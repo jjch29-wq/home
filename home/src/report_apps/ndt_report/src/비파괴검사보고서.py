@@ -8714,10 +8714,9 @@ class PMIReportApp:
                 self.pmi_material_combobox['values'] = new_values
 
             current_mat = self.gapji_material.get().strip()
-            if not current_mat or current_mat not in rec_materials:
+            # 품명 변경 시 재질 드롭다운 추천 순서만 갱신하며, 아래 기준은 절대 임의로 변경하지 않음
+            if not current_mat:
                 self.gapji_material.set(preset["default_material"])
-                self.apply_pmi_material_preset(preset["default_material"])
-                self.log(f"🔄 품명({raw_item})에 맞추어 재질을 '{preset['default_material']}'로 자동 연동했습니다.")
 
     def _on_pmi_material_changed(self, event=None):
         """재질 변경 시 기준/스펙 적용 및 품명 상호 연동"""

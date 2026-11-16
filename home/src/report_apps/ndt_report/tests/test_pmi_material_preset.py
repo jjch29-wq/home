@@ -223,39 +223,53 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
             self.fail(f"show_pmi_element_selector_dialog raised an exception: {e}")
 
     def test_item_and_material_bidirectional_sync(self):
-        """Verify selecting item updates material and vice-versa."""
+        """Verify selecting item updates material and vice-versa, without mutating chem specs."""
         if not self.app:
             self.skipTest("GUI not initialized")
 
-        # 1. Setting item to FLANGE updates material to A182-F316L
+        # Set baseline specs to test that changing item NEVER changes bottom specs
+        self.app.clear_all_pmi_specs()
+        self.app.pmi_chem_specs[0].set("Original Spec 1")
+
+        # 1. Setting item to FLANGE updates empty material to A182-F316L
+        self.app.gapji_material.set("")
         self.app.gapji_item.set("FLANGE")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A182-F316L")
+        # Bottom spec 1 MUST remain unchanged!
+        self.assertEqual(self.app.pmi_chem_specs[0].get(), "Original Spec 1")
 
-        # 2. Setting item to VALVE updates material to A351-CF8M
+        # 2. Setting item to VALVE updates empty material to A351-CF8M
+        self.app.gapji_material.set("")
         self.app.gapji_item.set("VALVE")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A351-CF8M")
+        self.assertEqual(self.app.pmi_chem_specs[0].get(), "Original Spec 1")
 
-        # 3. Setting item to FITTING updates material to A403-WP316L
+        # 3. Setting item to FITTING updates empty material to A403-WP316L
+        self.app.gapji_material.set("")
         self.app.gapji_item.set("FITTING")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
 
-        # 3-1. Setting item to ELBOW updates material to A403-WP316L
+        # 3-1. Setting item to ELBOW updates empty material to A403-WP316L
+        self.app.gapji_material.set("")
         self.app.gapji_item.set("ELBOW")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
 
-        # 3-2. Setting item to TEE updates material to A403-WP316L
+        # 3-2. Setting item to TEE updates empty material to A403-WP316L
+        self.app.gapji_material.set("")
         self.app.gapji_item.set("TEE")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
 
-        # 3-3. Setting item to REDUCER updates material to A403-WP316L
+        # 3-3. Setting item to REDUCER updates empty material to A403-WP316L
+        self.app.gapji_material.set("")
         self.app.gapji_item.set("REDUCER")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
+        self.assertEqual(self.app.pmi_chem_specs[0].get(), "Original Spec 1")
 
         # 3-4. Setting material to A403-WP304L retains existing fitting item (e.g. REDUCER)
         self.app.gapji_material.set("A403-WP304L")
@@ -278,7 +292,8 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.app._on_pmi_material_changed()
         self.assertEqual(self.app.gapji_item.get(), "PIPE")
 
-        # 6. Setting item to WELD updates material to ER316L
+        # 6. Setting item to WELD updates material to ER316L when material is empty
+        self.app.gapji_material.set("")
         self.app.gapji_item.set("WELD")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "ER316L")
