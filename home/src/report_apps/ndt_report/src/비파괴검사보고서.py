@@ -4484,7 +4484,7 @@ class PMIReportApp:
             elem_hdr = tk.Frame(chem_frame, background="#ffffff")
             elem_hdr.grid(row=0, column=0, columnspan=6, sticky='ew', pady=(0, 2))
             tk.Label(elem_hdr, text="원소명:", background="#ffffff", font=("Malgun Gothic", 8, "bold")).pack(side='left', padx=2)
-            ttk.Button(elem_hdr, text="🔍 원소 선택", width=10, command=self.show_pmi_element_selector_dialog).pack(side='right', padx=2)
+            ttk.Button(elem_hdr, text="🔍 원소 선택", command=self.show_pmi_element_selector_dialog).pack(side='right', padx=2)
             ttk.Button(elem_hdr, text="➕ 다음 기준에 추가", command=self.add_current_to_next_spec).pack(side='right', padx=(0, 4))
 
             for idx, var in enumerate(self.pmi_chem_elements, start=1):
