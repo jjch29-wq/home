@@ -4461,71 +4461,31 @@ class PMIReportApp:
                 chem_frame.columnconfigure(idx-1, weight=1)
                 self.setting_vars[f'PMI_CHEM_ELEMENT_{idx}'] = var
 
-            # 기준 1 / 2 / 3 선택기 및 규격 입력창
+            # 기준 선택기 및 규격 입력창 컨테이너
             specs_container = tk.Frame(chem_frame, background="#ffffff")
             specs_container.grid(row=2, column=0, columnspan=6, sticky='ew', pady=(4, 2))
-            
-            # --- 기준 1 ---
-            s1_hdr = tk.Frame(specs_container, background="#ffffff")
-            s1_hdr.pack(fill='x', pady=(2, 1))
-            self.pmi_spec1_lbl = tk.Label(s1_hdr, text="기준 1:", background="#ffffff", font=("Malgun Gothic", 8, "bold"))
-            self.pmi_spec1_lbl.pack(side='left')
-            ttk.Button(s1_hdr, text="✕", width=2, command=lambda: self.clear_pmi_spec(1)).pack(side='right', padx=(2, 0))
-            ttk.Button(s1_hdr, text="▼입력", width=4, command=lambda: self.apply_current_to_spec(1)).pack(side='right', padx=(2, 0))
-            self.pmi_spec1_combo = ttk.Combobox(
-                s1_hdr, textvariable=self.pmi_spec1_mat,
-                values=self.PMI_SPEC1_OPTIONS, width=20, state='readonly'
-            )
-            self.pmi_spec1_combo.pack(side='right')
-            self.pmi_spec1_combo.bind('<<ComboboxSelected>>', lambda e: self._on_pmi_spec1_selected())
-            ttk.Entry(specs_container, textvariable=self.pmi_chem_specs[0]).pack(fill='x', padx=2, pady=(0, 3))
-            self.setting_vars['PMI_CHEM_SPEC_1'] = self.pmi_chem_specs[0]
-            self.setting_vars['PMI_SPEC1_MAT'] = self.pmi_spec1_mat
+            self.pmi_specs_container = specs_container
+            self.pmi_spec_slots_ui = {}
 
-            # --- 기준 2 ---
-            s2_hdr = tk.Frame(specs_container, background="#ffffff")
-            s2_hdr.pack(fill='x', pady=(2, 1))
-            self.pmi_spec2_lbl = tk.Label(s2_hdr, text="기준 2:", background="#ffffff", font=("Malgun Gothic", 8, "bold"))
-            self.pmi_spec2_lbl.pack(side='left')
-            ttk.Button(s2_hdr, text="✕", width=2, command=lambda: self.clear_pmi_spec(2)).pack(side='right', padx=(2, 0))
-            ttk.Button(s2_hdr, text="▼입력", width=4, command=lambda: self.apply_current_to_spec(2)).pack(side='right', padx=(2, 0))
-            self.pmi_spec2_combo = ttk.Combobox(
-                s2_hdr, textvariable=self.pmi_spec2_mat,
-                values=self.PMI_SPEC2_OPTIONS, width=20, state='readonly'
-            )
-            self.pmi_spec2_combo.pack(side='right')
-            self.pmi_spec2_combo.bind('<<ComboboxSelected>>', lambda e: self._on_pmi_spec2_selected())
-            ttk.Entry(specs_container, textvariable=self.pmi_chem_specs[1]).pack(fill='x', padx=2, pady=(0, 3))
-            self.setting_vars['PMI_CHEM_SPEC_2'] = self.pmi_chem_specs[1]
-            self.setting_vars['PMI_SPEC2_MAT'] = self.pmi_spec2_mat
-
-            # --- 기준 3 ---
-            s3_hdr = tk.Frame(specs_container, background="#ffffff")
-            s3_hdr.pack(fill='x', pady=(2, 1))
-            self.pmi_spec3_lbl = tk.Label(s3_hdr, text="기준 3:", background="#ffffff", font=("Malgun Gothic", 8, "bold"))
-            self.pmi_spec3_lbl.pack(side='left')
-            ttk.Button(s3_hdr, text="✕", width=2, command=lambda: self.clear_pmi_spec(3)).pack(side='right', padx=(2, 0))
-            ttk.Button(s3_hdr, text="▼입력", width=4, command=lambda: self.apply_current_to_spec(3)).pack(side='right', padx=(2, 0))
-            self.pmi_spec3_combo = ttk.Combobox(
-                s3_hdr, textvariable=self.pmi_spec3_mat,
-                values=self.PMI_SPEC3_OPTIONS, width=20, state='readonly'
-            )
-            self.pmi_spec3_combo.pack(side='right')
-            self.pmi_spec3_combo.bind('<<ComboboxSelected>>', lambda e: self._on_pmi_spec3_selected())
-            ttk.Entry(specs_container, textvariable=self.pmi_chem_specs[2]).pack(fill='x', padx=2, pady=(0, 3))
-            self.setting_vars['PMI_CHEM_SPEC_3'] = self.pmi_chem_specs[2]
-            self.setting_vars['PMI_SPEC3_MAT'] = self.pmi_spec3_mat
+            # 기본 슬롯 (1, 2, 3) 및 기저장된 확장 슬롯(4~6) 복원
+            init_slots = 3
+            for i in (4, 5, 6):
+                if self.config.get(f'PMI_CHEM_SPEC_{i}') or self.config.get(f'PMI_SPEC{i}_MAT'):
+                    init_slots = max(init_slots, i)
+            for slot_i in range(1, init_slots + 1):
+                self._create_pmi_spec_slot_ui(slot_i, specs_container)
             
             # 초기 라벨 텍스트 동기화 및 품명 전용 재질 목록 필터링
             self._update_pmi_spec_labels()
             if hasattr(self, 'gapji_item') and self.gapji_item.get():
                 self._on_pmi_item_changed()
             
-            # [NEW] ⚖️ 규격 합/부 자동 판정 및 기준 전체 비우기 버튼
+            # [NEW] ⚖️ 규격 합/부 자동 판정, 🧹 기준 전체 비우기, ➕ 슬롯 추가 버튼
             action_row = tk.Frame(chem_frame, background="#ffffff")
             action_row.grid(row=3, column=0, columnspan=6, sticky='ew', pady=(4, 2))
             ttk.Button(action_row, text="⚖️ 규격 합/부 자동 판정", command=self.evaluate_pmi_data_compliance).pack(side='right', padx=2)
             ttk.Button(action_row, text="🧹 기준 전체 비우기", command=self.clear_all_pmi_specs).pack(side='right', padx=2)
+            ttk.Button(action_row, text="➕ 슬롯 추가", command=self.add_pmi_spec_slot).pack(side='left', padx=2)
             
         # RT radioactive-source settings (I10:M11 on the cover sheet).
         isotope_frame = tk.Frame(block, background="#ffffff")
@@ -8855,25 +8815,119 @@ class PMIReportApp:
 
         return ""
 
+    def _create_pmi_spec_slot_ui(self, slot_idx, container):
+        """지정된 번호(1~6)의 기준 슬롯 UI 위젯 생성"""
+        if not hasattr(self, 'pmi_spec_slots_ui'):
+            self.pmi_spec_slots_ui = {}
+        if slot_idx in self.pmi_spec_slots_ui:
+            return
+
+        idx_zero = slot_idx - 1
+        while len(self.pmi_chem_specs) <= idx_zero:
+            new_v = tk.StringVar(value=self.config.get(f'PMI_CHEM_SPEC_{len(self.pmi_chem_specs)+1}', ""))
+            self.pmi_chem_specs.append(new_v)
+            self.setting_vars[f'PMI_CHEM_SPEC_{len(self.pmi_chem_specs)}'] = new_v
+
+        mat_var = getattr(self, f'pmi_spec{slot_idx}_mat', None)
+        if not mat_var:
+            mat_var = tk.StringVar(value=self.config.get(f'PMI_SPEC{slot_idx}_MAT', ''))
+            setattr(self, f'pmi_spec{slot_idx}_mat', mat_var)
+            self.setting_vars[f'PMI_SPEC{slot_idx}_MAT'] = mat_var
+
+        s_hdr = tk.Frame(container, background="#ffffff")
+        s_hdr.pack(fill='x', pady=(2, 1))
+        
+        lbl = tk.Label(s_hdr, text=f"기준 {slot_idx}:", background="#ffffff", font=("Malgun Gothic", 8, "bold"))
+        lbl.pack(side='left')
+        setattr(self, f'pmi_spec{slot_idx}_lbl', lbl)
+
+        ttk.Button(s_hdr, text="✕", width=2, command=lambda i=slot_idx: self.clear_pmi_spec(i)).pack(side='right', padx=(2, 0))
+        ttk.Button(s_hdr, text="▼입력", width=4, command=lambda i=slot_idx: self.apply_current_to_spec(i)).pack(side='right', padx=(2, 0))
+
+        options = getattr(self, f'PMI_SPEC{slot_idx}_OPTIONS', self.PMI_COMMON_SPEC_OPTIONS)
+        combo = ttk.Combobox(
+            s_hdr, textvariable=mat_var,
+            values=options, width=20, state='readonly'
+        )
+        combo.pack(side='right')
+        combo.bind('<<ComboboxSelected>>', lambda e, i=slot_idx: self._on_pmi_spec_selected(i))
+        setattr(self, f'pmi_spec{slot_idx}_combo', combo)
+
+        entry = ttk.Entry(container, textvariable=self.pmi_chem_specs[idx_zero])
+        entry.pack(fill='x', padx=2, pady=(0, 3))
+
+        self.pmi_spec_slots_ui[slot_idx] = {
+            'header': s_hdr,
+            'lbl': lbl,
+            'combo': combo,
+            'entry': entry,
+            'mat_var': mat_var,
+            'spec_var': self.pmi_chem_specs[idx_zero]
+        }
+
+    def add_pmi_spec_slot(self, show_msg=True):
+        """새로운 기준 슬롯(4, 5, 6)을 동적으로 추가 (최대 6개)"""
+        cur_count = len(self.pmi_chem_specs)
+        if cur_count >= 6:
+            if show_msg:
+                messagebox.showinfo("알림", "갑지 성적서 1페이지 인쇄 규격상 기준 슬롯은 최대 6개까지 지원됩니다.")
+            return None
+        
+        new_idx = cur_count + 1
+        new_spec_var = tk.StringVar(value=self.config.get(f'PMI_CHEM_SPEC_{new_idx}', ""))
+        new_mat_var = tk.StringVar(value=self.config.get(f'PMI_SPEC{new_idx}_MAT', ''))
+        self.pmi_chem_specs.append(new_spec_var)
+        setattr(self, f'pmi_spec{new_idx}_mat', new_mat_var)
+        self.setting_vars[f'PMI_CHEM_SPEC_{new_idx}'] = new_spec_var
+        self.setting_vars[f'PMI_SPEC{new_idx}_MAT'] = new_mat_var
+        
+        if hasattr(self, 'pmi_specs_container') and self.pmi_specs_container.winfo_exists():
+            self._create_pmi_spec_slot_ui(new_idx, self.pmi_specs_container)
+            self._update_pmi_spec_labels()
+            if hasattr(self, 'gapji_item') and self.gapji_item.get():
+                self._on_pmi_item_changed()
+            try: self.root.update_idletasks()
+            except: pass
+            self.log(f"➕ 기준 슬롯 {new_idx} 추가 완료 (현재 총 {new_idx}개)")
+        return new_idx
+
+    def remove_pmi_spec_slot(self, idx):
+        """동적으로 추가된 4~6번 슬롯 제거"""
+        if idx <= 3 or idx != len(self.pmi_chem_specs):
+            return
+        slot_data = getattr(self, 'pmi_spec_slots_ui', {}).get(idx)
+        if slot_data:
+            if slot_data.get('header') and slot_data['header'].winfo_exists():
+                slot_data['header'].destroy()
+            if slot_data.get('entry') and slot_data['entry'].winfo_exists():
+                slot_data['entry'].destroy()
+            del self.pmi_spec_slots_ui[idx]
+        
+        self.pmi_chem_specs.pop()
+        self.setting_vars.pop(f'PMI_CHEM_SPEC_{idx}', None)
+        self.setting_vars.pop(f'PMI_SPEC{idx}_MAT', None)
+        self._update_pmi_spec_labels()
+        self.save_settings()
+        self.log(f"➖ 기준 슬롯 {idx} 제거 완료 (총 {len(self.pmi_chem_specs)}개)")
+
     def _update_pmi_spec_labels(self):
-        """기준 1, 2, 3 라벨을 재질명이 아닌 품명(Item Name)으로 동적 갱신"""
-        spec_pairs = [
-            (getattr(self, 'pmi_spec1_lbl', None), getattr(self, 'pmi_spec1_mat', None), self.pmi_chem_specs[0] if len(self.pmi_chem_specs) > 0 else None, "기준 1", 1),
-            (getattr(self, 'pmi_spec2_lbl', None), getattr(self, 'pmi_spec2_mat', None), self.pmi_chem_specs[1] if len(self.pmi_chem_specs) > 1 else None, "기준 2", 2),
-            (getattr(self, 'pmi_spec3_lbl', None), getattr(self, 'pmi_spec3_mat', None), self.pmi_chem_specs[2] if len(self.pmi_chem_specs) > 2 else None, "기준 3", 3),
-        ]
-        for lbl, mat_var, spec_var, prefix, slot_idx in spec_pairs:
+        """기준 라벨들을 재질명이 아닌 품명(Item Name)으로 동적 갱신"""
+        num_slots = len(getattr(self, 'pmi_chem_specs', []))
+        for slot_idx in range(1, num_slots + 1):
+            lbl = getattr(self, f'pmi_spec{slot_idx}_lbl', None)
             if not lbl: continue
+            mat_var = getattr(self, f'pmi_spec{slot_idx}_mat', None)
+            spec_var = self.pmi_chem_specs[slot_idx - 1] if slot_idx <= len(self.pmi_chem_specs) else None
             mat_txt = mat_var.get().strip() if mat_var else ""
             spec_txt = spec_var.get().strip() if spec_var else ""
             item_title = self._get_pmi_spec_item_title(slot_idx, mat_txt, spec_txt)
             if item_title:
-                lbl.config(text=f"{prefix} ({item_title}):")
+                lbl.config(text=f"기준 {slot_idx} ({item_title}):")
             else:
-                lbl.config(text=f"{prefix}:")
+                lbl.config(text=f"기준 {slot_idx}:")
 
-    def add_current_to_next_spec(self):
-        """상단에서 선택된 품명 및 재질을 비어있는 다음 기준 슬롯(1 -> 2 -> 3)에 순차 입력"""
+    def add_current_to_next_spec(self, show_msg=True):
+        """상단에서 선택된 품명 및 재질을 비어있는 다음 기준 슬롯(1 -> N)에 순차 입력 (부족 시 자동 슬롯 확장)"""
         cur_mat = self.gapji_material.get().strip() if hasattr(self, 'gapji_material') else ""
         cur_item = self.gapji_item.get().strip().upper() if hasattr(self, 'gapji_item') else ""
         if not cur_mat:
@@ -8881,37 +8935,44 @@ class PMIReportApp:
                 cur_mat = self._lookup_pmi_material_spec(cur_item)
                 if cur_mat: cur_mat = cur_mat["name"]
         if not cur_mat:
-            messagebox.showinfo("알림", "상단에서 먼저 재질을 선택해주세요.")
+            if show_msg:
+                messagebox.showinfo("알림", "상단에서 먼저 재질을 선택해주세요.")
             return
 
         spec = self._lookup_pmi_material_spec(cur_mat)
         if not spec:
-            messagebox.showinfo("알림", f"선택한 재질({cur_mat})에 대한 표준 규격을 찾을 수 없습니다.")
+            if show_msg:
+                messagebox.showinfo("알림", f"선택한 재질({cur_mat})에 대한 표준 규격을 찾을 수 없습니다.")
             return
 
-        # 빈 슬롯(1 -> 2 -> 3) 찾기
+        # 빈 슬롯(1 -> N) 찾기
         target_slot = None
-        for slot in (1, 2, 3):
+        for slot in range(1, len(self.pmi_chem_specs) + 1):
             idx = slot - 1
-            if idx < len(self.pmi_chem_specs):
-                val = self.pmi_chem_specs[idx].get().strip()
-                if not val or val == "-":
-                    target_slot = slot
-                    break
+            val = self.pmi_chem_specs[idx].get().strip()
+            if not val or val == "-":
+                target_slot = slot
+                break
 
+        # 기존 슬롯이 모두 채워진 경우 6개 미만이면 자동으로 슬롯 추가
         if target_slot is None:
-            messagebox.showinfo(
-                "알림",
-                "기준 1, 2, 3이 이미 모두 채워져 있습니다.\n"
-                "수정을 원하시는 기준 옆의 [▼입력] 버튼을 누르시면 해당 기준이 즉시 변경됩니다."
-            )
-            return
+            if len(self.pmi_chem_specs) < 6:
+                target_slot = self.add_pmi_spec_slot(show_msg=show_msg)
+            else:
+                if show_msg:
+                    messagebox.showinfo(
+                        "알림",
+                        "기준 슬롯 1~6이 이미 모두 채워져 있습니다.\n"
+                        "수정을 원하시는 기준 옆의 [▼입력] 버튼을 누르시면 해당 기준이 즉시 변경됩니다."
+                    )
+                return
 
-        self.apply_current_to_spec(target_slot)
-        self.log(f"📋 기준 {target_slot}에 입력 완료: {cur_item} {spec['name']}")
+        if target_slot:
+            self.apply_current_to_spec(target_slot)
+            self.log(f"📋 기준 {target_slot}에 입력 완료: {cur_item} {spec['name']}")
 
     def apply_current_to_spec(self, slot_idx):
-        """상단에서 선택된 품명 및 재질을 지정된 기준 슬롯(1, 2, 3)에 즉시 입력"""
+        """상단에서 선택된 품명 및 재질을 지정된 기준 슬롯에 즉시 입력"""
         cur_mat = self.gapji_material.get().strip() if hasattr(self, 'gapji_material') else ""
         cur_item = self.gapji_item.get().strip().upper() if hasattr(self, 'gapji_item') else ""
         if not cur_mat:
@@ -8956,76 +9017,388 @@ class PMIReportApp:
         self.log(f"📋 기준 {slot_idx}에 선택한 자재({spec['name']})를 입력했습니다.")
 
     def clear_pmi_spec(self, idx):
-        """기준 1, 2, 3 중 지정된 기준을 공란으로 초기화"""
-        if idx == 1 and len(self.pmi_chem_specs) > 0:
-            self.pmi_chem_specs[0].set("")
-            if hasattr(self, 'pmi_spec1_mat'): self.pmi_spec1_mat.set("(공란 / 비움)")
-            self.log("📋 기준 1을 공란으로 비웠습니다.")
-        elif idx == 2 and len(self.pmi_chem_specs) > 1:
-            self.pmi_chem_specs[1].set("")
-            if hasattr(self, 'pmi_spec2_mat'): self.pmi_spec2_mat.set("(공란 / 비움)")
-            self.log("📋 기준 2를 공란으로 비웠습니다.")
-        elif idx == 3 and len(self.pmi_chem_specs) > 2:
-            self.pmi_chem_specs[2].set("")
-            if hasattr(self, 'pmi_spec3_mat'): self.pmi_spec3_mat.set("(공란 / 비움)")
-            self.log("📋 기준 3을 공란으로 비웠습니다.")
+        """지정된 기준 슬롯을 공란으로 초기화하거나 초과 슬롯 제거"""
+        slot_idx = idx - 1
+        if 0 <= slot_idx < len(self.pmi_chem_specs):
+            cur_val = self.pmi_chem_specs[slot_idx].get().strip()
+            if idx > 3 and (not cur_val or cur_val == "-") and idx == len(self.pmi_chem_specs):
+                self.remove_pmi_spec_slot(idx)
+                return
+            self.pmi_chem_specs[slot_idx].set("")
+            mat_var = getattr(self, f'pmi_spec{idx}_mat', None)
+            if mat_var: mat_var.set("(공란 / 비움)")
+            self.log(f"📋 기준 {idx}을 공란으로 비웠습니다.")
         self._update_pmi_spec_labels()
         self.save_settings()
 
     def clear_all_pmi_specs(self):
-        """기준 1, 2, 3 모두 공란으로 초기화"""
-        for i in range(1, 4):
-            self.clear_pmi_spec(i)
-        self.log("📋 기준 1, 2, 3을 모두 공란으로 초기화했습니다.")
+        """모든 기준 슬롯을 공란으로 초기화"""
+        specs_list = getattr(self, 'pmi_chem_specs', [])
+        for i in range(1, len(specs_list) + 1):
+            slot_idx = i - 1
+            if slot_idx < len(specs_list):
+                specs_list[slot_idx].set("")
+            mat_var = getattr(self, f'pmi_spec{i}_mat', None)
+            if mat_var: mat_var.set("(공란 / 비움)")
+        self._update_pmi_spec_labels()
+        self.save_settings()
+        self.log("📋 모든 기준 슬롯을 공란으로 초기화했습니다.")
+
+    def _on_pmi_spec_selected(self, slot_idx, event=None):
+        """기준 슬롯 콤보박스 선택 공통 핸들러"""
+        mat_var = getattr(self, f'pmi_spec{slot_idx}_mat', None)
+        if not mat_var: return
+        val = mat_var.get().strip()
+        idx = slot_idx - 1
+        if idx >= len(self.pmi_chem_specs): return
+        if not val or "비움" in val or val == "-":
+            self.pmi_chem_specs[idx].set("")
+            self.log(f"📋 기준 {slot_idx}: 공란 설정")
+            self._update_pmi_spec_labels()
+            self.save_settings()
+            return
+        spec = self._lookup_pmi_material_spec(val)
+        if spec:
+            self.pmi_chem_specs[idx].set(spec["specs"][0])
+            if slot_idx == 1:
+                self.gapji_material.set(spec["name"])
+                self.apply_pmi_material_preset(spec["name"])
+            self.log(f"📋 기준 {slot_idx} 설정: {spec['name']}")
+            self.save_settings()
+        self._update_pmi_spec_labels()
 
     def _on_pmi_spec1_selected(self, event=None):
-        """기준 1 콤보박스 선택 시 규격 1 연동 및 라벨 갱신"""
-        val = self.pmi_spec1_mat.get().strip()
-        if not val or "비움" in val or val == "-":
-            self.pmi_chem_specs[0].set("")
-            self.log("📋 기준 1: 공란 설정")
-            self._update_pmi_spec_labels()
-            self.save_settings()
-            return
-        spec = self._lookup_pmi_material_spec(val)
-        if spec:
-            self.pmi_chem_specs[0].set(spec["specs"][0])
-            self.gapji_material.set(spec["name"])
-            self.apply_pmi_material_preset(spec["name"])
-            self.log(f"📋 기준 1 설정: {spec['name']}")
-        self._update_pmi_spec_labels()
+        self._on_pmi_spec_selected(1, event)
 
     def _on_pmi_spec2_selected(self, event=None):
-        """기준 2 콤보박스 선택 시 규격 2 연동 및 라벨 갱신"""
-        val = self.pmi_spec2_mat.get().strip()
-        if not val or "비움" in val or val == "-":
-            self.pmi_chem_specs[1].set("")
-            self.log("📋 기준 2: 공란 설정")
-            self._update_pmi_spec_labels()
-            self.save_settings()
-            return
-        spec = self._lookup_pmi_material_spec(val)
-        if spec:
-            self.pmi_chem_specs[1].set(spec["specs"][0])
-            self.log(f"📋 기준 2 설정: {spec['name']}")
-            self.save_settings()
-        self._update_pmi_spec_labels()
+        self._on_pmi_spec_selected(2, event)
 
     def _on_pmi_spec3_selected(self, event=None):
-        """기준 3 콤보박스 선택 시 규격 3 연동 및 라벨 갱신"""
-        val = self.pmi_spec3_mat.get().strip()
-        if not val or "비움" in val or val == "-":
-            self.pmi_chem_specs[2].set("")
-            self.log("📋 기준 3: 공란 설정")
-            self._update_pmi_spec_labels()
-            self.save_settings()
+        self._on_pmi_spec_selected(3, event)
+
+    def _collect_pmi_active_criteria(self):
+        """활성화된 기준 슬롯들로부터 화학성분 규격을 추출하고, 동일한 함량 기준끼리 품목명을 묶음(그룹화)"""
+        import re
+        raw_list = []
+        specs_list = getattr(self, 'pmi_chem_specs', [])
+        for slot_idx, spec_var in enumerate(specs_list, start=1):
+            spec_txt = spec_var.get().strip()
+            if not spec_txt or spec_txt == "-":
+                continue
+            mat_var = getattr(self, f'pmi_spec{slot_idx}_mat', None)
+            mat_txt = mat_var.get().strip() if mat_var else ""
+            item_title = self._get_pmi_spec_item_title(slot_idx, mat_txt, spec_txt)
+            if not item_title:
+                item_title = (self.gapji_item.get().strip() if hasattr(self, 'gapji_item') else '') or "PIPE"
+
+            spec_obj = self._lookup_pmi_material_spec(mat_txt) or self._lookup_pmi_material_spec(spec_txt)
+            spec_name = spec_obj.get('title', spec_obj['name']) if spec_obj else (mat_txt or spec_txt.split(':')[0].strip())
+
+            limits = {}
+            if spec_obj and spec_obj.get("limits"):
+                limits = dict(spec_obj["limits"])
+            else:
+                matches = re.findall(r'([A-Za-z]{1,2})\s*:\s*([\d\.]+)\s*(?:~|-)\s*([\d\.]+)', spec_txt)
+                for el, mi, ma in matches:
+                    limits[el] = (float(mi), float(ma))
+
+            raw_list.append({
+                'slot': slot_idx,
+                'name': spec_name,
+                'item': item_title,
+                'limits': limits,
+                'spec_text': spec_txt
+            })
+
+        # 활성 슬롯에 내용이 없으면 상단 기본 정보 폴백
+        if not raw_list:
+            mat_input = (self.gapji_material.get().strip() if hasattr(self, 'gapji_material') else '') or self.config.get('GAPJI_MATERIAL', '')
+            spec_obj = self._lookup_pmi_material_spec(mat_input) if hasattr(self, '_lookup_pmi_material_spec') else None
+            item_name = (self.gapji_item.get().strip() if hasattr(self, 'gapji_item') else '') or self.config.get('GAPJI_ITEM', 'PIPE')
+            if spec_obj:
+                raw_list.append({
+                    'slot': 1,
+                    'name': spec_obj.get('title', spec_obj['name']),
+                    'item': item_name,
+                    'limits': dict(spec_obj.get("limits", {})),
+                    'spec_text': spec_obj.get("specs", [""])[0]
+                })
+
+        # [원칙 1] 동일 함량 자동 묶기 (그룹화)
+        grouped = []
+        for item_data in raw_list:
+            matched_grp = None
+            for grp in grouped:
+                if grp['limits'] == item_data['limits'] and grp['limits']:
+                    matched_grp = grp
+                    break
+            if matched_grp:
+                cur_items = [x.strip() for x in matched_grp['item'].split(',') if x.strip()]
+                if item_data['item'] not in cur_items:
+                    cur_items.append(item_data['item'])
+                    matched_grp['item'] = ", ".join(cur_items)
+                cur_names = [x.strip() for x in matched_grp['name'].split(',') if x.strip()]
+                if item_data['name'] not in cur_names:
+                    cur_names.append(item_data['name'])
+                    matched_grp['name'] = ", ".join(cur_names)
+            else:
+                grouped.append({
+                    'name': item_data['name'],
+                    'item': item_data['item'],
+                    'limits': item_data['limits'],
+                    'spec_text': item_data['spec_text']
+                })
+        return grouped
+
+    def _apply_pmi_acceptance_criteria(self, ws):
+        """갑지 1. Acceptance Criteria (%) 표(24~39행, A~T열)를 [방안 B] 가로 비교 매트릭스 형태로 작성"""
+        if ws.cell(row=24, column=1).value is None:
             return
-        spec = self._lookup_pmi_material_spec(val)
-        if spec:
-            self.pmi_chem_specs[2].set(spec["specs"][0])
-            self.log(f"📋 기준 3 설정: {spec['name']}")
-            self.save_settings()
-        self._update_pmi_spec_labels()
+
+        from openpyxl.styles import Font, Alignment, Border, Side
+        from openpyxl.utils.cell import range_boundaries
+
+        def _style_range(ws_obj, cell_range, font=None, alignment=None, border=None):
+            min_col, min_row, max_col, max_row = range_boundaries(cell_range)
+            for row in ws_obj.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col):
+                for cell in row:
+                    if font: cell.font = font
+                    if alignment: cell.alignment = alignment
+                    if border: cell.border = border
+
+        grouped = self._collect_pmi_active_criteria()
+        if not grouped:
+            return
+
+        # 1. 기존 24~39행, A~T열의 병합 셀 해제 및 내용 초기화
+        to_unmerge = [rng for rng in ws.merged_cells.ranges if 24 <= rng.min_row <= 39 and (rng.min_col <= 20 or rng.max_col <= 20)]
+        for rng in to_unmerge:
+            try: ws.unmerge_cells(str(rng))
+            except: pass
+        for r in range(24, 40):
+            for c in range(1, 21):
+                cell = ws.cell(row=r, column=c)
+                cell.value = None
+                cell.border = Border()
+
+        thin_side = Side(style='thin')
+        b_thin = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+        f_title = Font(name='Times New Roman', size=11, bold=True)
+        f_hdr = Font(name='Times New Roman', size=10, bold=True)
+        f_data = Font(name='Times New Roman', size=10, bold=False)
+        f_note = Font(name='Times New Roman', size=9, bold=False)
+        align_c = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        elem_full_names = {
+            'Cr': 'Chromium', 'Ni': 'Nickel', 'Mo': 'Molybdenum',
+            'Mn': 'Manganese', 'Si': 'Silicon', 'V': 'Vanadium',
+            'Nb': 'Niobium', 'Ti': 'Titanium', 'Cu': 'Copper',
+            'P': 'Phosphorus', 'S': 'Sulfur'
+        }
+
+        all_elems = []
+        for g in grouped:
+            for k in g['limits'].keys():
+                if k not in all_elems and k != "-":
+                    all_elems.append(k)
+        target_elems = []
+        for p in ["Cr", "Ni", "Mo"]:
+            if p in all_elems:
+                target_elems.append(p)
+        for e in all_elems:
+            if e not in target_elems:
+                target_elems.append(e)
+        if not target_elems:
+            target_elems = ["Cr", "Ni", "Mo"]
+        target_elems = target_elems[:3]
+
+        def _format_limit(limits_dict, el_key):
+            if el_key in limits_dict:
+                l_min, l_max = limits_dict[el_key]
+                if l_min > 0 and l_max < 900.0:
+                    return f"{l_min:.2f}~{l_max:.2f}"
+                elif l_min > 0:
+                    return f"Min {l_min:.2f}"
+                elif l_max < 900.0:
+                    return f"Max {l_max:.2f}"
+            return "-"
+
+        num_groups = len(grouped)
+
+        # [케이스 1] 고유 기준 1개: 기존 10열(A~J) 단일 표
+        if num_groups == 1:
+            grp = grouped[0]
+            ws.merge_cells('A24:J26')
+            ws['A24'] = f"1. Acceptance Criteria (%)\n{grp['name']} — {grp['item']}"
+            _style_range(ws, 'A24:J26', font=f_title, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A27:F27')
+            ws['A27'] = 'Element'
+            _style_range(ws, 'A27:F27', font=f_hdr, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('G27:J27')
+            ws['G27'] = 'Composition, %'
+            _style_range(ws, 'G27:J27', font=f_hdr, alignment=align_c, border=b_thin)
+
+            for idx, el_k in enumerate(target_elems, start=28):
+                full_n = elem_full_names.get(el_k, el_k)
+                val_txt = _format_limit(grp['limits'], el_k)
+                ws.merge_cells(f'A{idx}:F{idx}')
+                ws[f'A{idx}'] = full_n
+                _style_range(ws, f'A{idx}:F{idx}', font=f_data, alignment=align_c, border=b_thin)
+
+                ws.merge_cells(f'G{idx}:J{idx}')
+                ws[f'G{idx}'] = val_txt
+                _style_range(ws, f'G{idx}:J{idx}', font=f_data, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A31:J31')
+            ws['A31'] = '* Tolerance ±10%'
+            _style_range(ws, 'A31:J31', font=f_note, alignment=align_c, border=b_thin)
+
+        # [케이스 2] 고유 기준 2개: [방안 B] 가로 비교 2열 매트릭스 (A~F: 원소, G~M: 기준1, N~T: 기준2)
+        elif num_groups == 2:
+            ws.merge_cells('A24:T26')
+            ws['A24'] = '1. Acceptance Criteria (%)'
+            _style_range(ws, 'A24:T26', font=f_title, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A27:F27')
+            ws['A27'] = 'Element'
+            _style_range(ws, 'A27:F27', font=f_hdr, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('G27:M27')
+            ws['G27'] = f"{grouped[0]['name']}\n({grouped[0]['item']})"
+            _style_range(ws, 'G27:M27', font=f_hdr, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('N27:T27')
+            ws['N27'] = f"{grouped[1]['name']}\n({grouped[1]['item']})"
+            _style_range(ws, 'N27:T27', font=f_hdr, alignment=align_c, border=b_thin)
+
+            for idx, el_k in enumerate(target_elems, start=28):
+                full_n = elem_full_names.get(el_k, el_k)
+                v1 = _format_limit(grouped[0]['limits'], el_k)
+                v2 = _format_limit(grouped[1]['limits'], el_k)
+
+                ws.merge_cells(f'A{idx}:F{idx}')
+                ws[f'A{idx}'] = full_n
+                _style_range(ws, f'A{idx}:F{idx}', font=f_data, alignment=align_c, border=b_thin)
+
+                ws.merge_cells(f'G{idx}:M{idx}')
+                ws[f'G{idx}'] = v1
+                _style_range(ws, f'G{idx}:M{idx}', font=f_data, alignment=align_c, border=b_thin)
+
+                ws.merge_cells(f'N{idx}:T{idx}')
+                ws[f'N{idx}'] = v2
+                _style_range(ws, f'N{idx}:T{idx}', font=f_data, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A31:T31')
+            ws['A31'] = '* Tolerance ±10%'
+            _style_range(ws, 'A31:T31', font=f_note, alignment=align_c, border=b_thin)
+
+        # [케이스 3] 고유 기준 3개: [방안 B] 가로 비교 3열 매트릭스 (A~E, F~J, K~O, P~T)
+        elif num_groups == 3:
+            ws.merge_cells('A24:T26')
+            ws['A24'] = '1. Acceptance Criteria (%)'
+            _style_range(ws, 'A24:T26', font=f_title, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A27:E27')
+            ws['A27'] = 'Element'
+            _style_range(ws, 'A27:E27', font=f_hdr, alignment=align_c, border=b_thin)
+
+            ranges_col = [('F', 'J'), ('K', 'O'), ('P', 'T')]
+            for g_i, (c_start, c_end) in enumerate(ranges_col):
+                rng_txt = f"{c_start}27:{c_end}27"
+                ws.merge_cells(rng_txt)
+                ws[f"{c_start}27"] = f"{grouped[g_i]['name']}\n({grouped[g_i]['item']})"
+                _style_range(ws, rng_txt, font=f_hdr, alignment=align_c, border=b_thin)
+
+            for idx, el_k in enumerate(target_elems, start=28):
+                full_n = elem_full_names.get(el_k, el_k)
+                ws.merge_cells(f'A{idx}:E{idx}')
+                ws[f'A{idx}'] = full_n
+                _style_range(ws, f'A{idx}:E{idx}', font=f_data, alignment=align_c, border=b_thin)
+
+                for g_i, (c_start, c_end) in enumerate(ranges_col):
+                    v = _format_limit(grouped[g_i]['limits'], el_k)
+                    rng_txt = f"{c_start}{idx}:{c_end}{idx}"
+                    ws.merge_cells(rng_txt)
+                    ws[f"{c_start}{idx}"] = v
+                    _style_range(ws, rng_txt, font=f_data, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A31:T31')
+            ws['A31'] = '* Tolerance ±10%'
+            _style_range(ws, 'A31:T31', font=f_note, alignment=align_c, border=b_thin)
+
+        # [케이스 4] 고유 기준 4~6개: 상단(24~31행) 1차 + 하단(32~39행) 2차 분할 2단 매트릭스
+        else:
+            tier1 = grouped[:3]
+            tier2 = grouped[3:6]
+
+            # 1단 (24~31행)
+            ws.merge_cells('A24:T26')
+            ws['A24'] = '1. Acceptance Criteria (%)'
+            _style_range(ws, 'A24:T26', font=f_title, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A27:E27')
+            ws['A27'] = 'Element'
+            _style_range(ws, 'A27:E27', font=f_hdr, alignment=align_c, border=b_thin)
+
+            ranges_col = [('F', 'J'), ('K', 'O'), ('P', 'T')]
+            for g_i in range(len(tier1)):
+                c_start, c_end = ranges_col[g_i]
+                rng_txt = f"{c_start}27:{c_end}27"
+                ws.merge_cells(rng_txt)
+                ws[f"{c_start}27"] = f"{tier1[g_i]['name']}\n({tier1[g_i]['item']})"
+                _style_range(ws, rng_txt, font=f_hdr, alignment=align_c, border=b_thin)
+
+            for idx, el_k in enumerate(target_elems, start=28):
+                full_n = elem_full_names.get(el_k, el_k)
+                ws.merge_cells(f'A{idx}:E{idx}')
+                ws[f'A{idx}'] = full_n
+                _style_range(ws, f'A{idx}:E{idx}', font=f_data, alignment=align_c, border=b_thin)
+                for g_i in range(len(tier1)):
+                    c_start, c_end = ranges_col[g_i]
+                    v = _format_limit(tier1[g_i]['limits'], el_k)
+                    rng_txt = f"{c_start}{idx}:{c_end}{idx}"
+                    ws.merge_cells(rng_txt)
+                    ws[f"{c_start}{idx}"] = v
+                    _style_range(ws, rng_txt, font=f_data, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A31:T31')
+            ws['A31'] = '* Tolerance ±10%'
+            _style_range(ws, 'A31:T31', font=f_note, alignment=align_c, border=b_thin)
+
+            # 2단 (32~39행)
+            ws.merge_cells('A32:T33')
+            ws['A32'] = '1. Acceptance Criteria (%) - Continued'
+            _style_range(ws, 'A32:T33', font=f_title, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A34:E34')
+            ws['A34'] = 'Element'
+            _style_range(ws, 'A34:E34', font=f_hdr, alignment=align_c, border=b_thin)
+
+            for g_i in range(len(tier2)):
+                c_start, c_end = ranges_col[g_i]
+                rng_txt = f"{c_start}34:{c_end}34"
+                ws.merge_cells(rng_txt)
+                ws[f"{c_start}34"] = f"{tier2[g_i]['name']}\n({tier2[g_i]['item']})"
+                _style_range(ws, rng_txt, font=f_hdr, alignment=align_c, border=b_thin)
+
+            for idx, el_k in enumerate(target_elems, start=35):
+                full_n = elem_full_names.get(el_k, el_k)
+                ws.merge_cells(f'A{idx}:E{idx}')
+                ws[f'A{idx}'] = full_n
+                _style_range(ws, f'A{idx}:E{idx}', font=f_data, alignment=align_c, border=b_thin)
+                for g_i in range(len(tier2)):
+                    c_start, c_end = ranges_col[g_i]
+                    v = _format_limit(tier2[g_i]['limits'], el_k)
+                    rng_txt = f"{c_start}{idx}:{c_end}{idx}"
+                    ws.merge_cells(rng_txt)
+                    ws[f"{c_start}{idx}"] = v
+                    _style_range(ws, rng_txt, font=f_data, alignment=align_c, border=b_thin)
+
+            ws.merge_cells('A38:T38')
+            ws['A38'] = '* Tolerance ±10%'
+            _style_range(ws, 'A38:T38', font=f_note, alignment=align_c, border=b_thin)
 
     def evaluate_pmi_data_compliance(self, show_msg=True):
         """추출된 PMI 측정 데이터를 현재 재질 기준(또는 element_filters)과 비교하여 합/부(ALL MATCH / MISMATCH) 자동 판정"""
@@ -12392,47 +12765,9 @@ class PMIReportApp:
                     elif ws.cell(row=40, column=10).value is not None:
                         self.safe_set_value(ws, 'J40', exam_date)
 
-                # [NEW] 갑지 1. Acceptance Criteria (%) 표(A24:G30)를 선택된 재질 기준으로 자동 갱신
-                mat_input = (self.gapji_material.get().strip() if hasattr(self, 'gapji_material') else '') or self.config.get('GAPJI_MATERIAL', '')
-                spec = self._lookup_pmi_material_spec(mat_input) if hasattr(self, '_lookup_pmi_material_spec') else None
-                if spec and ws.cell(row=24, column=1).value is not None:
-                    item_name = (self.gapji_item.get().strip() if hasattr(self, 'gapji_item') else '') or self.config.get('GAPJI_ITEM', 'PIPE')
-                    a24_title = f"1. Acceptance Criteria (%)\n{spec.get('title', spec['name'])} — {item_name}"
-                    self.safe_set_value(ws, 'A24', a24_title)
-                    elem_full_names = {
-                        'Cr': 'Chromium', 'Ni': 'Nickel', 'Mo': 'Molybdenum',
-                        'Mn': 'Manganese', 'Si': 'Silicon', 'V': 'Vanadium',
-                        'Nb': 'Niobium', 'Ti': 'Titanium', 'Cu': 'Copper',
-                        'P': 'Phosphorus', 'S': 'Sulfur'
-                    }
-                    target_elems = [e for e in spec.get("elements", []) if e and e != "-"]
-                    # Cr과 Ni가 모두 존재하는 합금강은 갑지 표준 서식에 맞춰 Chromium -> Nickel 순서 유지
-                    if "Cr" in target_elems and "Ni" in target_elems:
-                        target_elems = ["Cr", "Ni"] + [e for e in target_elems if e not in ("Cr", "Ni")]
-                    target_elems = target_elems[:3]
-                    if not target_elems:
-                        target_elems = list(spec.get("limits", {}).keys())[:3]
-
-                    target_cells = [('A28', 'G28'), ('A29', 'G29'), ('A30', 'G30')]
-                    for idx, (a_cell, g_cell) in enumerate(target_cells):
-                        if idx < len(target_elems):
-                            short_k = target_elems[idx]
-                            full_n = elem_full_names.get(short_k, short_k)
-                            if short_k in spec.get("limits", {}):
-                                l_min, l_max = spec["limits"][short_k]
-                                if l_min > 0 and l_max < 900.0:
-                                    g_text = f"{l_min:.2f}~{l_max:.2f}"
-                                elif l_min > 0:
-                                    g_text = f"Min {l_min:.2f}"
-                                else:
-                                    g_text = f"Max {l_max:.2f}"
-                            else:
-                                g_text = "-"
-                            self.safe_set_value(ws, a_cell, full_n)
-                            self.safe_set_value(ws, g_cell, g_text)
-                        else:
-                            self.safe_set_value(ws, a_cell, "-")
-                            self.safe_set_value(ws, g_cell, "-")
+                # [NEW] 갑지 1. Acceptance Criteria (%) 표(24~39행, A~T열)를 [방안 B] 가로 비교 매트릭스 형태로 자동 갱신
+                if hasattr(self, '_apply_pmi_acceptance_criteria'):
+                    self._apply_pmi_acceptance_criteria(ws)
             else:
                 # PMI templates already contain their own date field. Do not use B9
                 # as a fallback because it belongs to the cover logo/header area.

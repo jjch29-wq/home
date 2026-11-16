@@ -23,6 +23,13 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
             except:
                 pass
 
+    def setUp(self):
+        if self.app:
+            self.app.clear_all_pmi_specs()
+            # 슬롯 4~6이 남아있다면 3개까지 축소 정리
+            while len(self.app.pmi_chem_specs) > 3:
+                self.app.remove_pmi_spec_slot(len(self.app.pmi_chem_specs))
+
     def test_lookup_pmi_material_spec(self):
         """Verify alias and spec lookup for various material strings."""
         if not self.app:
@@ -485,6 +492,100 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertEqual(self.app.pmi_spec1_lbl.cget("text"), "기준 1 (FLANGE):")
         self.assertIn("A403-WP316L", self.app.pmi_chem_specs[1].get())
         self.assertIn("ER308L", self.app.pmi_chem_specs[2].get())
+
+    def test_dynamic_slot_addition_and_removal(self):
+        """Verify dynamic slot addition up to 6 and safe removal."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+
+        # Initial slots = 3
+        self.assertEqual(len(self.app.pmi_chem_specs), 3)
+
+        # Add slot 4
+        s4 = self.app.add_pmi_spec_slot()
+        self.assertEqual(s4, 4)
+        self.assertEqual(len(self.app.pmi_chem_specs), 4)
+
+        # Add slot 5
+        s5 = self.app.add_pmi_spec_slot()
+        self.assertEqual(s5, 5)
+        self.assertEqual(len(self.app.pmi_chem_specs), 5)
+
+        # Add slot 6
+        s6 = self.app.add_pmi_spec_slot()
+        self.assertEqual(s6, 6)
+        self.assertEqual(len(self.app.pmi_chem_specs), 6)
+
+        # 7th addition must be blocked
+        s7 = self.app.add_pmi_spec_slot(show_msg=False)
+        self.assertIsNone(s7)
+        self.assertEqual(len(self.app.pmi_chem_specs), 6)
+
+        # Remove slot 6
+        self.app.remove_pmi_spec_slot(6)
+        self.assertEqual(len(self.app.pmi_chem_specs), 5)
+
+        # Auto slot expansion via add_current_to_next_spec when all slots full
+        # Fill slot 1~5
+        for i in range(1, 6):
+            self.app.pmi_chem_specs[i-1].set("DUMMY: Cr:18.00 ~ 20.00%")
+        self.app.gapji_item.set("VALVE")
+        self.app.gapji_material.set("A351-CF8M")
+        self.app.add_current_to_next_spec(show_msg=False)
+        # Should have automatically expanded to slot 6 and filled it!
+        self.assertEqual(len(self.app.pmi_chem_specs), 6)
+        self.assertIn("CF8M", self.app.pmi_chem_specs[5].get())
+
+    def test_acceptance_criteria_grouping_and_matrix_layout(self):
+        """Verify grouping of identical limits (TEE + REDUCER) and Option B matrix generation."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+
+        wb = openpyxl.load_workbook("home/data/PMI-템플릿보고서.xlsx")
+        ws = wb["PMI(갑)"]
+
+        # Slot 1: PIPE / A312-TP304 (Cr 18~20, Ni 8~11)
+        self.app.pmi_chem_specs[0].set("A312-TP304 (PIPE): Cr:18.00 ~ 20.00%, Ni:8.00 ~ 11.00%")
+        self.app.pmi_spec1_mat.set("A312-TP304")
+
+        # Slot 2: TEE / A403-WP304L (Cr 18~20, Ni 9~13)
+        self.app.pmi_chem_specs[1].set("A403-WP304L (TEE): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%")
+        self.app.pmi_spec2_mat.set("A403-WP304L (피팅/엘보)")
+
+        # Slot 3: REDUCER / A403-WP304L (Same limits as Slot 2 -> should be grouped!)
+        self.app.pmi_chem_specs[2].set("A403-WP304L (REDUCER): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%")
+        self.app.pmi_spec3_mat.set("A403-WP304L (피팅/엘보)")
+
+        # 1. Test grouping logic
+        grouped = self.app._collect_pmi_active_criteria()
+        self.assertEqual(len(grouped), 2, "3 criteria with 2 identical limits must be grouped into 2 items")
+        self.assertIn("PIPE", grouped[0]["item"])
+        self.assertIn("TEE", grouped[1]["item"])
+        self.assertIn("REDUCER", grouped[1]["item"])
+
+        # 2. Test Option B matrix layout application
+        self.app._write_gapji_metadata(ws, mode="PMI")
+
+        # Title: 1. Acceptance Criteria (%) across A24:T26
+        self.assertEqual(ws["A24"].value, "1. Acceptance Criteria (%)")
+
+        # Row 27 Header: Element, Group 1, Group 2
+        self.assertEqual(ws["A27"].value, "Element")
+        self.assertIn("PIPE", ws["G27"].value)
+        self.assertIn("TEE, REDUCER", ws["N27"].value)
+
+        # Row 28 (Chromium)
+        self.assertEqual(ws["A28"].value, "Chromium")
+        self.assertEqual(ws["G28"].value, "18.00~20.00")
+        self.assertEqual(ws["N28"].value, "18.00~20.00")
+
+        # Row 29 (Nickel)
+        self.assertEqual(ws["A29"].value, "Nickel")
+        self.assertEqual(ws["G29"].value, "8.00~11.00")
+        self.assertEqual(ws["N29"].value, "9.00~13.00")
+
+        # Row 31 (Tolerance)
+        self.assertEqual(ws["A31"].value, "* Tolerance ±10%")
 
 
 if __name__ == "__main__":
