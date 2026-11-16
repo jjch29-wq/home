@@ -258,6 +258,34 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertIsNotNone(spec_70s)
         self.assertEqual(spec_70s["limits"]["Mn"], (0.80, 1.85))
 
+    def test_spec_combobox_individual_selection(self):
+        """Verify selecting each spec 1, 2, 3 combobox individually populates the respective chem spec text."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+
+        # 1. Spec 1 selection
+        self.app.pmi_spec1_mat.set("A312-TP304")
+        self.app._on_pmi_spec1_selected()
+        self.assertIn("A312-TP304", self.app.pmi_chem_specs[0].get())
+        self.assertIn("Cr:18.00 ~ 20.00%", self.app.pmi_chem_specs[0].get())
+
+        # 2. Spec 2 selection (e.g. switch to ER309L dissimilar)
+        self.app.pmi_spec2_mat.set("ER309L (이재질)")
+        self.app._on_pmi_spec2_selected()
+        self.assertIn("ER309L", self.app.pmi_chem_specs[1].get())
+        self.assertIn("Cr:23.00 ~ 25.00%", self.app.pmi_chem_specs[1].get())
+
+        # 3. Spec 3 selection (e.g. switch to A403-WP316L fitting)
+        self.app.pmi_spec3_mat.set("A403-WP316L (피팅/엘보)")
+        self.app._on_pmi_spec3_selected()
+        self.assertIn("A403-WP316L", self.app.pmi_chem_specs[2].get())
+        self.assertIn("Fitting", self.app.pmi_chem_specs[2].get())
+
+        # 4. Spec 3 empty option
+        self.app.pmi_spec3_mat.set("(해당없음 / 비움)")
+        self.app._on_pmi_spec3_selected()
+        self.assertEqual(self.app.pmi_chem_specs[2].get(), "-")
+
 
 if __name__ == "__main__":
     unittest.main()
