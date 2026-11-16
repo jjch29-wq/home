@@ -639,6 +639,29 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.app.clear_all_pmi_specs()
         self.assertEqual(len(self.app.pmi_chem_specs), 3)
 
+    def test_combined_item_names_written_to_gapji(self):
+        """Verify that all item names mentioned across criteria are combined and written to Gapji ITEM NAME (E13)."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+        wb = openpyxl.load_workbook("home/data/PMI-템플릿보고서.xlsx")
+        ws = wb['PMI(갑)']
+        self.app.clear_all_pmi_specs()
+
+        self.app.pmi_spec1_mat.set('A312-TP316L')
+        self.app.pmi_chem_specs[0].set('A312-TP316L (PIPE): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 14.00%')
+
+        self.app.pmi_spec2_mat.set('A403-WP316L (피팅/엘보)')
+        self.app.pmi_chem_specs[1].set('A403-WP316L (ELBOW): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 14.00%')
+
+        self.app.pmi_spec3_mat.set('A403-WP304L (피팅/엘보)')
+        self.app.pmi_chem_specs[2].set('A403-WP304L (TEE): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%')
+
+        combined = self.app._get_combined_pmi_item_names()
+        self.assertEqual(combined, "PIPE, ELBOW, TEE")
+
+        self.app._write_gapji_metadata(ws, mode='PMI')
+        self.assertEqual(ws['E13'].value, "PIPE, ELBOW, TEE")
+
 
 if __name__ == "__main__":
     unittest.main()

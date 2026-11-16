@@ -1,11 +1,11 @@
 {
-    "PMI_SASH_RATIO": 0.33263378803777544,
+    "PMI_SASH_RATIO": 0.3342077649527807,
     "RT_SASH_RATIO": 0.3111227701993704,
     "PT_SASH_RATIO": 0.35047219307450156,
     "PAUT_SASH_RATIO": 0.3310598111227702,
     "PMI_COL_WIDTHS": {
         "ST": 40,
-        "V": 40,
+        "V": 78,
         "No": 50,
         "Date": 146,
         "Report No": 100,
@@ -414,8 +414,8 @@
         "Remarks"
     ],
     "GAPJI_PROJECT": "Project PROVIDENCE (K1)",
-    "GAPJI_ITEM": "PIPE",
-    "GAPJI_MATERIAL": "",
+    "GAPJI_ITEM": "FLANGE",
+    "GAPJI_MATERIAL": "A312-TP304",
     "GAPJI_REPORT_NO": "",
     "GAPJI_EXAM_DATE": "2026-09-11",
     "SITCO_PMI_COVER_PATH": "",
@@ -460,8 +460,8 @@
     "FOOTER_PT_PMI_DATA_H": 0.0,
     "MARGIN_PMI_COVER_TOP": 0.2,
     "MARGIN_PMI_COVER_BOTTOM": 0.2,
-    "MARGIN_PMI_COVER_LEFT": 0.2,
-    "MARGIN_PMI_COVER_RIGHT": 0.2,
+    "MARGIN_PMI_COVER_LEFT": 0.25,
+    "MARGIN_PMI_COVER_RIGHT": 0.25,
     "PRINT_SCALE_PMI_COVER": "95",
     "PRINT_AREA_PMI_COVER": "",
     "CUSTOM_ROWS_PMI_COVER": "",
@@ -470,8 +470,8 @@
     "CUSTOM_COL_WIDTH_PMI_COVER": 10.0,
     "MARGIN_PMI_DATA_TOP": 0.2,
     "MARGIN_PMI_DATA_BOTTOM": 0.2,
-    "MARGIN_PMI_DATA_LEFT": 0.2,
-    "MARGIN_PMI_DATA_RIGHT": 0.2,
+    "MARGIN_PMI_DATA_LEFT": 0.25,
+    "MARGIN_PMI_DATA_RIGHT": 0.25,
     "PRINT_SCALE_PMI_DATA": "95",
     "PRINT_AREA_PMI_DATA": "",
     "CUSTOM_ROWS_PMI_DATA": "19-45",
@@ -927,19 +927,19 @@
     "PAUT_AWS_NAME_REM": "Remarks",
     "PMI_FILTERS": [
         {
-            "key": "Ni",
-            "min": "10.00",
-            "max": "14.00"
+            "key": "Cr",
+            "min": "18.00",
+            "max": "20.00"
         },
         {
-            "key": "Cr",
-            "min": "16.00",
-            "max": "18.00"
+            "key": "Ni",
+            "min": "8.00",
+            "max": "11.00"
         },
         {
             "key": "Mo",
-            "min": "2.00",
-            "max": "3.00"
+            "min": "",
+            "max": "0.50"
         }
     ],
     "PMI_START_ROW": "19",
@@ -1058,8 +1058,8 @@
     "MT_EXAM_DATE": "2026-11-05",
     "PT_REPORT_NO": "",
     "PT_EXAM_DATE": "2026-09-11",
-    "PMI_CHEM_ELEMENT_1": "Ni",
-    "PMI_CHEM_ELEMENT_2": "Cr",
+    "PMI_CHEM_ELEMENT_1": "Cr",
+    "PMI_CHEM_ELEMENT_2": "Ni",
     "PMI_CHEM_ELEMENT_3": "Mo",
     "PMI_CHEM_ELEMENT_4": "-",
     "PMI_CHEM_ELEMENT_5": "-",
@@ -1068,11 +1068,11 @@
     "PMI_CHEM_SPEC_3": "A182-F316: Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%",
     "PMI_PROJECT": "Project PROVIDENCE (K1)",
     "PMI_CUSTOMER": "\ub86f\ub370\uac74\uc124\u321c",
-    "PMI_ITEM": "PIPE",
-    "PMI_MATERIAL": "",
+    "PMI_ITEM": "FLANGE",
+    "PMI_MATERIAL": "A312-TP304",
     "RT_PROJECT": "2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 \ube44\ud30c\uad34\uac80\uc0ac \ub2e8\uac00\uacc4\uc57d",
     "RT_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",
-    "RT_ITEM": "PIPE",
+    "RT_ITEM": "TEE",
     "RT_MATERIAL": "A312-TP316L",
     "PAUT_PROJECT": "2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 \ube44\ud30c\uad34\uac80\uc0ac \ub2e8\uac00\uacc4\uc57d",
     "PAUT_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",

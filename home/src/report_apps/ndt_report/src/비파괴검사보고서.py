@@ -1760,17 +1760,18 @@ class PMIReportApp:
         ttk.Label(seq_row, text="📊 특정순번:", background="#f9fafb", font=("Malgun Gothic", 8)).pack(side='left')
         ttk.Entry(seq_row, textvariable=self.sequence_filter, width=15, font=("Arial", 9), exportselection=False).pack(side='left', padx=5, fill='x', expand=True)
 
-        action_bar = tk.Frame(left_pane, background="#f9fafb")
-        action_bar.pack(fill='x', pady=5)
-        ttk.Button(action_bar, text=" ✨ 생성 시작 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
-        ttk.Button(action_bar, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x', pady=(0, 5))
-        ttk.Button(action_bar, text=" 📋 일보 NDT 불러오기 ", command=self.load_daily_work_history).pack(fill='x')
-
         self._update_pmi_filter_ui()
 
         # [RIGHT] Multi-Preview Pane (Data & Gapji)
         right_container = tk.Frame(self.pmi_paned, background="#f3f4f6")
         self.pmi_paned.add(right_container, stretch="always")
+
+        # Top Action Bar (생성 시작, 데이터 추출, 일보 NDT 불러오기) - 가로 툴바 배치
+        action_bar = tk.Frame(right_container, background="#f3f4f6")
+        action_bar.pack(fill='x', padx=6, pady=(6, 4))
+        ttk.Button(action_bar, text=" ✨ 생성 시작 ", style="Action.TButton", command=self.run_process).pack(side='left', fill='x', expand=True, padx=(0, 4))
+        ttk.Button(action_bar, text=" 📝 데이터 추출 ", command=self.extract_only).pack(side='left', fill='x', expand=True, padx=(0, 4))
+        ttk.Button(action_bar, text=" 📋 일보 NDT 불러오기 ", command=self.load_daily_work_history).pack(side='left', fill='x', expand=True)
         
         if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
         nb = ttk.Notebook(right_container)
@@ -8820,6 +8821,42 @@ class PMIReportApp:
 
         return ""
 
+    def _get_combined_pmi_item_names(self):
+        """보고서 발행 및 갑지 표기 시 기준(1~6)에 언급된 모든 품명을 중복 없이 순서대로 수집하여 콤마로 연결"""
+        collected = []
+        # 1. 활성화된 기준 그룹에서 품명 수집
+        grouped = self._collect_pmi_active_criteria() if hasattr(self, '_collect_pmi_active_criteria') else []
+        for grp in grouped:
+            item_txt = grp.get('item', '').strip()
+            if item_txt:
+                for part in item_txt.split(','):
+                    p = part.strip()
+                    if p and p not in collected and not any(k in p for k in ("공란", "비움", "-")):
+                        collected.append(p)
+
+        # 2. 기준 슬롯들 직접 검사 (grouped에 누락된 품명이 있는 경우 보완)
+        specs_list = getattr(self, 'pmi_chem_specs', [])
+        for slot_idx, spec_var in enumerate(specs_list, start=1):
+            s_val = spec_var.get().strip()
+            if not s_val or s_val == "-": continue
+            mat_var = getattr(self, f'pmi_spec{slot_idx}_mat', None)
+            m_val = mat_var.get().strip() if mat_var else ""
+            item_t = self._get_pmi_spec_item_title(slot_idx, m_val, s_val) if hasattr(self, '_get_pmi_spec_item_title') else ""
+            if item_t:
+                for part in item_t.split(','):
+                    p = part.strip()
+                    if p and p not in collected and not any(k in p for k in ("공란", "비움", "-")):
+                        collected.append(p)
+
+        # 3. 만약 수집된 것이 없다면 상단 기본 정보 폴백
+        if not collected:
+            base_item = (self.gapji_item.get().strip() if hasattr(self, 'gapji_item') else '') or self.config.get('GAPJI_ITEM', '')
+            if base_item:
+                return base_item
+            return "PIPE"
+
+        return ", ".join(collected)
+
     def _create_pmi_spec_slot_ui(self, slot_idx, container):
         """지정된 번호(1~6)의 기준 슬롯 UI 위젯 생성"""
         if not hasattr(self, 'pmi_spec_slots_ui'):
@@ -12802,6 +12839,7 @@ class PMIReportApp:
                 l5_val = ''
             if ('PROJECT' in a11_val.upper() or '공사명' in a11_val) and ('CUSTOMER' in l5_val.upper() or '주문주' in l5_val):
                 # SITCO standard PMI layout (e.g. K1 / K3 / 롯데 / PROVIDENCE)
+                combined_pmi_item = self._get_combined_pmi_item_names() if hasattr(self, '_get_combined_pmi_item_names') else ''
                 sitco_pmi_mapping = [
                     ('GAPJI_PROJECT', 'E11', getattr(self, 'gapji_project', None)),
                     ('GAPJI_CUSTOMER', 'N5', getattr(self, 'gapji_customer', None)),
@@ -12810,8 +12848,11 @@ class PMIReportApp:
                     ('GAPJI_MATERIAL', 'E17', getattr(self, 'gapji_material', None)),
                 ]
                 for cfg_key, coord, ui_var in sitco_pmi_mapping:
-                    ui_val = ui_var.get().strip() if (ui_var and hasattr(ui_var, 'get')) else ''
-                    val = ui_val or self.config.get(cfg_key, "")
+                    if cfg_key == 'GAPJI_ITEM' and combined_pmi_item:
+                        val = combined_pmi_item
+                    else:
+                        ui_val = ui_var.get().strip() if (ui_var and hasattr(ui_var, 'get')) else ''
+                        val = ui_val or self.config.get(cfg_key, "")
                     if not val and cfg_key == 'GAPJI_REPORT_NO' and first_item:
                         val = str(first_item.get('Report No', '') or first_item.get('Report No.', '')).strip()
                     if val:
@@ -12845,6 +12886,7 @@ class PMIReportApp:
             else:
                 # PMI templates already contain their own date field. Do not use B9
                 # as a fallback because it belongs to the cover logo/header area.
+                combined_pmi_item = self._get_combined_pmi_item_names() if hasattr(self, '_get_combined_pmi_item_names') else ''
                 mapping = [
                     ('GAPJI_PROJECT', 'B5'),
                     ('GAPJI_CUSTOMER', 'B6'),
@@ -12854,7 +12896,10 @@ class PMIReportApp:
                 ]
                 
                 for cfg_key, coord in mapping:
-                    val = self.config.get(cfg_key, "")
+                    if cfg_key == 'GAPJI_ITEM' and combined_pmi_item:
+                        val = combined_pmi_item
+                    else:
+                        val = self.config.get(cfg_key, "")
                     if val:
                         self.safe_set_value(ws, self.config.get(f"{cfg_key}_CELL", coord), val)
 
