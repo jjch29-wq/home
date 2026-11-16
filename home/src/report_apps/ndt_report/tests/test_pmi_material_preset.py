@@ -587,6 +587,11 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         # Row 31 (Tolerance)
         self.assertEqual(ws["A31"].value, "* Tolerance ±10%")
 
+        # Row 27 Header Height & Font Size Check (Prevent text clipping)
+        self.assertEqual(ws.row_dimensions[27].height, 32.0, "Row 27 height must be 32.0 to prevent 2-line header text clipping")
+        self.assertEqual(ws["G27"].font.size, 9, "Header font size should be 9pt when multiple criteria present")
+        self.assertAlmostEqual(ws.row_dimensions[32].height, 3.77, places=2, msg="Row 32 should offset Row 27 height expansion to preserve total vertical height")
+
 
 if __name__ == "__main__":
     unittest.main()
