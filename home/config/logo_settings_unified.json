@@ -1,5 +1,5 @@
 {
-    "PMI_SASH_RATIO": 0.31374606505771246,
+    "PMI_SASH_RATIO": 0.33263378803777544,
     "RT_SASH_RATIO": 0.3111227701993704,
     "PT_SASH_RATIO": 0.35047219307450156,
     "PAUT_SASH_RATIO": 0.3310598111227702,
@@ -154,7 +154,7 @@
     "RT_DATA_END_ROW": "36",
     "RT_PRINT_END_ROW": "36",
     "PHOTO_SASH_RATIO": 0.2743966421825813,
-    "GAPJI_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",
+    "GAPJI_CUSTOMER": "\ub86f\ub370\uac74\uc124\u321c",
     "KOGAS_COL_WIDTHS": {
         "selected": 40,
         "No": 50,
@@ -191,7 +191,7 @@
     "WINDOW_STATE": "zoomed",
     "ACTIVE_TAB": 0,
     "PMI_TARGET_PATH": "G:/\ub0b4 \ub4dc\ub77c\uc774\ube0c/01_\uc5c5\ubb34_\ubc0f_\ud68c\uc0ac/Office/\ucc29\uacf5/Project PROVIDENCE \uc911 \ube44\ud30c\uad34\uac80\uc0ac/DATA/PMI/KES/\ub86f\ub370\uac74\uc124PMI260226 kes/\ub86f\ub370\uac74\uc124 PMI 26.02.26.xlsx",
-    "PMI_TEMPLATE_PATH": "G:/\ub0b4 \ub4dc\ub77c\uc774\ube0c/01_\uc5c5\ubb34_\ubc0f_\ud68c\uc0ac/Office/\ucc29\uacf5/Project PROVIDENCE \uc911 \ube44\ud30c\uad34\uac80\uc0ac/\ud30c\uc774\uc36c/PMI-\ud15c\ud50c\ub9bf\ubcf4\uace0\uc11c.xlsx",
+    "PMI_TEMPLATE_PATH": "C:\\Users\\jjch2\\Desktop\\PMI\\home\\data\\PMI-\ud15c\ud50c\ub9bf\ubcf4\uace0\uc11c.xlsx",
     "RT_TARGET_PATH": "",
     "RT_TEMPLATE_PATH": "C:/Users/jjch2/Desktop/\uc9c0\uc5ed\ub09c\ubc29 RT.xlsx",
     "PT_TARGET_PATH": "C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0070.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0071.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0072.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0073.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0074.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0075.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0076.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0077.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0078.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0079.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0080.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0081.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0082.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0083.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0084.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0085.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0086.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0087.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0088.xlsx|C:/Users/jjch2/Desktop/\uc815\ud638 REQUEST/NDEPTReport 0089.xlsx",
@@ -413,7 +413,7 @@
         "Evaluation",
         "Remarks"
     ],
-    "GAPJI_PROJECT": "2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 \ube44\ud30c\uad34\uac80\uc0ac \ub2e8\uac00\uacc4\uc57d",
+    "GAPJI_PROJECT": "Project PROVIDENCE (K1)",
     "GAPJI_ITEM": "PIPE",
     "GAPJI_MATERIAL": "",
     "GAPJI_REPORT_NO": "",
@@ -460,8 +460,8 @@
     "FOOTER_PT_PMI_DATA_H": 0.0,
     "MARGIN_PMI_COVER_TOP": 0.2,
     "MARGIN_PMI_COVER_BOTTOM": 0.2,
-    "MARGIN_PMI_COVER_LEFT": 0.25,
-    "MARGIN_PMI_COVER_RIGHT": 0.25,
+    "MARGIN_PMI_COVER_LEFT": 0.2,
+    "MARGIN_PMI_COVER_RIGHT": 0.2,
     "PRINT_SCALE_PMI_COVER": "95",
     "PRINT_AREA_PMI_COVER": "",
     "CUSTOM_ROWS_PMI_COVER": "",
@@ -470,8 +470,8 @@
     "CUSTOM_COL_WIDTH_PMI_COVER": 10.0,
     "MARGIN_PMI_DATA_TOP": 0.2,
     "MARGIN_PMI_DATA_BOTTOM": 0.2,
-    "MARGIN_PMI_DATA_LEFT": 0.25,
-    "MARGIN_PMI_DATA_RIGHT": 0.25,
+    "MARGIN_PMI_DATA_LEFT": 0.2,
+    "MARGIN_PMI_DATA_RIGHT": 0.2,
     "PRINT_SCALE_PMI_DATA": "95",
     "PRINT_AREA_PMI_DATA": "",
     "CUSTOM_ROWS_PMI_DATA": "19-45",
@@ -927,19 +927,19 @@
     "PAUT_AWS_NAME_REM": "Remarks",
     "PMI_FILTERS": [
         {
-            "key": "Cr",
-            "min": "",
-            "max": ""
+            "key": "Ni",
+            "min": "10.00",
+            "max": "14.00"
         },
         {
-            "key": "Ni",
-            "min": "",
-            "max": ""
+            "key": "Cr",
+            "min": "16.00",
+            "max": "18.00"
         },
         {
             "key": "Mo",
-            "min": "",
-            "max": ""
+            "min": "2.00",
+            "max": "3.00"
         }
     ],
     "PMI_START_ROW": "19",
@@ -1063,9 +1063,9 @@
     "PMI_CHEM_ELEMENT_3": "Mo",
     "PMI_CHEM_ELEMENT_4": "-",
     "PMI_CHEM_ELEMENT_5": "-",
-    "PMI_CHEM_SPEC_1": "A312- Ni:10.0 ~ 14.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%",
-    "PMI_CHEM_SPEC_2": "ER316L- Ni:11.0 ~ 14.0%, Cr:18.0 ~ 20.0%, Mo:2.0 ~ 3.0%",
-    "PMI_CHEM_SPEC_3": "A182-Ni:10.0 ~ 15.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%",
+    "PMI_CHEM_SPEC_1": "A312-TP316: Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%",
+    "PMI_CHEM_SPEC_2": "ER316: Ni:11.00 ~ 14.00%, Cr:18.00 ~ 20.00%, Mo:2.00 ~ 3.00%",
+    "PMI_CHEM_SPEC_3": "A182-F316: Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%",
     "PMI_PROJECT": "Project PROVIDENCE (K1)",
     "PMI_CUSTOMER": "\ub86f\ub370\uac74\uc124\u321c",
     "PMI_ITEM": "PIPE",
@@ -1073,7 +1073,7 @@
     "RT_PROJECT": "2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 \ube44\ud30c\uad34\uac80\uc0ac \ub2e8\uac00\uacc4\uc57d",
     "RT_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",
     "RT_ITEM": "PIPE",
-    "RT_MATERIAL": "",
+    "RT_MATERIAL": "A312-TP316L",
     "PAUT_PROJECT": "2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 \ube44\ud30c\uad34\uac80\uc0ac \ub2e8\uac00\uacc4\uc57d",
     "PAUT_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",
     "PAUT_ITEM": "PIPE",
@@ -1118,6 +1118,6 @@
     "PAUT_KS_NAME_TCG": "TCG MAX(%)",
     "PAUT_AWS_COL_TCG": "0",
     "PAUT_AWS_NAME_TCG": "TCG MAX(%)",
-    "PMI_LAYOUT_MODE": "PLANT_TRIPLE",
+    "PMI_LAYOUT_MODE": "STANDARD",
     "PMI_LAST_SAVE_DIR": "C:/Users/jjch2/Downloads"
 }

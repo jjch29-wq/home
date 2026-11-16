@@ -4409,6 +4409,11 @@ class PMIReportApp:
                 ent = ttk.Combobox(block, textvariable=var, width=15,
                                    values=('PIPE', 'HOT TAPPING'), state='readonly')
                 ent.bind('<<ComboboxSelected>>', lambda _event: self._apply_mt_item_selection())
+            elif mode == 'PMI' and lbl == '재질:':
+                ent = ttk.Combobox(block, textvariable=var, width=15,
+                                   values=list(self.PMI_MATERIAL_SPECS.keys()))
+                ent.bind('<<ComboboxSelected>>', lambda _event: self._on_pmi_material_changed())
+                ent.bind('<FocusOut>', lambda _event: self._on_pmi_material_changed())
             else:
                 ent = ttk.Entry(
                     block, textvariable=var, width=15,
@@ -4436,21 +4441,31 @@ class PMIReportApp:
                 background="#ffffff", font=("Malgun Gothic", 8, "bold")
             )
             chem_frame.grid(row=3, column=0, columnspan=4, sticky='ew', padx=2, pady=(5, 2))
-            tk.Label(chem_frame, text="원소명:", background="#ffffff").grid(row=0, column=0, padx=2)
+            
+            elem_hdr = tk.Frame(chem_frame, background="#ffffff")
+            elem_hdr.grid(row=0, column=0, columnspan=6, sticky='ew', pady=(0, 2))
+            tk.Label(elem_hdr, text="원소명:", background="#ffffff", font=("Malgun Gothic", 8, "bold")).pack(side='left', padx=2)
+            ttk.Button(elem_hdr, text="🔍 원소 선택", width=10, command=self.show_pmi_element_selector_dialog).pack(side='right', padx=2)
+
             for idx, var in enumerate(self.pmi_chem_elements, start=1):
                 ttk.Entry(chem_frame, textvariable=var, width=8).grid(
-                    row=0, column=idx, sticky='ew', padx=2, pady=1
+                    row=1, column=idx-1, sticky='ew', padx=2, pady=1
                 )
-                chem_frame.columnconfigure(idx, weight=1)
+                chem_frame.columnconfigure(idx-1, weight=1)
                 self.setting_vars[f'PMI_CHEM_ELEMENT_{idx}'] = var
             for idx, var in enumerate(self.pmi_chem_specs, start=1):
                 tk.Label(
                     chem_frame, text=f"기준 {idx}:", background="#ffffff"
-                ).grid(row=idx, column=0, sticky='e', padx=2)
+                ).grid(row=idx+1, column=0, sticky='e', padx=2)
                 ttk.Entry(chem_frame, textvariable=var).grid(
-                    row=idx, column=1, columnspan=5, sticky='ew', padx=2, pady=1
+                    row=idx+1, column=1, columnspan=5, sticky='ew', padx=2, pady=1
                 )
                 self.setting_vars[f'PMI_CHEM_SPEC_{idx}'] = var
+            
+            # [NEW] ⚖️ 규격 합/부 자동 판정 버튼
+            action_row = tk.Frame(chem_frame, background="#ffffff")
+            action_row.grid(row=5, column=0, columnspan=6, sticky='ew', pady=(4, 2))
+            ttk.Button(action_row, text="⚖️ 규격 합/부 자동 판정", command=self.evaluate_pmi_data_compliance).pack(side='right', padx=2)
             
         # RT radioactive-source settings (I10:M11 on the cover sheet).
         isotope_frame = tk.Frame(block, background="#ffffff")
@@ -8131,7 +8146,438 @@ class PMIReportApp:
                 return item[k]
         return None
 
-    def check_material_grade(self, row_data):
+    # --- PMI 재질별 표준 화학성분 스펙 및 판정 DB ---
+    PMI_MATERIAL_SPECS = {
+        "A312-TP304": {
+            "name": "A312-TP304",
+            "title": "ASTM A312 TP304",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "A312-TP304: Cr:18.00 ~ 20.00%, Ni:8.00 ~ 11.00%",
+                "ER308L: Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
+                "A182-F304: Cr:18.00 ~ 20.00%, Ni:8.00 ~ 11.00%"
+            ],
+            "limits": {"Cr": (18.0, 20.0), "Ni": (8.0, 11.0), "Mo": (0.0, 0.5)}
+        },
+        "A312-TP304L": {
+            "name": "A312-TP304L",
+            "title": "ASTM A312 TP304L",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "A312-TP304L: Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%",
+                "ER308L: Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
+                "A182-F304L: Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%"
+            ],
+            "limits": {"Cr": (18.0, 20.0), "Ni": (9.0, 13.0), "Mo": (0.0, 0.5)}
+        },
+        "A312-TP316": {
+            "name": "A312-TP316",
+            "title": "ASTM A312 TP316",
+            "elements": ["Ni", "Cr", "Mo", "-", "-"],
+            "specs": [
+                "A312-TP316: Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%",
+                "ER316: Ni:11.00 ~ 14.00%, Cr:18.00 ~ 20.00%, Mo:2.00 ~ 3.00%",
+                "A182-F316: Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%"
+            ],
+            "limits": {"Ni": (10.0, 14.0), "Cr": (16.0, 18.0), "Mo": (2.0, 3.0)}
+        },
+        "A312-TP316L": {
+            "name": "A312-TP316L",
+            "title": "ASTM A312 TP316L",
+            "elements": ["Ni", "Cr", "Mo", "-", "-"],
+            "specs": [
+                "A312- Ni:10.0 ~ 14.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%",
+                "ER316L- Ni:11.0 ~ 14.0%, Cr:18.0 ~ 20.0%, Mo:2.0 ~ 3.0%",
+                "A182-Ni:10.0 ~ 15.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%"
+            ],
+            "limits": {"Ni": (10.0, 14.0), "Cr": (16.0, 18.0), "Mo": (2.0, 3.0)}
+        },
+        "A312-TP321": {
+            "name": "A312-TP321",
+            "title": "ASTM A312 TP321",
+            "elements": ["Ni", "Cr", "Ti", "-", "-"],
+            "specs": [
+                "A312-TP321: Ni:9.00 ~ 12.00%, Cr:17.00 ~ 19.00%, Ti:0.35 ~ 0.70%",
+                "ER321: Ni:9.00 ~ 11.00%, Cr:18.50 ~ 20.50%, Ti:0.30 ~ 0.75%",
+                "A182-F321: Ni:9.00 ~ 12.00%, Cr:17.00 ~ 19.00%, Ti:0.35 ~ 0.70%"
+            ],
+            "limits": {"Ni": (9.0, 12.0), "Cr": (17.0, 19.0), "Ti": (0.35, 0.70)}
+        },
+        "A312-TP347": {
+            "name": "A312-TP347",
+            "title": "ASTM A312 TP347",
+            "elements": ["Ni", "Cr", "Nb", "-", "-"],
+            "specs": [
+                "A312-TP347: Ni:9.00 ~ 13.00%, Cr:17.00 ~ 19.00%, Nb:0.80 ~ 1.00%",
+                "ER347: Ni:9.00 ~ 11.00%, Cr:19.00 ~ 21.50%, Nb:0.75 ~ 1.00%",
+                "A182-F347: Ni:9.00 ~ 13.00%, Cr:17.00 ~ 19.00%, Nb:0.80 ~ 1.00%"
+            ],
+            "limits": {"Ni": (9.0, 13.0), "Cr": (17.0, 19.0), "Nb": (0.80, 1.00)}
+        },
+        "DUPLEX (S31803)": {
+            "name": "DUPLEX (S31803)",
+            "title": "ASTM A790 S31803",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "S31803: Cr:21.00 ~ 23.00%, Ni:4.50 ~ 6.50%, Mo:2.50 ~ 3.50%",
+                "ER2209: Cr:21.50 ~ 23.50%, Ni:7.50 ~ 9.50%, Mo:2.50 ~ 3.50%",
+                "A182-F51: Cr:21.00 ~ 23.00%, Ni:4.50 ~ 6.50%, Mo:2.50 ~ 3.50%"
+            ],
+            "limits": {"Cr": (21.0, 23.0), "Ni": (4.5, 6.5), "Mo": (2.5, 3.5)}
+        },
+        "INCONEL 625": {
+            "name": "INCONEL 625",
+            "title": "ASTM B444 N06625",
+            "elements": ["Ni", "Cr", "Mo", "Nb", "-"],
+            "specs": [
+                "Inconel 625: Ni:min 58.0%, Cr:20.0 ~ 23.0%, Mo:8.0 ~ 10.0%, Nb:3.15 ~ 4.15%",
+                "ERNiCrMo-3: Ni:min 58.0%, Cr:20.0 ~ 23.0%, Mo:8.0 ~ 10.0%, Nb:3.15 ~ 4.15%",
+                "B564-N06625: Ni:min 58.0%, Cr:20.0 ~ 23.0%, Mo:8.0 ~ 10.0%, Nb:3.15 ~ 4.15%"
+            ],
+            "limits": {"Ni": (58.0, 100.0), "Cr": (20.0, 23.0), "Mo": (8.0, 10.0), "Nb": (3.15, 4.15)}
+        },
+        # --- 구조용 강재 (COLUMN, GIRDER, BEAM / H-BEAM) ---
+        "ASTM A992": {
+            "name": "ASTM A992",
+            "title": "ASTM A992 (BEAM / COLUMN)",
+            "elements": ["Mn", "Si", "V", "Cu", "Cr"],
+            "specs": [
+                "ASTM A992: Mn:0.50 ~ 1.60%, Si:0.15 ~ 0.40%, V:≤0.15%",
+                "WELD (E7018): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
+                "A992 (Residual): Cu:≤0.60%, Ni:≤0.45%, Cr:≤0.35%"
+            ],
+            "limits": {"Mn": (0.50, 1.60), "Si": (0.15, 0.40), "V": (0.00, 0.15)}
+        },
+        "ASTM A572 Gr.50": {
+            "name": "ASTM A572 Gr.50",
+            "title": "ASTM A572 Gr.50 (GIRDER / PLATE)",
+            "elements": ["Mn", "Si", "V", "Nb", "Cr"],
+            "specs": [
+                "A572 Gr.50: Mn:≤1.35%, Si:0.15 ~ 0.40%, V:0.01 ~ 0.15%",
+                "WELD (E7018): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
+                "A572 Gr.50: Nb(Cb):0.005 ~ 0.05%, Cu:≤0.50%"
+            ],
+            "limits": {"Mn": (0.50, 1.35), "Si": (0.15, 0.40), "V": (0.01, 0.15)}
+        },
+        "SM355 (SM490)": {
+            "name": "SM355 (SM490)",
+            "title": "KS D 3515 SM355 (용접구조용)",
+            "elements": ["Mn", "Si", "P", "S", "Cu"],
+            "specs": [
+                "SM355: Mn:≤1.60%, Si:≤0.55%, P:≤0.030%",
+                "WELD (E7018/YGW11): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
+                "SM355: S:≤0.030%, Ceq:≤0.44%"
+            ],
+            "limits": {"Mn": (0.50, 1.60), "Si": (0.10, 0.55)}
+        },
+        "SN355": {
+            "name": "SN355",
+            "title": "KS D 3866 SN355 (건축구조용 H형강)",
+            "elements": ["Mn", "Si", "P", "S", "Cr"],
+            "specs": [
+                "SN355: Mn:≤1.60%, Si:≤0.55%, P:≤0.030%",
+                "WELD (E7018/YGW11): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
+                "SN355: S:≤0.015%, Ceq:≤0.45%"
+            ],
+            "limits": {"Mn": (0.50, 1.60), "Si": (0.10, 0.55)}
+        },
+        "ASTM A36": {
+            "name": "ASTM A36",
+            "title": "ASTM A36 (탄소 구조강)",
+            "elements": ["Mn", "Si", "Cu", "P", "S"],
+            "specs": [
+                "ASTM A36: Mn:0.60 ~ 1.20%, Si:≤0.40%",
+                "WELD (E6013/E7018): Mn:0.40 ~ 1.25%, Si:≤0.60%",
+                "ASTM A36: P:≤0.030%, S:≤0.030%"
+            ],
+            "limits": {"Mn": (0.40, 1.20), "Si": (0.10, 0.40)}
+        },
+        "SS275 (SS400)": {
+            "name": "SS275 (SS400)",
+            "title": "KS D 3503 SS275 (일반구조용)",
+            "elements": ["Mn", "Si", "P", "S", "-"],
+            "specs": [
+                "SS275: Mn:≤1.40%, Si:≤0.45%",
+                "WELD (E4313/E7016): Mn:0.40 ~ 1.20%, Si:≤0.50%",
+                "SS275: P:≤0.040%, S:≤0.040%"
+            ],
+            "limits": {"Mn": (0.30, 1.40), "Si": (0.05, 0.45)}
+        },
+        # --- Project PROVIDENCE 현장 공식 성분표 규격 (SA-351 / SA-403 / SFA-5.9) ---
+        "A351-CF8M": {
+            "name": "A351-CF8M",
+            "title": "ASTM A351 CF8M (316 VALVE)",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "A351-CF8M (Valve): Cr:18.00 ~ 21.00%, Ni:9.00 ~ 12.00%, Mo:2.00 ~ 3.00%",
+                "ER316L (Weld): Cr:18.00 ~ 20.00%, Ni:11.00 ~ 14.00%, Mo:2.00 ~ 3.00%",
+                "A182-F316L (Flange): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 15.00%, Mo:2.00 ~ 3.00%"
+            ],
+            "limits": {"Cr": (16.0, 21.0), "Ni": (9.0, 15.0), "Mo": (2.0, 3.0)}
+        },
+        "A351-CF3M": {
+            "name": "A351-CF3M",
+            "title": "ASTM A351 CF3M (316L VALVE)",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "A351-CF3M (Valve): Cr:17.00 ~ 21.00%, Ni:9.00 ~ 13.00%, Mo:2.00 ~ 3.00%",
+                "ER316L (Weld): Cr:18.00 ~ 20.00%, Ni:11.00 ~ 14.00%, Mo:2.00 ~ 3.00%",
+                "A182-F316L (Flange): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 15.00%, Mo:2.00 ~ 3.00%"
+            ],
+            "limits": {"Cr": (16.0, 21.0), "Ni": (9.0, 15.0), "Mo": (2.0, 3.0)}
+        },
+        "A351-CF8": {
+            "name": "A351-CF8",
+            "title": "ASTM A351 CF8 (304 VALVE)",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "A351-CF8 (Valve): Cr:18.00 ~ 21.00%, Ni:8.00 ~ 11.00%, Mo:≤0.50%",
+                "ER308L (Weld): Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
+                "A182-F304 (Flange): Cr:18.00 ~ 20.00%, Ni:8.00 ~ 11.00%"
+            ],
+            "limits": {"Cr": (18.0, 22.0), "Ni": (8.0, 11.0), "Mo": (0.0, 0.75)}
+        },
+        "A403-WP316L": {
+            "name": "A403-WP316L",
+            "title": "ASTM A403 WP316L (FITTINGS)",
+            "elements": ["Ni", "Cr", "Mo", "-", "-"],
+            "specs": [
+                "A403-WP316L (Fitting): Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%",
+                "ER316L (Weld): Ni:11.00 ~ 14.00%, Cr:18.00 ~ 20.00%, Mo:2.00 ~ 3.00%",
+                "A312-TP316L (Pipe): Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%"
+            ],
+            "limits": {"Ni": (10.0, 14.0), "Cr": (16.0, 20.0), "Mo": (2.0, 3.0)}
+        },
+        "ER309L (이재질)": {
+            "name": "ER309L (이재질)",
+            "title": "AWS A5.9 ER309L (DISSIMILAR WELD)",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "ER309L (Weld): Cr:23.00 ~ 25.00%, Ni:12.00 ~ 14.00%, Mo:≤0.75%",
+                "A312-TP316L / TP304L: Cr:16.00 ~ 20.00%, Ni:10.00 ~ 14.00%",
+                "Carbon Steel (Base): Fe:Balance, Mn:≤1.60%"
+            ],
+            "limits": {"Cr": (16.0, 25.0), "Ni": (8.0, 14.0)}
+        }
+    }
+
+    PMI_MATERIAL_ALIASES = {
+        "TP304": "A312-TP304", "SUS304": "A312-TP304", "SS304": "A312-TP304", "304": "A312-TP304",
+        "TP304L": "A312-TP304L", "SUS304L": "A312-TP304L", "SS304L": "A312-TP304L", "304L": "A312-TP304L",
+        "TP316": "A312-TP316", "SUS316": "A312-TP316", "SS316": "A312-TP316", "316": "A312-TP316",
+        "TP316L": "A312-TP316L", "SUS316L": "A312-TP316L", "SS316L": "A312-TP316L", "316L": "A312-TP316L",
+        "TP321": "A312-TP321", "SUS321": "A312-TP321", "SS321": "A312-TP321", "321": "A312-TP321",
+        "TP347": "A312-TP347", "SUS347": "A312-TP347", "SS347": "A312-TP347", "347": "A312-TP347",
+        "DUPLEX": "DUPLEX (S31803)", "S31803": "DUPLEX (S31803)", "S32205": "DUPLEX (S31803)",
+        "INCONEL": "INCONEL 625", "INCONEL625": "INCONEL 625",
+        "A992": "ASTM A992", "WBEAM": "ASTM A992", "HBEAM": "ASTM A992", "BEAM": "ASTM A992", "COLUMN": "ASTM A992", "GIRDER": "ASTM A992",
+        "A572": "ASTM A572 Gr.50", "A572GR50": "ASTM A572 Gr.50", "GR50": "ASTM A572 Gr.50",
+        "SM355": "SM355 (SM490)", "SM490": "SM355 (SM490)", "SM355A": "SM355 (SM490)", "SM355B": "SM355 (SM490)",
+        "SN355": "SN355", "SN490": "SN355", "SHN355": "SN355",
+        "A36": "ASTM A36",
+        "SS275": "SS275 (SS400)", "SS400": "SS275 (SS400)",
+        "CF8M": "A351-CF8M", "CF3M": "A351-CF3M", "CF8": "A351-CF8", "CF3": "A351-CF8", "VALVE": "A351-CF8M", "351": "A351-CF8M",
+        "WP316L": "A403-WP316L", "WP316": "A403-WP316L", "WP304L": "A312-TP304L", "WP304": "A312-TP304", "FITTING": "A403-WP316L",
+        "ER309L": "ER309L (이재질)", "309L": "ER309L (이재질)", "309": "ER309L (이재질)", "이재질": "ER309L (이재질)",
+        "F316L": "A312-TP316L", "F316": "A312-TP316", "F304L": "A312-TP304L", "F304": "A312-TP304"
+    }
+
+    def _lookup_pmi_material_spec(self, mat_str):
+        if not mat_str: return None
+        raw = str(mat_str).strip().upper().replace(" ", "").replace("-", "").replace("_", "")
+        # 1. Exact match with primary spec keys
+        for k, v in self.PMI_MATERIAL_SPECS.items():
+            k_clean = k.upper().replace(" ", "").replace("-", "").replace("_", "")
+            if raw == k_clean:
+                return v
+        # 2. Exact match with alias keys
+        for alias, target in self.PMI_MATERIAL_ALIASES.items():
+            a_clean = alias.upper().replace(" ", "").replace("-", "").replace("_", "")
+            if raw == a_clean:
+                return self.PMI_MATERIAL_SPECS.get(target)
+        # 3. Partial match (longest alias first to prevent short substring false-positive like '316' inside 'WP316L')
+        sorted_aliases = sorted(self.PMI_MATERIAL_ALIASES.items(), key=lambda x: len(x[0]), reverse=True)
+        for alias, target in sorted_aliases:
+            a_clean = alias.upper().replace(" ", "").replace("-", "").replace("_", "")
+            if len(a_clean) >= 3 and a_clean in raw:
+                return self.PMI_MATERIAL_SPECS.get(target)
+        # 4. Partial match with primary spec keys
+        sorted_specs = sorted(self.PMI_MATERIAL_SPECS.items(), key=lambda x: len(x[0]), reverse=True)
+        for k, v in sorted_specs:
+            k_clean = k.upper().replace(" ", "").replace("-", "").replace("_", "")
+            if len(k_clean) >= 4 and (k_clean in raw or raw in k_clean):
+                return v
+        return None
+
+    def apply_pmi_material_preset(self, mat_name):
+        spec = self._lookup_pmi_material_spec(mat_name)
+        if not spec: return False
+        
+        # 1. Chemical elements (Ni, Cr, Mo...)
+        for idx, elem in enumerate(spec["elements"]):
+            if idx < len(self.pmi_chem_elements):
+                self.pmi_chem_elements[idx].set(elem)
+                
+        # 2. Chemical specs (기준 1, 2, 3)
+        for idx, sp in enumerate(spec["specs"]):
+            if idx < len(self.pmi_chem_specs):
+                self.pmi_chem_specs[idx].set(sp)
+                
+        # 3. element_filters (Min ~ Max)
+        if hasattr(self, 'element_filters'):
+            self.element_filters.clear()
+            for elem_name, (f_min, f_max) in spec["limits"].items():
+                min_str = f"{f_min:.2f}" if f_min > 0 else ""
+                max_str = f"{f_max:.2f}" if f_max > 0 else ""
+                self.element_filters.append({
+                    'key': tk.StringVar(value=elem_name),
+                    'min': tk.StringVar(value=min_str),
+                    'max': tk.StringVar(value=max_str)
+                })
+            self._update_pmi_filter_ui()
+            
+        self.save_settings()
+        self.log(f"📋 PMI 재질 기준 자동 적용: {spec['name']}")
+        
+        # 4. If extracted data exists, re-evaluate automatically
+        if getattr(self, 'extracted_data', None):
+            self.evaluate_pmi_data_compliance(show_msg=False)
+            
+        return True
+
+    def _on_pmi_material_changed(self, event=None):
+        mat = self.gapji_material.get().strip()
+        if mat:
+            self.apply_pmi_material_preset(mat)
+
+    def evaluate_pmi_data_compliance(self, show_msg=True):
+        """추출된 PMI 측정 데이터를 현재 재질 기준(또는 element_filters)과 비교하여 합/부(ALL MATCH / MISMATCH) 자동 판정"""
+        if not getattr(self, 'extracted_data', None):
+            if show_msg:
+                messagebox.showinfo("알림", "판정할 PMI 추출 데이터가 없습니다.")
+            return
+
+        limits = {}
+        if hasattr(self, 'element_filters') and self.element_filters:
+            for f in self.element_filters:
+                k = f['key'].get().strip()
+                if not k: continue
+                min_v = self.to_float(f['min'].get())
+                max_v = self.to_float(f['max'].get())
+                if min_v > 0 or max_v > 0:
+                    limits[k] = (min_v, max_v if max_v > 0 else 999.9)
+
+        if not limits:
+            spec = self._lookup_pmi_material_spec(self.gapji_material.get().strip())
+            if spec:
+                limits = spec["limits"]
+
+        if not limits:
+            if show_msg:
+                messagebox.showwarning("경고", "판정할 원소 기준(Min ~ Max)이 설정되지 않았습니다.\n재질을 선택하거나 성분 필터를 입력해주세요.")
+            return
+
+        pass_count = 0
+        fail_count = 0
+        margin = 0.10 # 10% tolerance (갑지 Acceptance Criteria 규격)
+
+        for item in self.extracted_data:
+            mismatches = []
+            for elem_k, (f_min, f_max) in limits.items():
+                val = self.to_float(self._get_val_ci(item, elem_k))
+                tol_min = round(f_min * (1.0 - margin), 2) if f_min > 0 else 0.0
+                tol_max = round(f_max * (1.0 + margin), 2) if f_max > 0 else 999.9
+
+                if f_min > 0 and val < tol_min:
+                    mismatches.append(f"{elem_k}미달({val:.2f}%)")
+                elif f_max > 0 and val > tol_max:
+                    mismatches.append(f"{elem_k}초과({val:.2f}%)")
+
+            if not mismatches:
+                item['Grade'] = "ALL MATCH"
+                item['Result'] = "ALL MATCH"
+                item['is_deficient'] = False
+                pass_count += 1
+            else:
+                reason = ", ".join(mismatches)
+                item['Grade'] = f"MISMATCH ({reason})"
+                item['Result'] = "MISMATCH"
+                item['is_deficient'] = True
+                fail_count += 1
+
+        self.populate_preview(self.extracted_data, switch_tab=False, mode="PMI")
+        msg = f"⚖️ 규격 판정 완료: 전체 {len(self.extracted_data)}건 중 합격(ALL MATCH) {pass_count}건, 부적합(MISMATCH) {fail_count}건"
+        self.log(msg)
+        if show_msg:
+            messagebox.showinfo("판정 결과", msg)
+
+    def show_pmi_element_selector_dialog(self):
+        """추출된 데이터 또는 전체 화학 원소 목록에서 리포트에 표기할 원소(최대 5개)를 선택하는 다이얼로그"""
+        detected_elements = set()
+        if getattr(self, 'extracted_data', None):
+            ignore_keys = {"_status", "selected", "No", "Date", "Report No", "Dwg", "Joint", "Loc", "Grade", "Result", "Remarks", "Welder", "order_index"}
+            for item in self.extracted_data[:30]:
+                for k, v in item.items():
+                    if k not in ignore_keys and isinstance(v, (int, float)) and v > 0:
+                        detected_elements.add(k)
+        
+        common_elements = ["Ni", "Cr", "Mo", "Ti", "Nb", "Mn", "Si", "Cu", "V", "W", "Co", "Fe", "Al", "C", "P", "S"]
+        ordered_candidates = [e for e in common_elements if e in detected_elements] + [e for e in detected_elements if e not in common_elements] + [e for e in common_elements if e not in detected_elements]
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("PMI 출력 원소 선택")
+        dialog.geometry("450x340")
+        dialog.minsize(420, 300)
+        dialog.configure(background="#f9fafb")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        main_f = ttk.Frame(dialog, padding=15)
+        main_f.pack(fill='both', expand=True)
+        
+        # 1. 상단 안내
+        top_f = ttk.Frame(main_f)
+        top_f.pack(fill='x', pady=(0, 10))
+        ttk.Label(top_f, text="🔬 성적서 출력 원소 선택 (최대 5개)", font=("Malgun Gothic", 10, "bold")).pack(anchor='w', pady=(0, 3))
+        ttk.Label(top_f, text="출력할 화학 원소를 체크하세요. (선택된 순서대로 성적서에 반영됩니다)", font=("Malgun Gothic", 8), foreground="#6b7280").pack(anchor='w')
+        
+        # 2. 하단 버튼 영역 (창 크기와 무관하게 항상 보이도록 side='bottom'으로 먼저 패킹)
+        btn_f = ttk.Frame(main_f)
+        btn_f.pack(side='bottom', fill='x', pady=(10, 0))
+        
+        def apply_selected():
+            chosen = [e for e, v in check_vars.items() if v.get()]
+            if not chosen:
+                messagebox.showwarning("경고", "최소 1개 이상의 원소를 선택해주세요.")
+                return
+            if len(chosen) > 5:
+                messagebox.showwarning("경고", f"성적서 양식상 최대 5개 원소까지만 선택 가능합니다.\n(현재 {len(chosen)}개 선택됨)")
+                return
+                
+            for idx in range(5):
+                val = chosen[idx] if idx < len(chosen) else "-"
+                self.pmi_chem_elements[idx].set(val)
+                
+            self.save_settings()
+            self.log(f"✅ PMI 출력 원소 설정 완료: {', '.join(chosen)}")
+            dialog.destroy()
+            
+        ttk.Button(btn_f, text=" 적용 (Apply) ", command=apply_selected, width=14).pack(side='right', padx=5)
+        ttk.Button(btn_f, text=" 취소 (Cancel) ", command=dialog.destroy, width=14).pack(side='right')
+
+        # 3. 중앙 체크박스 영역 (4열 배치로 콤팩트하게 정렬)
+        content_box = tk.LabelFrame(main_f, text=" 화학 원소 목록 ", padding=10, background="#ffffff", font=("Malgun Gothic", 8, "bold"))
+        content_box.pack(fill='both', expand=True, pady=5)
+        for col_i in range(4):
+            content_box.columnconfigure(col_i, weight=1)
+
+        current_selected = [var.get().strip() for var in self.pmi_chem_elements if var.get().strip() and var.get().strip() != '-']
+        check_vars = {}
+        for i, elem in enumerate(ordered_candidates[:16]):
+            var = tk.BooleanVar(value=(elem in current_selected))
+            check_vars[elem] = var
+            chk = ttk.Checkbutton(content_box, text=elem, variable=var)
+            chk.grid(row=i//4, column=i%4, sticky='w', padx=12, pady=6)
         """jjchRFIPMI.py에서 이식된 10% 여유치 판정 로직"""
         cr = self.to_float(self._get_val_ci(row_data, 'Cr'))
         ni = self.to_float(self._get_val_ci(row_data, 'Ni'))
@@ -11368,6 +11814,48 @@ class PMIReportApp:
                         self.safe_set_value(ws, 'K42', exam_date)
                     elif ws.cell(row=40, column=10).value is not None:
                         self.safe_set_value(ws, 'J40', exam_date)
+
+                # [NEW] 갑지 1. Acceptance Criteria (%) 표(A24:G30)를 선택된 재질 기준으로 자동 갱신
+                mat_input = (self.gapji_material.get().strip() if hasattr(self, 'gapji_material') else '') or self.config.get('GAPJI_MATERIAL', '')
+                spec = self._lookup_pmi_material_spec(mat_input) if hasattr(self, '_lookup_pmi_material_spec') else None
+                if spec and ws.cell(row=24, column=1).value is not None:
+                    item_name = (self.gapji_item.get().strip() if hasattr(self, 'gapji_item') else '') or self.config.get('GAPJI_ITEM', 'PIPE')
+                    a24_title = f"1. Acceptance Criteria (%)\n{spec.get('title', spec['name'])} — {item_name}"
+                    self.safe_set_value(ws, 'A24', a24_title)
+                    elem_full_names = {
+                        'Cr': 'Chromium', 'Ni': 'Nickel', 'Mo': 'Molybdenum',
+                        'Mn': 'Manganese', 'Si': 'Silicon', 'V': 'Vanadium',
+                        'Nb': 'Niobium', 'Ti': 'Titanium', 'Cu': 'Copper',
+                        'P': 'Phosphorus', 'S': 'Sulfur'
+                    }
+                    target_elems = [e for e in spec.get("elements", []) if e and e != "-"]
+                    # Cr과 Ni가 모두 존재하는 합금강은 갑지 표준 서식에 맞춰 Chromium -> Nickel 순서 유지
+                    if "Cr" in target_elems and "Ni" in target_elems:
+                        target_elems = ["Cr", "Ni"] + [e for e in target_elems if e not in ("Cr", "Ni")]
+                    target_elems = target_elems[:3]
+                    if not target_elems:
+                        target_elems = list(spec.get("limits", {}).keys())[:3]
+
+                    target_cells = [('A28', 'G28'), ('A29', 'G29'), ('A30', 'G30')]
+                    for idx, (a_cell, g_cell) in enumerate(target_cells):
+                        if idx < len(target_elems):
+                            short_k = target_elems[idx]
+                            full_n = elem_full_names.get(short_k, short_k)
+                            if short_k in spec.get("limits", {}):
+                                l_min, l_max = spec["limits"][short_k]
+                                if l_min > 0 and l_max < 900.0:
+                                    g_text = f"{l_min:.2f}~{l_max:.2f}"
+                                elif l_min > 0:
+                                    g_text = f"Min {l_min:.2f}"
+                                else:
+                                    g_text = f"Max {l_max:.2f}"
+                            else:
+                                g_text = "-"
+                            self.safe_set_value(ws, a_cell, full_n)
+                            self.safe_set_value(ws, g_cell, g_text)
+                        else:
+                            self.safe_set_value(ws, a_cell, "-")
+                            self.safe_set_value(ws, g_cell, "-")
             else:
                 # PMI templates already contain their own date field. Do not use B9
                 # as a fallback because it belongs to the cover logo/header area.
