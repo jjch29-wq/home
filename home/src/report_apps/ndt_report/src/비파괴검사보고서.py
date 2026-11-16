@@ -1675,18 +1675,17 @@ class PMIReportApp:
             cmd = (lambda : self._browse_dir(var)) if is_dir else (lambda : self._browse_file(var, types))
             ttk.Button(parent_f, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
 
-        _add_very_compact_row(file_container, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
-        _add_very_compact_row(file_container, "데이터:", self.target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
-        _add_very_compact_row(file_container, "양식:", self.template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        _add_very_compact_row(file_container, "데이터:", self.target_file_path, 0, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_very_compact_row(file_container, "양식:", self.template_file_path, 1, types=[("Excel Template", "*.xlsx;*.xlsm")])
         
         # [NEW] Template Config Save Button
         btn_frame = tk.Frame(file_container, background="#f0f0f0")
-        btn_frame.grid(row=3, column=1, sticky='ew', pady=2)
+        btn_frame.grid(row=2, column=1, sticky='ew', pady=2)
         ttk.Button(btn_frame, text="💾 현재 설정을 이 양식 전용으로 저장", command=lambda: self.save_template_specific_config("PMI")).pack(side='left', padx=2)
 
         # [NEW] PMI 양식 모드 선택 (일반 1행 vs 모재+용접부+모재 3단)
         layout_mode_frame = tk.LabelFrame(file_container, text=" 양식 모드 (측정 방식) ", background="#f0f0f0", padx=4, pady=2)
-        layout_mode_frame.grid(row=4, column=0, columnspan=3, sticky='ew', padx=2, pady=3)
+        layout_mode_frame.grid(row=3, column=0, columnspan=3, sticky='ew', padx=2, pady=3)
         ttk.Radiobutton(layout_mode_frame, text="일반 단일행 (1포인트 = 1행)", variable=self.pmi_layout_mode, value="STANDARD").pack(side='left', padx=6)
         ttk.Radiobutton(layout_mode_frame, text="플랜트 배관용 (모재+용접부+모재 3단 / 1p당 9포인트)", variable=self.pmi_layout_mode, value="PLANT_TRIPLE").pack(side='left', padx=6)
 
@@ -1700,17 +1699,20 @@ class PMIReportApp:
         tab_cover = ttk.Frame(self.pmi_tab_notebook, padding=5)
         tab_data = ttk.Frame(self.pmi_tab_notebook, padding=5)
         tab_rows = ttk.Frame(self.pmi_tab_notebook, padding=5)
-        tab_filter = ttk.Frame(self.pmi_tab_notebook, padding=10)
         tab_cols = ttk.Frame(self.pmi_tab_notebook, padding=5)
+        tab_filter = ttk.Frame(self.pmi_tab_notebook, padding=10)  # 내부 호환용 위젯 유지 (노트북 탭 미노출)
         
         # [CRITICAL] Allow children to expand within tabs
-        for t in [tab_cover, tab_data, tab_rows, tab_filter, tab_cols]: t.columnconfigure(0, weight=1)
+        for t in [tab_cover, tab_data, tab_rows, tab_cols]: t.columnconfigure(0, weight=1)
 
         self.pmi_tab_notebook.add(tab_cover, text="갑지")
         self.pmi_tab_notebook.add(tab_data, text="을지")
         self.pmi_tab_notebook.add(tab_rows, text="행 설정")
         self.pmi_tab_notebook.add(tab_cols, text="컬럼 설정")
-        self.pmi_tab_notebook.add(tab_filter, text="필터/옵션")
+        # [CLEANUP] 사용 빈도가 낮고 혼선을 주는 레거시 '필터/옵션' 탭은 화면에서 숨김 (재질 자동 판정은 기본 True 유지)
+        # self.pmi_tab_notebook.add(tab_filter, text="필터/옵션")
+        if hasattr(self, 'auto_verify'):
+            self.auto_verify.set(True)
 
         # [FIX] Do NOT reset setting_vars here to prevent data loss when switching tabs
         # [ALIGNED] Mode-specific context for logo grid
