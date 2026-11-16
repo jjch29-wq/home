@@ -220,6 +220,44 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.app._on_pmi_material_changed()
         self.assertEqual(self.app.gapji_item.get(), "PIPE")
 
+        # 6. Setting item to WELD updates material to ER316L
+        self.app.gapji_item.set("WELD")
+        self.app._on_pmi_item_changed()
+        self.assertEqual(self.app.gapji_material.get(), "ER316L")
+
+        # 7. Setting material to ER308L updates item to WELD
+        self.app.gapji_material.set("ER308L")
+        self.app._on_pmi_material_changed()
+        self.assertEqual(self.app.gapji_item.get(), "WELD")
+
+        # 8. Setting material to ER70S-6 updates item to WELD
+        self.app.gapji_material.set("ER70S-6")
+        self.app._on_pmi_material_changed()
+        self.assertEqual(self.app.gapji_item.get(), "WELD")
+
+    def test_welding_material_presets_limits(self):
+        """Verify welding consumables (ER316L, ER308L, ER2209, ER70S-6) have correct limits and specs."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+
+        spec_316 = self.app._lookup_pmi_material_spec("ER316L")
+        self.assertIsNotNone(spec_316)
+        self.assertEqual(spec_316["limits"]["Cr"], (18.0, 20.0))
+        self.assertEqual(spec_316["limits"]["Ni"], (11.0, 14.0))
+
+        spec_308 = self.app._lookup_pmi_material_spec("ER308L")
+        self.assertIsNotNone(spec_308)
+        self.assertEqual(spec_308["limits"]["Cr"], (19.5, 22.0))
+        self.assertEqual(spec_308["limits"]["Ni"], (9.0, 11.0))
+
+        spec_2209 = self.app._lookup_pmi_material_spec("ER2209")
+        self.assertIsNotNone(spec_2209)
+        self.assertEqual(spec_2209["limits"]["Cr"], (21.5, 23.5))
+
+        spec_70s = self.app._lookup_pmi_material_spec("ER70S-6")
+        self.assertIsNotNone(spec_70s)
+        self.assertEqual(spec_70s["limits"]["Mn"], (0.80, 1.85))
+
 
 if __name__ == "__main__":
     unittest.main()

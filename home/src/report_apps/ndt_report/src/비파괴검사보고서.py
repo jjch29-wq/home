@@ -4411,7 +4411,7 @@ class PMIReportApp:
                 ent.bind('<<ComboboxSelected>>', lambda _event: self._apply_mt_item_selection())
             elif mode == 'PMI' and lbl == '품명:':
                 ent = ttk.Combobox(block, textvariable=var, width=15,
-                                   values=('PIPE', 'FLANGE', 'VALVE', 'FITTING', 'BEAM/COLUMN', 'HOT TAPPING'))
+                                   values=('PIPE', 'FLANGE', 'VALVE', 'FITTING', 'WELD', 'BEAM/COLUMN', 'HOT TAPPING'))
                 ent.bind('<<ComboboxSelected>>', lambda _event: self._on_pmi_item_changed())
                 ent.bind('<FocusOut>', lambda _event: self._on_pmi_item_changed())
                 self.pmi_item_combobox = ent
@@ -8387,6 +8387,51 @@ class PMIReportApp:
                 "Carbon Steel (Base): Fe:Balance, Mn:≤1.60%"
             ],
             "limits": {"Cr": (16.0, 25.0), "Ni": (8.0, 14.0)}
+        },
+        # --- 용접봉 및 용접재 단독 규격 (AWS A5.9 / A5.18 / ASME SFA-5.9) ---
+        "ER316L": {
+            "name": "ER316L",
+            "title": "AWS A5.9 ER316L (WELD)",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "ER316L (Weld): Cr:18.00 ~ 20.00%, Ni:11.00 ~ 14.00%, Mo:2.00 ~ 3.00%",
+                "A312-TP316L (Pipe): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 14.00%, Mo:2.00 ~ 3.00%",
+                "A182-F316L (Flange): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 15.00%, Mo:2.00 ~ 3.00%"
+            ],
+            "limits": {"Cr": (18.0, 20.0), "Ni": (11.0, 14.0), "Mo": (2.0, 3.0)}
+        },
+        "ER308L": {
+            "name": "ER308L",
+            "title": "AWS A5.9 ER308L (WELD)",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "ER308L (Weld): Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%, Mo:≤0.75%",
+                "A312-TP304L (Pipe): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%",
+                "A182-F304L (Flange): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%"
+            ],
+            "limits": {"Cr": (19.5, 22.0), "Ni": (9.0, 11.0), "Mo": (0.0, 0.75)}
+        },
+        "ER2209": {
+            "name": "ER2209",
+            "title": "AWS A5.9 ER2209 (DUPLEX WELD)",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "ER2209 (Duplex Weld): Cr:21.50 ~ 23.50%, Ni:7.50 ~ 9.50%, Mo:2.50 ~ 3.50%",
+                "S31803 / S32205 (Pipe): Cr:21.00 ~ 23.00%, Ni:4.50 ~ 6.50%, Mo:2.50 ~ 3.50%",
+                "A182-F51 (Flange): Cr:21.00 ~ 23.00%, Ni:4.50 ~ 6.50%, Mo:2.50 ~ 3.50%"
+            ],
+            "limits": {"Cr": (21.5, 23.5), "Ni": (7.5, 9.5), "Mo": (2.5, 3.5)}
+        },
+        "ER70S-6": {
+            "name": "ER70S-6",
+            "title": "AWS A5.18 ER70S-6 / E7018 (WELD)",
+            "elements": ["Mn", "Si", "P", "S", "Cu"],
+            "specs": [
+                "ER70S-6 (Weld Wire): Mn:1.40 ~ 1.85%, Si:0.80 ~ 1.15%",
+                "E7018 (SMAW): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
+                "ASTM A992 / SM355: Mn:0.50 ~ 1.60%, Si:0.15 ~ 0.55%"
+            ],
+            "limits": {"Mn": (0.80, 1.85), "Si": (0.20, 1.15)}
         }
     }
 
@@ -8408,6 +8453,10 @@ class PMIReportApp:
         "CF8M": "A351-CF8M", "CF3M": "A351-CF3M", "CF8": "A351-CF8", "CF3": "A351-CF8", "VALVE": "A351-CF8M", "351": "A351-CF8M",
         "WP316L": "A403-WP316L", "WP316": "A403-WP316L", "WP304L": "A312-TP304L", "WP304": "A312-TP304", "FITTING": "A403-WP316L",
         "ER309L": "ER309L (이재질)", "309L": "ER309L (이재질)", "309": "ER309L (이재질)", "이재질": "ER309L (이재질)",
+        "ER316L": "ER316L", "E316L": "ER316L", "316LWELD": "ER316L", "ER316": "ER316L",
+        "ER308L": "ER308L", "E308L": "ER308L", "308L": "ER308L", "ER308": "ER308L",
+        "ER2209": "ER2209", "2209": "ER2209", "E2209": "ER2209",
+        "ER70S6": "ER70S-6", "ER70S-6": "ER70S-6", "YGW11": "ER70S-6", "YGW12": "ER70S-6", "E7018": "ER70S-6", "WELD": "ER316L",
         "F316L": "A182-F316L", "F316": "A182-F316L", "F304L": "A182-F304L", "F304": "A182-F304L", "FLANGE": "A182-F316L", "A182": "A182-F316L"
     }
 
@@ -8492,6 +8541,10 @@ class PMIReportApp:
             "default_material": "A403-WP316L",
             "materials": ["A403-WP316L"]
         },
+        "WELD": {
+            "default_material": "ER316L",
+            "materials": ["ER316L", "ER308L", "ER309L (이재질)", "ER2209", "ER70S-6"]
+        },
         "BEAM/COLUMN": {
             "default_material": "ASTM A992",
             "materials": ["ASTM A992", "ASTM A572 Gr.50", "SM355 (SM490)", "SN355", "ASTM A36", "SS275 (SS400)"]
@@ -8499,7 +8552,7 @@ class PMIReportApp:
     }
 
     def _on_pmi_item_changed(self, event=None):
-        """품명 변경 시 해당 품명 형태(파이프, 단조품, 주물, 피팅 등)에 맞는 재질 드롭다운 재정렬 및 기본 재질 자동 연동"""
+        """품명 변경 시 해당 품명 형태(파이프, 단조품, 주물, 피팅, 용접봉 등)에 맞는 재질 드롭다운 재정렬 및 기본 재질 자동 연동"""
         if not hasattr(self, 'gapji_item') or not hasattr(self, 'gapji_material'):
             return
         raw_item = self.gapji_item.get().strip().upper()
@@ -8514,6 +8567,8 @@ class PMIReportApp:
             target_cat = "VALVE"
         elif any(k in raw_item for k in ["FITTING", "피팅", "이음쇠", "ELBOW", "엘보", "TEE", "티"]):
             target_cat = "FITTING"
+        elif any(k in raw_item for k in ["WELD", "용접", "용접봉", "와이어", "WIRE", "ELECTRODE"]):
+            target_cat = "WELD"
         elif any(k in raw_item for k in ["BEAM", "COLUMN", "GIRDER", "보", "기둥", "거더", "형강"]):
             target_cat = "BEAM/COLUMN"
 
@@ -8548,12 +8603,14 @@ class PMIReportApp:
                 new_item = "VALVE"
             elif "A403" in m_name:
                 new_item = "FITTING"
+            elif any(k in m_name for k in ["ER316L", "ER308L", "ER309L", "ER2209", "ER70S"]):
+                new_item = "WELD"
             elif any(k in m_name for k in ["A992", "A572", "SM355", "SN355", "A36", "SS275"]):
                 new_item = "H-BEAM"
             elif "A312" in m_name:
                 new_item = "PIPE"
 
-            if new_item and (not cur_item or cur_item in ("PIPE", "FLANGE", "VALVE", "FITTING", "H-BEAM", "BEAM", "HOT TAPPING")):
+            if new_item and (not cur_item or cur_item in ("PIPE", "FLANGE", "VALVE", "FITTING", "WELD", "H-BEAM", "BEAM", "HOT TAPPING")):
                 self.gapji_item.set(new_item)
                 self.save_settings()
 
