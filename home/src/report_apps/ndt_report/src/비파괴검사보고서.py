@@ -4464,14 +4464,16 @@ class PMIReportApp:
             specs_container = tk.Frame(chem_frame, background="#ffffff")
             specs_container.grid(row=2, column=0, columnspan=6, sticky='ew', pady=(4, 2))
             
-            # --- 기준 1 (모재 1) ---
+            # --- 기준 1 ---
             s1_hdr = tk.Frame(specs_container, background="#ffffff")
             s1_hdr.pack(fill='x', pady=(2, 1))
-            tk.Label(s1_hdr, text="기준 1 (모재 1):", background="#ffffff", font=("Malgun Gothic", 8, "bold")).pack(side='left')
+            self.pmi_spec1_lbl = tk.Label(s1_hdr, text="기준 1:", background="#ffffff", font=("Malgun Gothic", 8, "bold"))
+            self.pmi_spec1_lbl.pack(side='left')
             ttk.Button(s1_hdr, text="✕", width=2, command=lambda: self.clear_pmi_spec(1)).pack(side='right', padx=(2, 0))
+            ttk.Button(s1_hdr, text="▼입력", width=4, command=lambda: self.apply_current_to_spec(1)).pack(side='right', padx=(2, 0))
             self.pmi_spec1_combo = ttk.Combobox(
                 s1_hdr, textvariable=self.pmi_spec1_mat,
-                values=self.PMI_SPEC1_OPTIONS, width=17, state='readonly'
+                values=self.PMI_SPEC1_OPTIONS, width=20, state='readonly'
             )
             self.pmi_spec1_combo.pack(side='right')
             self.pmi_spec1_combo.bind('<<ComboboxSelected>>', lambda e: self._on_pmi_spec1_selected())
@@ -4479,14 +4481,16 @@ class PMIReportApp:
             self.setting_vars['PMI_CHEM_SPEC_1'] = self.pmi_chem_specs[0]
             self.setting_vars['PMI_SPEC1_MAT'] = self.pmi_spec1_mat
 
-            # --- 기준 2 (용접부) ---
+            # --- 기준 2 ---
             s2_hdr = tk.Frame(specs_container, background="#ffffff")
             s2_hdr.pack(fill='x', pady=(2, 1))
-            tk.Label(s2_hdr, text="기준 2 (용접부):", background="#ffffff", font=("Malgun Gothic", 8, "bold")).pack(side='left')
+            self.pmi_spec2_lbl = tk.Label(s2_hdr, text="기준 2:", background="#ffffff", font=("Malgun Gothic", 8, "bold"))
+            self.pmi_spec2_lbl.pack(side='left')
             ttk.Button(s2_hdr, text="✕", width=2, command=lambda: self.clear_pmi_spec(2)).pack(side='right', padx=(2, 0))
+            ttk.Button(s2_hdr, text="▼입력", width=4, command=lambda: self.apply_current_to_spec(2)).pack(side='right', padx=(2, 0))
             self.pmi_spec2_combo = ttk.Combobox(
                 s2_hdr, textvariable=self.pmi_spec2_mat,
-                values=self.PMI_SPEC2_OPTIONS, width=17, state='readonly'
+                values=self.PMI_SPEC2_OPTIONS, width=20, state='readonly'
             )
             self.pmi_spec2_combo.pack(side='right')
             self.pmi_spec2_combo.bind('<<ComboboxSelected>>', lambda e: self._on_pmi_spec2_selected())
@@ -4494,20 +4498,25 @@ class PMIReportApp:
             self.setting_vars['PMI_CHEM_SPEC_2'] = self.pmi_chem_specs[1]
             self.setting_vars['PMI_SPEC2_MAT'] = self.pmi_spec2_mat
 
-            # --- 기준 3 (모재 2) ---
+            # --- 기준 3 ---
             s3_hdr = tk.Frame(specs_container, background="#ffffff")
             s3_hdr.pack(fill='x', pady=(2, 1))
-            tk.Label(s3_hdr, text="기준 3 (모재 2):", background="#ffffff", font=("Malgun Gothic", 8, "bold")).pack(side='left')
+            self.pmi_spec3_lbl = tk.Label(s3_hdr, text="기준 3:", background="#ffffff", font=("Malgun Gothic", 8, "bold"))
+            self.pmi_spec3_lbl.pack(side='left')
             ttk.Button(s3_hdr, text="✕", width=2, command=lambda: self.clear_pmi_spec(3)).pack(side='right', padx=(2, 0))
+            ttk.Button(s3_hdr, text="▼입력", width=4, command=lambda: self.apply_current_to_spec(3)).pack(side='right', padx=(2, 0))
             self.pmi_spec3_combo = ttk.Combobox(
                 s3_hdr, textvariable=self.pmi_spec3_mat,
-                values=self.PMI_SPEC3_OPTIONS, width=17, state='readonly'
+                values=self.PMI_SPEC3_OPTIONS, width=20, state='readonly'
             )
             self.pmi_spec3_combo.pack(side='right')
             self.pmi_spec3_combo.bind('<<ComboboxSelected>>', lambda e: self._on_pmi_spec3_selected())
             ttk.Entry(specs_container, textvariable=self.pmi_chem_specs[2]).pack(fill='x', padx=2, pady=(0, 3))
             self.setting_vars['PMI_CHEM_SPEC_3'] = self.pmi_chem_specs[2]
             self.setting_vars['PMI_SPEC3_MAT'] = self.pmi_spec3_mat
+            
+            # 초기 라벨 텍스트 동기화
+            self._update_pmi_spec_labels()
             
             # [NEW] ⚖️ 규격 합/부 자동 판정 및 기준 전체 비우기 버튼
             action_row = tk.Frame(chem_frame, background="#ffffff")
@@ -8514,26 +8523,26 @@ class PMIReportApp:
         "F316L": "A182-F316L", "F316": "A182-F316L", "F304L": "A182-F304L", "F304": "A182-F304L", "FLANGE": "A182-F316L", "A182": "A182-F316L"
     }
 
-    # 기준 1 / 2 / 3 전용 빠른 선택 목록
-    PMI_SPEC1_OPTIONS = [
+    # 기준 1 / 2 / 3 전용 빠른 선택 목록 (선택한 자재에 맞춰 모든 기준에서 자유롭게 선택 가능)
+    PMI_COMMON_SPEC_OPTIONS = [
         "(공란 / 비움)",
+        # 배관 (PIPE)
         "A312-TP316L", "A312-TP304L", "A312-TP316", "A312-TP304",
         "A312-TP321", "A312-TP347", "DUPLEX (S31803)", "INCONEL 625",
-        "A182-F316L", "A182-F304L", "A351-CF8M", "A351-CF3M", "A351-CF8",
-        "A403-WP316L", "A403-WP304L",
+        # 피팅 (ELBOW / TEE / REDUCER)
+        "A403-WP316L (피팅/엘보)", "A403-WP304L (피팅/엘보)",
+        # 플랜지 (FLANGE)
+        "A182-F316L (플랜지)", "A182-F304L (플랜지)",
+        # 밸브 (VALVE)
+        "A351-CF8M (주조 밸브)", "A351-CF3M (밸브)", "A351-CF8 (304 밸브)",
+        # 용접봉 (WELD)
+        "ER316L (용접봉)", "ER308L (용접봉)", "ER309L (이재질)", "ER2209", "ER70S-6", "ERNiCrMo-3",
+        # 구조용강 (BEAM)
         "ASTM A992", "ASTM A572 Gr.50", "SM355 (SM490)", "SN355", "ASTM A36", "SS275 (SS400)"
     ]
-    PMI_SPEC2_OPTIONS = [
-        "(해당없음 / 비움)", "ER316L", "ER308L", "ER309L (이재질)", "ER2209", "ER70S-6", "ERNiCrMo-3"
-    ]
-    PMI_SPEC3_OPTIONS = [
-        "(해당없음 / 비움)",
-        "A182-F316L (플랜지)", "A182-F304L (플랜지)",
-        "A403-WP316L (피팅/엘보)", "A403-WP304L (피팅/엘보)",
-        "A351-CF8M (주조 밸브)", "A351-CF3M (밸브)", "A351-CF8 (304 밸브)",
-        "A312-TP316L (파이프)", "A312-TP304L (파이프)",
-        "ASTM A992", "SM355 (SM490)"
-    ]
+    PMI_SPEC1_OPTIONS = PMI_COMMON_SPEC_OPTIONS
+    PMI_SPEC2_OPTIONS = PMI_COMMON_SPEC_OPTIONS
+    PMI_SPEC3_OPTIONS = PMI_COMMON_SPEC_OPTIONS
 
     def _lookup_pmi_material_spec(self, mat_str):
         if not mat_str: return None
@@ -8618,6 +8627,7 @@ class PMIReportApp:
                 })
             self._update_pmi_filter_ui()
             
+        self._update_pmi_spec_labels()
         self.save_settings()
         self.log(f"📋 PMI 재질 기준 적용: {spec['name']}")
         return True
@@ -8740,20 +8750,88 @@ class PMIReportApp:
                 self.gapji_item.set(new_item)
                 self.save_settings()
 
+    def _update_pmi_spec_labels(self):
+        """기준 1, 2, 3 라벨을 고정 내용(모재 1, 용접부, 모재 2) 대신 선택한 내용으로 동적 갱신"""
+        spec_pairs = [
+            (getattr(self, 'pmi_spec1_lbl', None), getattr(self, 'pmi_spec1_mat', None), self.pmi_chem_specs[0] if len(self.pmi_chem_specs) > 0 else None, "기준 1"),
+            (getattr(self, 'pmi_spec2_lbl', None), getattr(self, 'pmi_spec2_mat', None), self.pmi_chem_specs[1] if len(self.pmi_chem_specs) > 1 else None, "기준 2"),
+            (getattr(self, 'pmi_spec3_lbl', None), getattr(self, 'pmi_spec3_mat', None), self.pmi_chem_specs[2] if len(self.pmi_chem_specs) > 2 else None, "기준 3"),
+        ]
+        for lbl, mat_var, spec_var, prefix in spec_pairs:
+            if not lbl: continue
+            mat_txt = mat_var.get().strip() if mat_var else ""
+            spec_txt = spec_var.get().strip() if spec_var else ""
+            title = ""
+            if mat_txt and not any(k in mat_txt for k in ["공란", "비움", "해당없음", "-"]):
+                title = mat_txt.split("(")[0].strip()
+            elif spec_txt and spec_txt != "-":
+                title = spec_txt.split(":")[0].strip()
+            
+            if title:
+                lbl.config(text=f"{prefix} ({title}):")
+            else:
+                lbl.config(text=f"{prefix}:")
+
+    def apply_current_to_spec(self, slot_idx):
+        """상단에서 선택된 품명 및 재질을 지정된 기준 슬롯(1, 2, 3)에 즉시 입력"""
+        cur_mat = self.gapji_material.get().strip() if hasattr(self, 'gapji_material') else ""
+        cur_item = self.gapji_item.get().strip().upper() if hasattr(self, 'gapji_item') else ""
+        if not cur_mat:
+            if cur_item:
+                cur_mat = self._lookup_pmi_material_spec(cur_item)
+                if cur_mat: cur_mat = cur_mat["name"]
+        if not cur_mat:
+            messagebox.showinfo("알림", "상단에서 먼저 재질을 선택해주세요.")
+            return
+
+        spec = self._lookup_pmi_material_spec(cur_mat)
+        if not spec: return
+
+        idx = slot_idx - 1
+        if idx < len(self.pmi_chem_specs):
+            spec_text = spec["specs"][0]
+            if cur_item and cur_item not in spec_text.upper():
+                spec_text = f"{spec['name']} ({cur_item}): " + spec_text.split(":", 1)[-1].strip()
+            self.pmi_chem_specs[idx].set(spec_text)
+
+        mat_var = getattr(self, f'pmi_spec{slot_idx}_mat', None)
+        if mat_var:
+            matched = next((opt for opt in self.PMI_COMMON_SPEC_OPTIONS if spec["name"] in opt), spec["name"])
+            mat_var.set(matched)
+
+        if slot_idx == 1 or not getattr(self, 'element_filters', None):
+            for e_idx, elem in enumerate(spec["elements"]):
+                if e_idx < len(self.pmi_chem_elements):
+                    self.pmi_chem_elements[e_idx].set(elem)
+            if hasattr(self, 'element_filters'):
+                self.element_filters.clear()
+                for elem_name, (f_min, f_max) in spec["limits"].items():
+                    self.element_filters.append({
+                        'key': tk.StringVar(value=elem_name),
+                        'min': tk.StringVar(value=f"{f_min:.2f}" if f_min > 0 else ""),
+                        'max': tk.StringVar(value=f"{f_max:.2f}" if f_max > 0 else "")
+                    })
+                self._update_pmi_filter_ui()
+
+        self._update_pmi_spec_labels()
+        self.save_settings()
+        self.log(f"📋 기준 {slot_idx}에 선택한 자재({spec['name']})를 입력했습니다.")
+
     def clear_pmi_spec(self, idx):
         """기준 1, 2, 3 중 지정된 기준을 공란으로 초기화"""
         if idx == 1 and len(self.pmi_chem_specs) > 0:
             self.pmi_chem_specs[0].set("")
             if hasattr(self, 'pmi_spec1_mat'): self.pmi_spec1_mat.set("(공란 / 비움)")
-            self.log("📋 기준 1(모재 1)을 공란으로 비웠습니다.")
+            self.log("📋 기준 1을 공란으로 비웠습니다.")
         elif idx == 2 and len(self.pmi_chem_specs) > 1:
             self.pmi_chem_specs[1].set("")
-            if hasattr(self, 'pmi_spec2_mat'): self.pmi_spec2_mat.set("(해당없음 / 비움)")
-            self.log("📋 기준 2(용접부)를 공란으로 비웠습니다.")
+            if hasattr(self, 'pmi_spec2_mat'): self.pmi_spec2_mat.set("(공란 / 비움)")
+            self.log("📋 기준 2를 공란으로 비웠습니다.")
         elif idx == 3 and len(self.pmi_chem_specs) > 2:
             self.pmi_chem_specs[2].set("")
-            if hasattr(self, 'pmi_spec3_mat'): self.pmi_spec3_mat.set("(해당없음 / 비움)")
-            self.log("📋 기준 3(모재 2)을 공란으로 비웠습니다.")
+            if hasattr(self, 'pmi_spec3_mat'): self.pmi_spec3_mat.set("(공란 / 비움)")
+            self.log("📋 기준 3을 공란으로 비웠습니다.")
+        self._update_pmi_spec_labels()
         self.save_settings()
 
     def clear_all_pmi_specs(self):
@@ -8763,11 +8841,12 @@ class PMIReportApp:
         self.log("📋 기준 1, 2, 3을 모두 공란으로 초기화했습니다.")
 
     def _on_pmi_spec1_selected(self, event=None):
-        """기준 1(모재 1) 콤보박스 선택 시 규격 1 및 화학 성분 기준 연동"""
+        """기준 1 콤보박스 선택 시 규격 1 연동 및 라벨 갱신"""
         val = self.pmi_spec1_mat.get().strip()
         if not val or "비움" in val or val == "-":
             self.pmi_chem_specs[0].set("")
-            self.log("📋 기준 1(모재 1): 공란 설정")
+            self.log("📋 기준 1: 공란 설정")
+            self._update_pmi_spec_labels()
             self.save_settings()
             return
         spec = self._lookup_pmi_material_spec(val)
@@ -8775,35 +8854,40 @@ class PMIReportApp:
             self.pmi_chem_specs[0].set(spec["specs"][0])
             self.gapji_material.set(spec["name"])
             self.apply_pmi_material_preset(spec["name"])
-            self.log(f"📋 기준 1(모재 1) 설정: {spec['name']}")
+            self.log(f"📋 기준 1 설정: {spec['name']}")
+        self._update_pmi_spec_labels()
 
     def _on_pmi_spec2_selected(self, event=None):
-        """기준 2(용접부) 콤보박스 선택 시 규격 2 연동"""
+        """기준 2 콤보박스 선택 시 규격 2 연동 및 라벨 갱신"""
         val = self.pmi_spec2_mat.get().strip()
         if not val or "비움" in val or val == "-":
             self.pmi_chem_specs[1].set("")
-            self.log("📋 기준 2(용접부): 공란(해당없음) 설정")
+            self.log("📋 기준 2: 공란 설정")
+            self._update_pmi_spec_labels()
             self.save_settings()
             return
         spec = self._lookup_pmi_material_spec(val)
         if spec:
             self.pmi_chem_specs[1].set(spec["specs"][0])
-            self.log(f"📋 기준 2(용접부) 설정: {spec['name']}")
+            self.log(f"📋 기준 2 설정: {spec['name']}")
             self.save_settings()
+        self._update_pmi_spec_labels()
 
     def _on_pmi_spec3_selected(self, event=None):
-        """기준 3(모재 2/상대 부재) 콤보박스 선택 시 규격 3 연동"""
+        """기준 3 콤보박스 선택 시 규격 3 연동 및 라벨 갱신"""
         val = self.pmi_spec3_mat.get().strip()
         if not val or "비움" in val or val == "-":
             self.pmi_chem_specs[2].set("")
-            self.log("📋 기준 3(모재 2): 공란(해당없음) 설정")
+            self.log("📋 기준 3: 공란 설정")
+            self._update_pmi_spec_labels()
             self.save_settings()
             return
         spec = self._lookup_pmi_material_spec(val)
         if spec:
             self.pmi_chem_specs[2].set(spec["specs"][0])
-            self.log(f"📋 기준 3(모재 2) 설정: {spec['name']}")
+            self.log(f"📋 기준 3 설정: {spec['name']}")
             self.save_settings()
+        self._update_pmi_spec_labels()
 
     def evaluate_pmi_data_compliance(self, show_msg=True):
         """추출된 PMI 측정 데이터를 현재 재질 기준(또는 element_filters)과 비교하여 합/부(ALL MATCH / MISMATCH) 자동 판정"""

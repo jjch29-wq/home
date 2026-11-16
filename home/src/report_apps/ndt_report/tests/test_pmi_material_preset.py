@@ -340,9 +340,38 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertIn("Fitting", self.app.pmi_chem_specs[2].get())
 
         # 4. Spec 3 empty option
-        self.app.pmi_spec3_mat.set("(해당없음 / 비움)")
+        self.app.pmi_spec3_mat.set("(공란 / 비움)")
         self.app._on_pmi_spec3_selected()
         self.assertEqual(self.app.pmi_chem_specs[2].get(), "")
+        self.assertEqual(self.app.pmi_spec3_lbl.cget("text"), "기준 3:")
+
+    def test_dynamic_spec_labels_and_apply_current(self):
+        """Verify labels dynamically display selected material name and apply_current_to_spec works."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+
+        # 1. Clear all
+        self.app.clear_all_pmi_specs()
+        self.assertEqual(self.app.pmi_spec1_lbl.cget("text"), "기준 1:")
+        self.assertEqual(self.app.pmi_spec2_lbl.cget("text"), "기준 2:")
+        self.assertEqual(self.app.pmi_spec3_lbl.cget("text"), "기준 3:")
+
+        # 2. Select Spec 1 -> label updates dynamically with material name
+        self.app.pmi_spec1_mat.set("A312-TP304")
+        self.app._on_pmi_spec1_selected()
+        self.assertIn("A312-TP304", self.app.pmi_spec1_lbl.cget("text"))
+
+        # 3. Apply current upper material (e.g. ELBOW / A403-WP316L) to Spec 2 slot
+        self.app.gapji_item.set("ELBOW")
+        self.app.gapji_material.set("A403-WP316L")
+        self.app.apply_current_to_spec(2)
+        self.assertIn("A403-WP316L", self.app.pmi_chem_specs[1].get())
+        self.assertIn("A403-WP316L", self.app.pmi_spec2_lbl.cget("text"))
+
+        # 4. Clear slot 2 -> label reverts to "기준 2:"
+        self.app.clear_pmi_spec(2)
+        self.assertEqual(self.app.pmi_chem_specs[1].get(), "")
+        self.assertEqual(self.app.pmi_spec2_lbl.cget("text"), "기준 2:")
 
     def test_clear_pmi_spec_buttons(self):
         """Verify clear_pmi_spec individual and all buttons clear the fields to blank."""
