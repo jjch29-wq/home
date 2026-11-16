@@ -104,6 +104,13 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         if not self.app:
             self.skipTest("GUI not initialized")
 
+        # 1. Clear all specs first
+        self.app.clear_all_pmi_specs()
+        self.assertEqual(self.app.pmi_chem_specs[0].get(), "")
+        self.assertEqual(self.app.pmi_chem_specs[1].get(), "")
+        self.assertEqual(self.app.pmi_chem_specs[2].get(), "")
+
+        # 2. Applying base metal (A312-TP316L) fills ONLY criteria 1; criteria 2 & 3 stay blank!
         success = self.app.apply_pmi_material_preset("A312-TP316L")
         self.assertTrue(success)
 
@@ -113,9 +120,15 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertIn("Cr", elem_vals)
         self.assertIn("Mo", elem_vals)
 
-        # Check specs
-        spec_vals = [var.get() for var in self.app.pmi_chem_specs]
-        self.assertTrue(any("ER316L" in s for s in spec_vals))
+        # Check criteria 1 is populated and criteria 2 & 3 stay blank
+        self.assertTrue("A312" in self.app.pmi_chem_specs[0].get())
+        self.assertEqual(self.app.pmi_chem_specs[1].get(), "")
+        self.assertEqual(self.app.pmi_chem_specs[2].get(), "")
+
+        # 3. Applying welding consumable (ER316L) populates criteria 2 (Weld)
+        self.app.apply_pmi_material_preset("ER316L")
+        self.assertTrue("ER316L" in self.app.pmi_chem_specs[1].get())
+        self.assertEqual(self.app.pmi_chem_specs[2].get(), "")
 
         # Check element filters
         filter_keys = [f["key"].get() for f in self.app.element_filters]
@@ -329,7 +342,34 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         # 4. Spec 3 empty option
         self.app.pmi_spec3_mat.set("(해당없음 / 비움)")
         self.app._on_pmi_spec3_selected()
-        self.assertEqual(self.app.pmi_chem_specs[2].get(), "-")
+        self.assertEqual(self.app.pmi_chem_specs[2].get(), "")
+
+    def test_clear_pmi_spec_buttons(self):
+        """Verify clear_pmi_spec individual and all buttons clear the fields to blank."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+
+        # Set some values
+        self.app.pmi_chem_specs[0].set("Spec 1")
+        self.app.pmi_chem_specs[1].set("Spec 2")
+        self.app.pmi_chem_specs[2].set("Spec 3")
+
+        # Clear 1
+        self.app.clear_pmi_spec(1)
+        self.assertEqual(self.app.pmi_chem_specs[0].get(), "")
+        self.assertEqual(self.app.pmi_chem_specs[1].get(), "Spec 2")
+
+        # Clear 2
+        self.app.clear_pmi_spec(2)
+        self.assertEqual(self.app.pmi_chem_specs[1].get(), "")
+
+        # Clear all
+        self.app.pmi_chem_specs[0].set("Spec 1")
+        self.app.pmi_chem_specs[1].set("Spec 2")
+        self.app.clear_all_pmi_specs()
+        self.assertEqual(self.app.pmi_chem_specs[0].get(), "")
+        self.assertEqual(self.app.pmi_chem_specs[1].get(), "")
+        self.assertEqual(self.app.pmi_chem_specs[2].get(), "")
 
 
 if __name__ == "__main__":
