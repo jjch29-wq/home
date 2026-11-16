@@ -588,9 +588,35 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertEqual(ws["A31"].value, "* Tolerance ±10%")
 
         # Row 27 Header Height & Font Size Check (Prevent text clipping)
-        self.assertEqual(ws.row_dimensions[27].height, 32.0, "Row 27 height must be 32.0 to prevent 2-line header text clipping")
-        self.assertEqual(ws["G27"].font.size, 9, "Header font size should be 9pt when multiple criteria present")
-        self.assertAlmostEqual(ws.row_dimensions[32].height, 3.77, places=2, msg="Row 32 should offset Row 27 height expansion to preserve total vertical height")
+        self.assertEqual(ws.row_dimensions[27].height, 34.0, "Row 27 height must be 34.0 to prevent 2-line header text clipping")
+        self.assertEqual(ws["G27"].font.size, 8.5, "Header font size should be 8.5pt when 2 criteria present")
+        self.assertAlmostEqual(ws.row_dimensions[32].height, 1.77, places=2, msg="Row 32 should offset Row 27 height expansion to preserve total vertical height")
+
+    def test_acceptance_criteria_three_groups_font_size(self):
+        """Verify that 3 distinct criteria use 8pt font and 34pt row height to completely prevent text clipping."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+        wb = openpyxl.load_workbook("home/data/PMI-템플릿보고서.xlsx")
+        ws = wb['PMI(갑)']
+        self.app.clear_all_pmi_specs()
+
+        self.app.pmi_spec1_mat.set('A312-TP304L')
+        self.app.pmi_chem_specs[0].set('A312-TP304L (PIPE): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%')
+
+        self.app.pmi_spec2_mat.set('A403-WP316L (피팅/엘보)')
+        self.app.pmi_chem_specs[1].set('A403-WP316L (ELBOW): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 14.00%, Mo:2.00 ~ 3.00%')
+
+        self.app.pmi_spec3_mat.set('A312-TP304')
+        self.app.pmi_chem_specs[2].set('A312-TP304 (FITTINGS): Cr:18.00 ~ 20.00%, Ni:8.00 ~ 11.00%')
+
+        grouped = self.app._collect_pmi_active_criteria()
+        self.assertEqual(len(grouped), 3)
+
+        self.app._apply_pmi_acceptance_criteria(ws)
+        self.assertEqual(ws.row_dimensions[27].height, 34.0)
+        self.assertEqual(ws['F27'].font.size, 8.0)
+        self.assertEqual(ws['K27'].font.size, 8.0)
+        self.assertEqual(ws['P27'].font.size, 8.0)
 
 
 if __name__ == "__main__":

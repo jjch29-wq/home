@@ -9187,8 +9187,17 @@ class PMIReportApp:
         thin_side = Side(style='thin')
         b_thin = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
         f_title = Font(name='Times New Roman', size=11, bold=True)
-        # 2개 이상일 때는 긴 규격명/품목명이 2줄 이상 줄바꿈되어도 아래쪽 글자가 잘리지 않도록 9pt (단일 기준은 10pt)
-        f_hdr = Font(name='Times New Roman', size=9 if num_groups >= 2 else 10, bold=True)
+        # 기준 개수(열 너비)에 따라 헤더 폰트 크기 세분화 (글자 가려짐 완전 방지):
+        # - 1개 기준: 10pt
+        # - 2개 기준 (7열 너비): 8.5pt
+        # - 3개 이상 기준 (5열 너비): 8pt (긴 규격명과 품목명이 여유 있게 한눈에 표시됨)
+        if num_groups >= 3:
+            hdr_size = 8
+        elif num_groups == 2:
+            hdr_size = 8.5
+        else:
+            hdr_size = 10
+        f_hdr = Font(name='Times New Roman', size=hdr_size, bold=True)
         f_data = Font(name='Times New Roman', size=10, bold=False)
         f_note = Font(name='Times New Roman', size=9, bold=False)
         align_c = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -9272,9 +9281,9 @@ class PMIReportApp:
             ws['A24'] = '1. Acceptance Criteria (%)'
             _style_range(ws, 'A24:T26', font=f_title, alignment=align_c, border=b_thin)
 
-            # 27행 헤더 2줄 텍스트가 잘리지 않도록 높이 32pt 지정, 빈 32행에서 상쇄하여 총 세로높이 100% 보존
-            ws.row_dimensions[27].height = 32.0
-            ws.row_dimensions[32].height = 3.77
+            # 27행 헤더 2줄 텍스트가 잘리지 않도록 높이 34pt 지정, 빈 32행에서 상쇄하여 총 세로높이 100% 보존
+            ws.row_dimensions[27].height = 34.0
+            ws.row_dimensions[32].height = 1.77
 
             ws.merge_cells('A27:F27')
             ws['A27'] = 'Element'
@@ -9315,9 +9324,9 @@ class PMIReportApp:
             ws['A24'] = '1. Acceptance Criteria (%)'
             _style_range(ws, 'A24:T26', font=f_title, alignment=align_c, border=b_thin)
 
-            # 27행 헤더 2줄 텍스트가 잘리지 않도록 높이 32pt 지정, 빈 32행에서 상쇄하여 총 세로높이 100% 보존
-            ws.row_dimensions[27].height = 32.0
-            ws.row_dimensions[32].height = 3.77
+            # 27행 헤더 2줄 텍스트가 잘리지 않도록 높이 34pt 지정, 빈 32행에서 상쇄하여 총 세로높이 100% 보존
+            ws.row_dimensions[27].height = 34.0
+            ws.row_dimensions[32].height = 1.77
 
             ws.merge_cells('A27:E27')
             ws['A27'] = 'Element'
@@ -9357,10 +9366,10 @@ class PMIReportApp:
             ws['A24'] = '1. Acceptance Criteria (%)'
             _style_range(ws, 'A24:T26', font=f_title, alignment=align_c, border=b_thin)
 
-            # 헤더 높이 30pt씩 부여하고, 25/26행에서 상쇄하여 총 세로높이 100% 보존
-            ws.row_dimensions[25].height = 11.885
-            ws.row_dimensions[26].height = 11.885
-            ws.row_dimensions[27].height = 30.0
+            # 헤더 높이 32pt씩 부여하고, 25/26행에서 상쇄하여 총 세로높이 100% 보존
+            ws.row_dimensions[25].height = 10.885
+            ws.row_dimensions[26].height = 10.885
+            ws.row_dimensions[27].height = 32.0
 
             ws.merge_cells('A27:E27')
             ws['A27'] = 'Element'
@@ -9396,7 +9405,7 @@ class PMIReportApp:
             ws['A32'] = '1. Acceptance Criteria (%) - Continued'
             _style_range(ws, 'A32:T33', font=f_title, alignment=align_c, border=b_thin)
 
-            ws.row_dimensions[34].height = 30.0
+            ws.row_dimensions[34].height = 32.0
             ws.merge_cells('A34:E34')
             ws['A34'] = 'Element'
             _style_range(ws, 'A34:E34', font=f_hdr, alignment=align_c, border=b_thin)
