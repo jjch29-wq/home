@@ -231,19 +231,21 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.app.clear_all_pmi_specs()
         self.app.pmi_chem_specs[0].set("Original Spec 1")
 
-        # 1. Setting item to FLANGE updates empty material to A182-F316L
+        # 1. Setting item to FLANGE updates empty material to A182-F316L and limits values to flange materials
         self.app.gapji_material.set("")
         self.app.gapji_item.set("FLANGE")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A182-F316L")
+        self.assertEqual(list(self.app.pmi_material_combobox['values']), ["A182-F316L", "A182-F304L"])
         # Bottom spec 1 MUST remain unchanged!
         self.assertEqual(self.app.pmi_chem_specs[0].get(), "Original Spec 1")
 
-        # 2. Setting item to VALVE updates empty material to A351-CF8M
+        # 2. Setting item to VALVE updates empty material to A351-CF8M and limits values to valve materials
         self.app.gapji_material.set("")
         self.app.gapji_item.set("VALVE")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A351-CF8M")
+        self.assertEqual(list(self.app.pmi_material_combobox['values']), ["A351-CF8M", "A351-CF3M", "A351-CF8"])
         self.assertEqual(self.app.pmi_chem_specs[0].get(), "Original Spec 1")
 
         # 3. Setting item to FITTING updates empty material to A403-WP316L
@@ -251,12 +253,14 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.app.gapji_item.set("FITTING")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
+        self.assertEqual(list(self.app.pmi_material_combobox['values']), ["A403-WP316L", "A403-WP304L"])
 
         # 3-1. Setting item to ELBOW updates empty material to A403-WP316L
         self.app.gapji_material.set("")
         self.app.gapji_item.set("ELBOW")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
+        self.assertEqual(list(self.app.pmi_material_combobox['values']), ["A403-WP316L", "A403-WP304L"])
 
         # 3-2. Setting item to TEE updates empty material to A403-WP316L
         self.app.gapji_material.set("")

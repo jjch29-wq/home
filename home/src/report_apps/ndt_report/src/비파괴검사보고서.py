@@ -4516,8 +4516,10 @@ class PMIReportApp:
             self.setting_vars['PMI_CHEM_SPEC_3'] = self.pmi_chem_specs[2]
             self.setting_vars['PMI_SPEC3_MAT'] = self.pmi_spec3_mat
             
-            # 초기 라벨 텍스트 동기화
+            # 초기 라벨 텍스트 동기화 및 품명 전용 재질 목록 필터링
             self._update_pmi_spec_labels()
+            if hasattr(self, 'gapji_item') and self.gapji_item.get():
+                self._on_pmi_item_changed()
             
             # [NEW] ⚖️ 규격 합/부 자동 판정 및 기준 전체 비우기 버튼
             action_row = tk.Frame(chem_frame, background="#ffffff")
@@ -8744,19 +8746,21 @@ class PMIReportApp:
 
         if target_cat and target_cat in self.PMI_ITEM_PRESETS:
             preset = self.PMI_ITEM_PRESETS[target_cat]
-            rec_materials = preset["materials"]
-            other_materials = [m for m in self.PMI_MATERIAL_SPECS.keys() if m not in rec_materials]
-            new_values = rec_materials + other_materials
+            rec_materials = list(preset["materials"])
             if hasattr(self, 'pmi_material_combobox') and self.pmi_material_combobox:
-                self.pmi_material_combobox['values'] = new_values
+                self.pmi_material_combobox['values'] = rec_materials
 
             current_mat = self.gapji_material.get().strip()
-            # 품명 변경 시: 추천 재질 드롭다운만 갱신하고 기본 재질 힌트 세팅.
+            # 품명 변경 시: 해당 품명의 전용 재질 목록만 드롭다운에 표시하고 기본 재질 힌트 세팅.
             # 하단 기준 1, 2, 3은 사용자가 [입력] 또는 [➕ 다음 기준에 추가] 버튼을 누를 때 반영되도록 보존!
             if not current_mat or current_mat not in rec_materials:
                 new_mat = preset["default_material"]
                 self.gapji_material.set(new_mat)
             self._update_pmi_spec_labels()
+        else:
+            # 기타/미지정 품목인 경우 전체 재질 목록 제공
+            if hasattr(self, 'pmi_material_combobox') and self.pmi_material_combobox:
+                self.pmi_material_combobox['values'] = list(self.PMI_MATERIAL_SPECS.keys())
 
     def _on_pmi_material_changed(self, event=None):
         """재질 변경 시 품명 상호 연동 및 원소명 동기화 (하단 기준 슬롯은 [입력] 버튼으로 적용)"""
