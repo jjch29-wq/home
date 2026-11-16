@@ -1768,12 +1768,42 @@ class PMIReportApp:
         right_container = tk.Frame(self.pmi_paned, background="#f3f4f6")
         self.pmi_paned.add(right_container, stretch="always")
 
-        # Top Action Bar (생성 시작, 데이터 추출, 일보 NDT 불러오기) - 가로 툴바 배치
-        action_bar = tk.Frame(right_container, background="#f3f4f6")
-        action_bar.pack(fill='x', padx=6, pady=(6, 4))
-        ttk.Button(action_bar, text=" ✨ 생성 시작 ", style="Action.TButton", command=self.run_process).pack(side='left', fill='x', expand=True, padx=(0, 4))
-        ttk.Button(action_bar, text=" 📝 데이터 추출 ", command=self.extract_only).pack(side='left', fill='x', expand=True, padx=(0, 4))
-        ttk.Button(action_bar, text=" 📋 일보 NDT 불러오기 ", command=self.load_daily_work_history).pack(side='left', fill='x', expand=True)
+        # Top Action Bar (생성 시작, 데이터 추출, 일보 NDT 불러오기) - 모던 플랫 툴바 스타일
+        action_bar = tk.Frame(right_container, background="#ffffff", padx=8, pady=6)
+        action_bar.pack(fill='x')
+
+        btn_run = tk.Button(
+            action_bar, text="✨ 생성 시작", command=self.run_process,
+            font=("Malgun Gothic", 10, "bold"), bg="#2563eb", fg="#ffffff",
+            activebackground="#1d4ed8", activeforeground="#ffffff",
+            relief="flat", cursor="hand2", padx=12, pady=5, bd=0
+        )
+        btn_run.pack(side='left', fill='x', expand=True, padx=(0, 6))
+        btn_run.bind("<Enter>", lambda e: btn_run.configure(bg="#1d4ed8"))
+        btn_run.bind("<Leave>", lambda e: btn_run.configure(bg="#2563eb"))
+
+        btn_extract = tk.Button(
+            action_bar, text="📝 데이터 추출", command=self.extract_only,
+            font=("Malgun Gothic", 9, "bold"), bg="#f8fafc", fg="#334155",
+            activebackground="#e2e8f0", activeforeground="#1e293b",
+            relief="solid", bd=1, cursor="hand2", padx=10, pady=5
+        )
+        btn_extract.pack(side='left', fill='x', expand=True, padx=(0, 6))
+        btn_extract.bind("<Enter>", lambda e: btn_extract.configure(bg="#e2e8f0"))
+        btn_extract.bind("<Leave>", lambda e: btn_extract.configure(bg="#f8fafc"))
+
+        btn_daily = tk.Button(
+            action_bar, text="📋 일보 NDT 불러오기", command=self.load_daily_work_history,
+            font=("Malgun Gothic", 9, "bold"), bg="#f8fafc", fg="#334155",
+            activebackground="#e2e8f0", activeforeground="#1e293b",
+            relief="solid", bd=1, cursor="hand2", padx=10, pady=5
+        )
+        btn_daily.pack(side='left', fill='x', expand=True)
+        btn_daily.bind("<Enter>", lambda e: btn_daily.configure(bg="#e2e8f0"))
+        btn_daily.bind("<Leave>", lambda e: btn_daily.configure(bg="#f8fafc"))
+
+        # 툴바와 미리보기 탭 사이 구분선
+        tk.Frame(right_container, height=1, background="#e2e8f0").pack(fill='x', pady=(0, 4))
         
         if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
         nb = ttk.Notebook(right_container)
