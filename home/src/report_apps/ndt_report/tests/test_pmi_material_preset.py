@@ -361,7 +361,7 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertEqual(self.app.pmi_spec3_lbl.cget("text"), "기준 3:")
 
     def test_dynamic_spec_labels_and_apply_current(self):
-        """Verify labels dynamically display selected material name and apply_current_to_spec works."""
+        """Verify labels dynamically display selected item name (not raw material) and apply_current_to_spec works."""
         if not self.app:
             self.skipTest("GUI not initialized")
 
@@ -371,19 +371,30 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertEqual(self.app.pmi_spec2_lbl.cget("text"), "기준 2:")
         self.assertEqual(self.app.pmi_spec3_lbl.cget("text"), "기준 3:")
 
-        # 2. Select Spec 1 -> label updates dynamically with material name
+        # 2. Select Spec 1 (A312-TP304) -> label updates dynamically with item name "PIPE"
+        self.app.gapji_item.set("PIPE")
         self.app.pmi_spec1_mat.set("A312-TP304")
         self.app._on_pmi_spec1_selected()
-        self.assertIn("A312-TP304", self.app.pmi_spec1_lbl.cget("text"))
+        self.assertEqual(self.app.pmi_spec1_lbl.cget("text"), "기준 1 (PIPE):")
 
-        # 3. Apply current upper material (e.g. ELBOW / A403-WP316L) to Spec 2 slot
+        # 3. Apply current upper material (e.g. ELBOW / A403-WP316L) to Spec 2 slot -> label displays "ELBOW"
         self.app.gapji_item.set("ELBOW")
         self.app.gapji_material.set("A403-WP316L")
         self.app.apply_current_to_spec(2)
         self.assertIn("A403-WP316L", self.app.pmi_chem_specs[1].get())
-        self.assertIn("A403-WP316L", self.app.pmi_spec2_lbl.cget("text"))
+        self.assertEqual(self.app.pmi_spec2_lbl.cget("text"), "기준 2 (ELBOW):")
 
-        # 4. Clear slot 2 -> label reverts to "기준 2:"
+        # 4. Select welding wire for Spec 2 -> label displays "용접봉"
+        self.app.pmi_spec2_mat.set("ER308L (용접봉)")
+        self.app._on_pmi_spec2_selected()
+        self.assertEqual(self.app.pmi_spec2_lbl.cget("text"), "기준 2 (용접봉):")
+
+        # 5. Select flange for Spec 3 -> label displays "FLANGE"
+        self.app.pmi_spec3_mat.set("A182-F304L (플랜지)")
+        self.app._on_pmi_spec3_selected()
+        self.assertEqual(self.app.pmi_spec3_lbl.cget("text"), "기준 3 (FLANGE):")
+
+        # 6. Clear slot 2 -> label reverts to "기준 2:"
         self.app.clear_pmi_spec(2)
         self.assertEqual(self.app.pmi_chem_specs[1].get(), "")
         self.assertEqual(self.app.pmi_spec2_lbl.cget("text"), "기준 2:")

@@ -8717,6 +8717,7 @@ class PMIReportApp:
             # 품명 변경 시 재질 드롭다운 추천 순서만 갱신하며, 아래 기준은 절대 임의로 변경하지 않음
             if not current_mat:
                 self.gapji_material.set(preset["default_material"])
+            self._update_pmi_spec_labels()
 
     def _on_pmi_material_changed(self, event=None):
         """재질 변경 시 기준/스펙 적용 및 품명 상호 연동"""
@@ -8749,25 +8750,79 @@ class PMIReportApp:
                 self.gapji_item.set(new_item)
                 self.save_settings()
 
+    def _get_pmi_spec_item_title(self, slot_idx, mat_txt="", spec_txt=""):
+        """기준 슬롯(1, 2, 3)의 재질 및 규격에 대응하는 품명(Item Name)을 도출"""
+        mat_clean = mat_txt.strip()
+        spec_clean = spec_txt.strip()
+        if not mat_clean and not spec_clean:
+            return ""
+        if any(k in mat_clean for k in ["공란", "비움", "해당없음"]) and (not spec_clean or spec_clean == "-"):
+            return ""
+
+        cur_item = self.gapji_item.get().strip().upper() if hasattr(self, 'gapji_item') else ""
+        combined = f"{mat_clean} {spec_clean}".upper()
+
+        # 1. 용접봉/용접부
+        if any(k in combined for k in ["ER316", "ER308", "ER309", "ER2209", "ER70S", "ERNICRMO", "E7018", "WELD", "용접"]):
+            return "용접봉"
+
+        # 2. 플랜지
+        if any(k in combined for k in ["A182", "F316", "F304", "F51", "B564", "FLANGE", "플랜지"]):
+            return "FLANGE"
+
+        # 3. 밸브
+        if any(k in combined for k in ["A351", "CF8M", "CF3M", "CF8", "VALVE", "밸브"]):
+            return "VALVE"
+
+        # 4. 피팅 (엘보/티/레듀샤)
+        if any(k in combined for k in ["A403", "WP316", "WP304", "ELBOW", "TEE", "REDUCER", "엘보", "티", "레듀샤", "피팅"]):
+            if cur_item in ("ELBOW", "TEE", "REDUCER", "엘보", "티", "레듀샤"):
+                return cur_item
+            if "TEE" in combined or "티" in combined:
+                return "TEE"
+            if "REDUCER" in combined or "레듀샤" in combined:
+                return "REDUCER"
+            return "ELBOW"
+
+        # 5. 형강/구조재
+        if any(k in combined for k in ["A992", "A572", "SM355", "SN355", "A36", "SS275", "BEAM", "COLUMN", "GIRDER", "형강"]):
+            if cur_item and any(k in cur_item for k in ["BEAM", "COLUMN", "GIRDER", "보", "기둥"]):
+                return cur_item
+            return "H-BEAM"
+
+        # 6. 배관 (PIPE)
+        if any(k in combined for k in ["A312", "TP316", "TP304", "TP321", "TP347", "S31803", "PIPE", "배관"]):
+            return "PIPE"
+
+        # 7. 기준 1(slot 1)이고 상단 품명이 지정되어 있는 경우 상단 품명 사용
+        if slot_idx == 1 and cur_item:
+            return cur_item
+
+        # 8. 괄호 안에 품명 힌트가 있는 경우 (예: "피팅/엘보", "플랜지", "용접봉")
+        if "(" in mat_clean and ")" in mat_clean:
+            hint = mat_clean.split("(")[1].split(")")[0].strip()
+            if hint: return hint
+
+        # 9. 그 외 기본 재질명에서 품명 유추 불가 시
+        if mat_clean and not any(k in mat_clean for k in ["공란", "비움"]):
+            return mat_clean.split("(")[0].strip()
+
+        return ""
+
     def _update_pmi_spec_labels(self):
-        """기준 1, 2, 3 라벨을 고정 내용(모재 1, 용접부, 모재 2) 대신 선택한 내용으로 동적 갱신"""
+        """기준 1, 2, 3 라벨을 재질명이 아닌 품명(Item Name)으로 동적 갱신"""
         spec_pairs = [
-            (getattr(self, 'pmi_spec1_lbl', None), getattr(self, 'pmi_spec1_mat', None), self.pmi_chem_specs[0] if len(self.pmi_chem_specs) > 0 else None, "기준 1"),
-            (getattr(self, 'pmi_spec2_lbl', None), getattr(self, 'pmi_spec2_mat', None), self.pmi_chem_specs[1] if len(self.pmi_chem_specs) > 1 else None, "기준 2"),
-            (getattr(self, 'pmi_spec3_lbl', None), getattr(self, 'pmi_spec3_mat', None), self.pmi_chem_specs[2] if len(self.pmi_chem_specs) > 2 else None, "기준 3"),
+            (getattr(self, 'pmi_spec1_lbl', None), getattr(self, 'pmi_spec1_mat', None), self.pmi_chem_specs[0] if len(self.pmi_chem_specs) > 0 else None, "기준 1", 1),
+            (getattr(self, 'pmi_spec2_lbl', None), getattr(self, 'pmi_spec2_mat', None), self.pmi_chem_specs[1] if len(self.pmi_chem_specs) > 1 else None, "기준 2", 2),
+            (getattr(self, 'pmi_spec3_lbl', None), getattr(self, 'pmi_spec3_mat', None), self.pmi_chem_specs[2] if len(self.pmi_chem_specs) > 2 else None, "기준 3", 3),
         ]
-        for lbl, mat_var, spec_var, prefix in spec_pairs:
+        for lbl, mat_var, spec_var, prefix, slot_idx in spec_pairs:
             if not lbl: continue
             mat_txt = mat_var.get().strip() if mat_var else ""
             spec_txt = spec_var.get().strip() if spec_var else ""
-            title = ""
-            if mat_txt and not any(k in mat_txt for k in ["공란", "비움", "해당없음", "-"]):
-                title = mat_txt.split("(")[0].strip()
-            elif spec_txt and spec_txt != "-":
-                title = spec_txt.split(":")[0].strip()
-            
-            if title:
-                lbl.config(text=f"{prefix} ({title}):")
+            item_title = self._get_pmi_spec_item_title(slot_idx, mat_txt, spec_txt)
+            if item_title:
+                lbl.config(text=f"{prefix} ({item_title}):")
             else:
                 lbl.config(text=f"{prefix}:")
 
