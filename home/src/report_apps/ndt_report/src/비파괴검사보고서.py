@@ -8571,6 +8571,47 @@ class PMIReportApp:
                 return v
         return None
 
+    def _determine_pmi_target_slot(self, spec):
+        """새로 선택된 재질/스펙이 들어갈 최적의 기준 슬롯(1, 2, 3)을 순차적으로 결정"""
+        m_name = spec["name"]
+        is_weld = any(k in m_name for k in ["ER316", "ER308", "ER309", "ER2209", "ER70S", "ERNICRMO", "E7018", "WELD", "용접"])
+        
+        # 현재 슬롯별 상태 확인 (공란 여부)
+        s1 = self.pmi_chem_specs[0].get().strip() if len(self.pmi_chem_specs) > 0 else ""
+        s2 = self.pmi_chem_specs[1].get().strip() if len(self.pmi_chem_specs) > 1 else ""
+        s3 = self.pmi_chem_specs[2].get().strip() if len(self.pmi_chem_specs) > 2 else ""
+
+        is_s1_empty = (not s1 or s1 == "-")
+        is_s2_empty = (not s2 or s2 == "-")
+        is_s3_empty = (not s3 or s3 == "-")
+
+        # 1. 용접봉/용접재인 경우: 기준 2(용접부) 우선 배정
+        if is_weld:
+            if is_s2_empty or (m_name in s2):
+                return 2
+            elif is_s3_empty:
+                return 3
+            elif is_s1_empty:
+                return 1
+            return 2
+
+        # 2. 일반 자재(모재 / 피팅 / 플랜지 등):
+        # 2-1. 기준 1이 비어있거나, 기존 기준 1과 동일한 재질 계열이면 기준 1 갱신
+        if is_s1_empty or (m_name in s1):
+            return 1
+
+        # 2-2. 기준 1에 이미 다른 자재가 들어가 있는 경우:
+        # 차례대로 기준 2가 비어있으면 기준 2로 자동 입력
+        if is_s2_empty or (m_name in s2):
+            return 2
+
+        # 2-3. 기준 2도 차있으면 기준 3으로 자동 입력
+        if is_s3_empty or (m_name in s3):
+            return 3
+
+        # 모두 차있으면 기존 기준 보호를 위해 덮어쓰지 않음
+        return None
+
     def apply_pmi_material_preset(self, mat_name, fill_all_specs=False):
         spec = self._lookup_pmi_material_spec(mat_name)
         if not spec: return False
@@ -8580,39 +8621,34 @@ class PMIReportApp:
             if idx < len(self.pmi_chem_elements):
                 self.pmi_chem_elements[idx].set(elem)
                 
-        # 2. Chemical specs (기준 1, 2, 3)
-        # 중요: 기준 1, 2, 3은 기본적으로 공란으로 대기하며, 선택한 재질에 해당하는 기준만 채워집니다.
+        # 2. Chemical specs (기준 1, 2, 3 차례대로 스마트 순차 자동 입력)
         m_name = spec["name"]
-        is_weld = any(k in m_name for k in ["ER316L", "ER308L", "ER309L", "ER2209", "ER70S", "ERNiCrMo"])
+        target_slot = self._determine_pmi_target_slot(spec)
+        if target_slot is not None:
+            target_idx = target_slot - 1
 
-        if is_weld:
-            # 용접봉 선택 시: 기준 2(용접부)에 채움
-            if len(self.pmi_chem_specs) > 1:
-                self.pmi_chem_specs[1].set(spec["specs"][0])
-            if hasattr(self, 'pmi_spec2_mat'):
-                matched_s2 = next((opt for opt in self.PMI_SPEC2_OPTIONS if m_name in opt or opt in m_name), m_name)
-                self.pmi_spec2_mat.set(matched_s2)
-        else:
-            # 모재/피팅/밸브 등 일반 재질 선택 시: 기준 1(모재 1)에 채움
-            if len(self.pmi_chem_specs) > 0:
-                self.pmi_chem_specs[0].set(spec["specs"][0])
-            if hasattr(self, 'pmi_spec1_mat'):
-                self.pmi_spec1_mat.set(spec["name"])
+            if target_idx < len(self.pmi_chem_specs):
+                self.pmi_chem_specs[target_idx].set(spec["specs"][0])
 
-            # fill_all_specs=True(명시적 플래그)일 때만 기준 2, 3을 자동 채움
-            if fill_all_specs:
-                if len(spec.get("specs", [])) > 1 and len(self.pmi_chem_specs) > 1:
-                    self.pmi_chem_specs[1].set(spec["specs"][1])
-                    if hasattr(self, 'pmi_spec2_mat'):
-                        raw_s2 = spec["specs"][1].split(":")[0].strip()
-                        matched_s2 = next((opt for opt in self.PMI_SPEC2_OPTIONS if raw_s2 in opt or opt in raw_s2), raw_s2)
-                        self.pmi_spec2_mat.set(matched_s2)
-                if len(spec.get("specs", [])) > 2 and len(self.pmi_chem_specs) > 2:
-                    self.pmi_chem_specs[2].set(spec["specs"][2])
-                    if hasattr(self, 'pmi_spec3_mat'):
-                        raw_s3 = spec["specs"][2].split(":")[0].strip()
-                        matched_s3 = next((opt for opt in self.PMI_SPEC3_OPTIONS if raw_s3 in opt or opt in raw_s3), raw_s3)
-                        self.pmi_spec3_mat.set(matched_s3)
+            mat_var = getattr(self, f'pmi_spec{target_slot}_mat', None)
+            if mat_var:
+                matched = next((opt for opt in self.PMI_COMMON_SPEC_OPTIONS if spec["name"] in opt), spec["name"])
+                mat_var.set(matched)
+
+        # fill_all_specs=True(명시적 플래그)일 때만 기준 2, 3을 자동 채움
+        if fill_all_specs:
+            if len(spec.get("specs", [])) > 1 and len(self.pmi_chem_specs) > 1:
+                self.pmi_chem_specs[1].set(spec["specs"][1])
+                if hasattr(self, 'pmi_spec2_mat'):
+                    raw_s2 = spec["specs"][1].split(":")[0].strip()
+                    matched_s2 = next((opt for opt in self.PMI_SPEC2_OPTIONS if raw_s2 in opt or opt in raw_s2), raw_s2)
+                    self.pmi_spec2_mat.set(matched_s2)
+            if len(spec.get("specs", [])) > 2 and len(self.pmi_chem_specs) > 2:
+                self.pmi_chem_specs[2].set(spec["specs"][2])
+                if hasattr(self, 'pmi_spec3_mat'):
+                    raw_s3 = spec["specs"][2].split(":")[0].strip()
+                    matched_s3 = next((opt for opt in self.PMI_SPEC3_OPTIONS if raw_s3 in opt or opt in raw_s3), raw_s3)
+                    self.pmi_spec3_mat.set(matched_s3)
                 
         # 3. element_filters (Min ~ Max)
         if hasattr(self, 'element_filters'):
@@ -8714,9 +8750,12 @@ class PMIReportApp:
                 self.pmi_material_combobox['values'] = new_values
 
             current_mat = self.gapji_material.get().strip()
-            # 품명 변경 시 재질 드롭다운 추천 순서만 갱신하며, 아래 기준은 절대 임의로 변경하지 않음
-            if not current_mat:
-                self.gapji_material.set(preset["default_material"])
+            # 품명 변경 시: 이전 품명과 다른 새로운 품명의 추천 재질을 설정하고,
+            # 빈 슬롯(기준 1 -> 기준 2 -> 기준 3)에 순차적으로 자동 입력
+            if not current_mat or current_mat not in rec_materials:
+                new_mat = preset["default_material"]
+                self.gapji_material.set(new_mat)
+                self.apply_pmi_material_preset(new_mat)
             self._update_pmi_spec_labels()
 
     def _on_pmi_material_changed(self, event=None):
@@ -8776,8 +8815,6 @@ class PMIReportApp:
 
         # 4. 피팅 (엘보/티/레듀샤)
         if any(k in combined for k in ["A403", "WP316", "WP304", "ELBOW", "TEE", "REDUCER", "엘보", "티", "레듀샤", "피팅"]):
-            if cur_item in ("ELBOW", "TEE", "REDUCER", "엘보", "티", "레듀샤"):
-                return cur_item
             if "TEE" in combined or "티" in combined:
                 return "TEE"
             if "REDUCER" in combined or "레듀샤" in combined:
@@ -8786,24 +8823,18 @@ class PMIReportApp:
 
         # 5. 형강/구조재
         if any(k in combined for k in ["A992", "A572", "SM355", "SN355", "A36", "SS275", "BEAM", "COLUMN", "GIRDER", "형강"]):
-            if cur_item and any(k in cur_item for k in ["BEAM", "COLUMN", "GIRDER", "보", "기둥"]):
-                return cur_item
             return "H-BEAM"
 
         # 6. 배관 (PIPE)
         if any(k in combined for k in ["A312", "TP316", "TP304", "TP321", "TP347", "S31803", "PIPE", "배관"]):
             return "PIPE"
 
-        # 7. 기준 1(slot 1)이고 상단 품명이 지정되어 있는 경우 상단 품명 사용
-        if slot_idx == 1 and cur_item:
-            return cur_item
-
-        # 8. 괄호 안에 품명 힌트가 있는 경우 (예: "피팅/엘보", "플랜지", "용접봉")
+        # 7. 괄호 안에 품명 힌트가 있는 경우 (예: "피팅/엘보", "플랜지", "용접봉")
         if "(" in mat_clean and ")" in mat_clean:
             hint = mat_clean.split("(")[1].split(")")[0].strip()
             if hint: return hint
 
-        # 9. 그 외 기본 재질명에서 품명 유추 불가 시
+        # 8. 그 외 기본 재질명에서 품명 유추 불가 시
         if mat_clean and not any(k in mat_clean for k in ["공란", "비움"]):
             return mat_clean.split("(")[0].strip()
 
