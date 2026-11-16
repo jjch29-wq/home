@@ -174,6 +174,22 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertEqual(ws["A30"].value, "Vanadium")
         self.assertEqual(ws["G30"].value, "Max 0.15")
 
+    def test_show_pmi_element_selector_dialog_creates_elements_without_error(self):
+        """Verify element selector dialog opens cleanly with element checkboxes and bottom buttons."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+
+        # Mock extracted data with detected elements
+        self.app.extracted_data = [
+            {"No": "1", "Cr": 18.5, "Ni": 11.2, "Mo": 2.1, "Ti": 0.05, "Mn": 1.2}
+        ]
+
+        # Call dialog - must not throw TclError or any exception
+        try:
+            self.app.show_pmi_element_selector_dialog()
+        except Exception as e:
+            self.fail(f"show_pmi_element_selector_dialog raised an exception: {e}")
+
 
 if __name__ == "__main__":
     unittest.main()

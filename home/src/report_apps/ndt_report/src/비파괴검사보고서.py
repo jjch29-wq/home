@@ -8348,6 +8348,28 @@ class PMIReportApp:
             ],
             "limits": {"Ni": (10.0, 14.0), "Cr": (16.0, 20.0), "Mo": (2.0, 3.0)}
         },
+        "A182-F316L": {
+            "name": "A182-F316L",
+            "title": "ASTM A182 F316L (FLANGE)",
+            "elements": ["Ni", "Cr", "Mo", "-", "-"],
+            "specs": [
+                "A182-F316L (Flange): Ni:10.00 ~ 15.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%",
+                "ER316L (Weld): Ni:11.00 ~ 14.00%, Cr:18.00 ~ 20.00%, Mo:2.00 ~ 3.00%",
+                "A312-TP316L (Pipe): Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%"
+            ],
+            "limits": {"Ni": (10.0, 15.0), "Cr": (16.0, 18.0), "Mo": (2.0, 3.0)}
+        },
+        "A182-F304L": {
+            "name": "A182-F304L",
+            "title": "ASTM A182 F304L (FLANGE)",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "A182-F304L (Flange): Cr:18.00 ~ 20.00%, Ni:8.00 ~ 13.00%",
+                "ER308L (Weld): Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
+                "A312-TP304L (Pipe): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%"
+            ],
+            "limits": {"Cr": (18.0, 20.0), "Ni": (8.0, 13.0), "Mo": (0.0, 0.5)}
+        },
         "ER309L (이재질)": {
             "name": "ER309L (이재질)",
             "title": "AWS A5.9 ER309L (DISSIMILAR WELD)",
@@ -8379,7 +8401,7 @@ class PMIReportApp:
         "CF8M": "A351-CF8M", "CF3M": "A351-CF3M", "CF8": "A351-CF8", "CF3": "A351-CF8", "VALVE": "A351-CF8M", "351": "A351-CF8M",
         "WP316L": "A403-WP316L", "WP316": "A403-WP316L", "WP304L": "A312-TP304L", "WP304": "A312-TP304", "FITTING": "A403-WP316L",
         "ER309L": "ER309L (이재질)", "309L": "ER309L (이재질)", "309": "ER309L (이재질)", "이재질": "ER309L (이재질)",
-        "F316L": "A312-TP316L", "F316": "A312-TP316", "F304L": "A312-TP304L", "F304": "A312-TP304"
+        "F316L": "A182-F316L", "F316": "A182-F316L", "F304L": "A182-F304L", "F304": "A182-F304L", "FLANGE": "A182-F316L", "A182": "A182-F316L"
     }
 
     def _lookup_pmi_material_spec(self, mat_str):
@@ -8566,7 +8588,7 @@ class PMIReportApp:
         ttk.Button(btn_f, text=" 취소 (Cancel) ", command=dialog.destroy, width=14).pack(side='right')
 
         # 3. 중앙 체크박스 영역 (4열 배치로 콤팩트하게 정렬)
-        content_box = tk.LabelFrame(main_f, text=" 화학 원소 목록 ", padding=10, background="#ffffff", font=("Malgun Gothic", 8, "bold"))
+        content_box = ttk.LabelFrame(main_f, text=" 화학 원소 목록 (선택) ", padding=10)
         content_box.pack(fill='both', expand=True, pady=5)
         for col_i in range(4):
             content_box.columnconfigure(col_i, weight=1)
@@ -8578,6 +8600,10 @@ class PMIReportApp:
             check_vars[elem] = var
             chk = ttk.Checkbutton(content_box, text=elem, variable=var)
             chk.grid(row=i//4, column=i%4, sticky='w', padx=12, pady=6)
+
+        return dialog
+
+    def check_material_grade(self, row_data):
         """jjchRFIPMI.py에서 이식된 10% 여유치 판정 로직"""
         cr = self.to_float(self._get_val_ci(row_data, 'Cr'))
         ni = self.to_float(self._get_val_ci(row_data, 'Ni'))
