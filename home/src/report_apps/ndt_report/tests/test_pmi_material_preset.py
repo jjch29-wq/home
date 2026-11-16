@@ -618,6 +618,27 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertEqual(ws['K27'].font.size, 8.0)
         self.assertEqual(ws['P27'].font.size, 8.0)
 
+    def test_slot_reset_to_default_three(self):
+        """Verify that expanding slots to 6 and resetting returns slots to default 3."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+        self.app.clear_all_pmi_specs()
+        self.assertEqual(len(self.app.pmi_chem_specs), 3)
+
+        self.app.add_pmi_spec_slot(show_msg=False)
+        self.app.add_pmi_spec_slot(show_msg=False)
+        self.assertEqual(len(self.app.pmi_chem_specs), 5)
+
+        # Reset to default 3
+        self.app.reset_pmi_spec_slots_to_default()
+        self.assertEqual(len(self.app.pmi_chem_specs), 3)
+
+        # Clear all specs also resets to 3
+        self.app.add_pmi_spec_slot(show_msg=False)
+        self.assertEqual(len(self.app.pmi_chem_specs), 4)
+        self.app.clear_all_pmi_specs()
+        self.assertEqual(len(self.app.pmi_chem_specs), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

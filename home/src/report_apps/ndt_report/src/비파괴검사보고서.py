@@ -4467,10 +4467,14 @@ class PMIReportApp:
             self.pmi_specs_container = specs_container
             self.pmi_spec_slots_ui = {}
 
-            # 기본 슬롯 (1, 2, 3) 및 기저장된 확장 슬롯(4~6) 복원
+            # 기본 슬롯 (1, 2, 3) 및 실제 유효한 내용이 저장된 확장 슬롯(4~6)만 복원
             init_slots = 3
             for i in (4, 5, 6):
-                if self.config.get(f'PMI_CHEM_SPEC_{i}') or self.config.get(f'PMI_SPEC{i}_MAT'):
+                s_val = (self.config.get(f'PMI_CHEM_SPEC_{i}') or '').strip()
+                m_val = (self.config.get(f'PMI_SPEC{i}_MAT') or '').strip()
+                has_valid_s = s_val and s_val != "-" and not any(k in s_val for k in ("공란", "비움"))
+                has_valid_m = m_val and m_val != "-" and not any(k in m_val for k in ("공란", "비움"))
+                if has_valid_s or has_valid_m:
                     init_slots = max(init_slots, i)
             for slot_i in range(1, init_slots + 1):
                 self._create_pmi_spec_slot_ui(slot_i, specs_container)
@@ -4486,6 +4490,7 @@ class PMIReportApp:
             ttk.Button(action_row, text="⚖️ 규격 합/부 자동 판정", command=self.evaluate_pmi_data_compliance).pack(side='right', padx=2)
             ttk.Button(action_row, text="🧹 기준 전체 비우기", command=self.clear_all_pmi_specs).pack(side='right', padx=2)
             ttk.Button(action_row, text="➕ 슬롯 추가", command=self.add_pmi_spec_slot).pack(side='left', padx=2)
+            ttk.Button(action_row, text="↩️ 기본 3개로 원위치", command=self.reset_pmi_spec_slots_to_default).pack(side='left', padx=2)
             
         # RT radioactive-source settings (I10:M11 on the cover sheet).
         isotope_frame = tk.Frame(block, background="#ffffff")
@@ -8892,23 +8897,54 @@ class PMIReportApp:
         return new_idx
 
     def remove_pmi_spec_slot(self, idx):
-        """동적으로 추가된 4~6번 슬롯 제거"""
-        if idx <= 3 or idx != len(self.pmi_chem_specs):
+        """동적으로 추가된 4~6번 슬롯 제거 (중간 슬롯 삭제 시 뒤쪽 슬롯 값을 앞으로 이동)"""
+        cur_total = len(self.pmi_chem_specs)
+        if idx <= 3 or idx > cur_total:
             return
-        slot_data = getattr(self, 'pmi_spec_slots_ui', {}).get(idx)
+        
+        # 중간 슬롯 삭제 시 뒤쪽 슬롯 값들을 앞으로 한 칸씩 당김
+        for s in range(idx, cur_total):
+            next_s = s + 1
+            cur_spec = self.pmi_chem_specs[next_s - 1].get()
+            cur_mat = getattr(self, f'pmi_spec{next_s}_mat', None)
+            cur_mat_val = cur_mat.get() if cur_mat else ""
+            
+            self.pmi_chem_specs[s - 1].set(cur_spec)
+            target_mat = getattr(self, f'pmi_spec{s}_mat', None)
+            if target_mat: target_mat.set(cur_mat_val)
+
+        # 맨 마지막 슬롯의 UI 및 변수 파괴
+        last_idx = cur_total
+        slot_data = getattr(self, 'pmi_spec_slots_ui', {}).get(last_idx)
         if slot_data:
             if slot_data.get('header') and slot_data['header'].winfo_exists():
                 slot_data['header'].destroy()
             if slot_data.get('entry') and slot_data['entry'].winfo_exists():
                 slot_data['entry'].destroy()
-            del self.pmi_spec_slots_ui[idx]
+            del self.pmi_spec_slots_ui[last_idx]
         
         self.pmi_chem_specs.pop()
-        self.setting_vars.pop(f'PMI_CHEM_SPEC_{idx}', None)
-        self.setting_vars.pop(f'PMI_SPEC{idx}_MAT', None)
+        self.setting_vars.pop(f'PMI_CHEM_SPEC_{last_idx}', None)
+        self.setting_vars.pop(f'PMI_SPEC{last_idx}_MAT', None)
+        self.config.pop(f'PMI_CHEM_SPEC_{last_idx}', None)
+        self.config.pop(f'PMI_SPEC{last_idx}_MAT', None)
         self._update_pmi_spec_labels()
         self.save_settings()
-        self.log(f"➖ 기준 슬롯 {idx} 제거 완료 (총 {len(self.pmi_chem_specs)}개)")
+        self.log(f"➖ 기준 슬롯 제거 완료 (현재 총 {len(self.pmi_chem_specs)}개)")
+
+    def reset_pmi_spec_slots_to_default(self, show_msg=False):
+        """4번 이상 슬롯을 모두 닫아 기본 3개 상태로 원위치"""
+        while len(self.pmi_chem_specs) > 3:
+            last_idx = len(self.pmi_chem_specs)
+            self.remove_pmi_spec_slot(last_idx)
+        for i in (4, 5, 6):
+            self.config.pop(f'PMI_CHEM_SPEC_{i}', None)
+            self.config.pop(f'PMI_SPEC{i}_MAT', None)
+        self._update_pmi_spec_labels()
+        self.save_settings()
+        self.log("↩️ 기준 슬롯을 기본 3개로 원위치했습니다.")
+        if show_msg:
+            messagebox.showinfo("알림", "기준 슬롯을 기본 3개로 원위치했습니다.")
 
     def _update_pmi_spec_labels(self):
         """기준 라벨들을 재질명이 아닌 품명(Item Name)으로 동적 갱신"""
@@ -9017,11 +9053,12 @@ class PMIReportApp:
         self.log(f"📋 기준 {slot_idx}에 선택한 자재({spec['name']})를 입력했습니다.")
 
     def clear_pmi_spec(self, idx):
-        """지정된 기준 슬롯을 공란으로 초기화하거나 초과 슬롯 제거"""
+        """지정된 기준 슬롯을 공란으로 초기화하거나 4번 이상 슬롯은 즉시 닫기(제거)"""
         slot_idx = idx - 1
         if 0 <= slot_idx < len(self.pmi_chem_specs):
-            cur_val = self.pmi_chem_specs[slot_idx].get().strip()
-            if idx > 3 and (not cur_val or cur_val == "-") and idx == len(self.pmi_chem_specs):
+            # 4번 이상 확장 슬롯에서 ✕를 누르면 슬롯 자체를 즉시 닫아 원위치
+            if idx > 3:
+                # idx번부터 마지막까지 모두 비어있거나 현재 슬롯을 지우면 닫힘
                 self.remove_pmi_spec_slot(idx)
                 return
             self.pmi_chem_specs[slot_idx].set("")
@@ -9032,17 +9069,19 @@ class PMIReportApp:
         self.save_settings()
 
     def clear_all_pmi_specs(self):
-        """모든 기준 슬롯을 공란으로 초기화"""
-        specs_list = getattr(self, 'pmi_chem_specs', [])
-        for i in range(1, len(specs_list) + 1):
+        """모든 기준 슬롯을 비우고 4~6번 슬롯은 기본 3개로 자동 원위치"""
+        # 4번 이상 슬롯이 열려있다면 전부 닫아서 3개로 축소
+        if hasattr(self, 'reset_pmi_spec_slots_to_default'):
+            self.reset_pmi_spec_slots_to_default()
+        for i in range(1, 4):
             slot_idx = i - 1
-            if slot_idx < len(specs_list):
-                specs_list[slot_idx].set("")
+            if slot_idx < len(self.pmi_chem_specs):
+                self.pmi_chem_specs[slot_idx].set("")
             mat_var = getattr(self, f'pmi_spec{i}_mat', None)
             if mat_var: mat_var.set("(공란 / 비움)")
         self._update_pmi_spec_labels()
         self.save_settings()
-        self.log("📋 모든 기준 슬롯을 공란으로 초기화했습니다.")
+        self.log("📋 모든 기준 슬롯을 비우고 기본 3개로 원위치했습니다.")
 
     def _on_pmi_spec_selected(self, slot_idx, event=None):
         """기준 슬롯 콤보박스 선택 공통 핸들러"""
