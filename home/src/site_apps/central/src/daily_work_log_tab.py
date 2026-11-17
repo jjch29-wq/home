@@ -292,20 +292,23 @@ class DailyWorkLogTab(ttk.Frame):
         btn_weekly_report = ttk.Button(mid_box, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
         btn_weekly_report.grid(row=1, column=0, columnspan=2, padx=3, pady=(1, 0), sticky="ew")
 
-        # 3. 우측: 비파괴검사결과서 편집 도구 (우측 빈 공간 100% 활용)
+        # 3. 우측: 비파괴검사결과서 편집 도구 (우측 빈 공간 100% 활용 및 2단 배치)
         right_box = ttk.LabelFrame(top_frame, text="비파괴검사결과서 편집", padding=(6, 3))
         right_box.pack(side="left", fill="both", expand=True)
 
-        ttk.Button(right_box, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).grid(row=0, column=0, padx=3, pady=2, sticky="w")
-        ttk.Button(right_box, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row).grid(row=0, column=1, padx=3, pady=2, sticky="w")
-        ttk.Button(right_box, text="✏️ 라인번호 일괄", command=self._edit_ndt_lines).grid(row=0, column=2, padx=3, pady=2, sticky="w")
-        ttk.Button(right_box, text="✏️ 구간 일괄", command=self._edit_ndt_sections).grid(row=0, column=3, padx=3, pady=2, sticky="w")
-        ttk.Button(right_box, text="🏷️ 공사구분 일괄", command=self._edit_ndt_work_categories).grid(row=0, column=4, padx=3, pady=2, sticky="w")
-        ttk.Button(right_box, text="🔍 작업내역 검색·수정", command=self.open_history_search_dialog).grid(row=0, column=5, padx=3, pady=2, sticky="w")
+        # 1단: 행 추가/삭제 및 작업내역 검색
+        ttk.Button(right_box, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).grid(row=0, column=0, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row).grid(row=0, column=1, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="🔍 작업내역 검색·수정", command=self.open_history_search_dialog).grid(row=0, column=2, padx=2, pady=1, sticky="w")
+
+        # 2단: 일괄 변경 도구 3종 (라인번호, 구간, 공사구분)
+        ttk.Button(right_box, text="✏️ 라인번호 일괄", command=self._edit_ndt_lines).grid(row=1, column=0, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="✏️ 구간 일괄", command=self._edit_ndt_sections).grid(row=1, column=1, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="🏷️ 공사구분 일괄", command=self._edit_ndt_work_categories).grid(row=1, column=2, padx=2, pady=1, sticky="w")
 
         self.ndt_selection_vars = []
         self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
-        ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=1, column=0, columnspan=6, padx=4, pady=2, sticky="w")
+        ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=0, column=3, rowspan=2, padx=(8, 4), pady=1, sticky="w")
 
     def _build_left_pane(self, parent):
         # --- Middle Section: Work Quantities ---
