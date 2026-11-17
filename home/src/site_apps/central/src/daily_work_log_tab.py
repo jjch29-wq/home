@@ -290,10 +290,11 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(right_box, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row).grid(row=0, column=1, padx=3, pady=2, sticky="w")
         ttk.Button(right_box, text="✏️ 라인번호 일괄", command=self._edit_ndt_lines).grid(row=0, column=2, padx=3, pady=2, sticky="w")
         ttk.Button(right_box, text="✏️ 구간 일괄", command=self._edit_ndt_sections).grid(row=0, column=3, padx=3, pady=2, sticky="w")
+        ttk.Button(right_box, text="🔍 작업내역 검색·수정", command=self.open_history_search_dialog).grid(row=0, column=4, padx=3, pady=2, sticky="w")
 
         self.ndt_selection_vars = []
         self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
-        ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=1, column=0, columnspan=4, padx=4, pady=2, sticky="w")
+        ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=1, column=0, columnspan=5, padx=4, pady=2, sticky="w")
 
     def _build_left_pane(self, parent):
         # --- Middle Section: Work Quantities ---
@@ -828,6 +829,7 @@ class DailyWorkLogTab(ttk.Frame):
             menu.add_separator()
             menu.add_command(label="✏️ 라인번호 일괄 변경...", command=self._edit_ndt_lines)
             menu.add_command(label="✏️ 구간 일괄 변경...", command=self._edit_ndt_sections)
+            menu.add_command(label="🔍 작업내역 검색·수정...", command=self.open_history_search_dialog)
             menu.add_separator()
             menu.add_command(label="💾 자동 집계 및 저장", command=self.auto_calculate_and_save)
             menu.add_command(label="📊 엑셀 출력 (일보)", command=self.export_excel)
@@ -1044,6 +1046,365 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(buttons, text='취소', command=dialog.destroy).pack(side='left')
         dialog.grab_set()
         entry.focus_set()
+
+    def open_history_search_dialog(self):
+        """저장된 전체 작업내역에서 일자·업체·라인번호별로 검색하고,
+        원하는 행을 선택하여 해당 일자의 결과서로 이동해 수정하거나 현재 일보로 복사해옵니다."""
+        history = self.load_history()
+        all_records = []
+        company_set = set()
+        line_set = set()
+        method_set = set()
+
+        for date_key in sorted(history.keys(), reverse=True):
+            day_data = history[date_key]
+            for row_idx, r in enumerate(day_data.get('ndt_results', [])):
+                if not any(str(r.get(k, '')).strip() for k in ('업체', '라인번호', 'Joint No.', '검사방법', '구간')):
+                    continue
+                co = str(r.get('업체', '')).strip()
+                ln = str(r.get('라인번호', '')).strip()
+                mth = str(r.get('검사방법', '')).strip().upper()
+                if co: company_set.add(co)
+                if ln: line_set.add(ln)
+                if mth: method_set.add(mth)
+                all_records.append({
+                    'date': str(date_key),
+                    'row_idx': row_idx,
+                    'company': co,
+                    'method': mth,
+                    'section': str(r.get('구간', '')).strip(),
+                    'work_type': str(r.get('작업구분', '')).strip(),
+                    'hot_loc': str(r.get('핫태핑개소', '')).strip(),
+                    'hot_deg': str(r.get('핫태핑차수', '')).strip(),
+                    'hot_cnt': str(r.get('핫태핑개소수', '')).strip(),
+                    'line_no': ln,
+                    'joint_no': str(r.get('Joint No.', '')).strip(),
+                    'pipe': str(r.get('관경', '')).strip(),
+                    'thick': str(r.get('두께', '')).strip(),
+                    'welder': str(r.get('용접사', '')).strip(),
+                    'joint_info': str(r.get('구간정보', '')).strip(),
+                    'result': str(r.get('결과', '')).strip(),
+                    'spec': str(r.get('규격', '')).strip(),
+                    'shift': str(r.get('근무구분', '')).strip(),
+                    'raw': dict(r),
+                })
+
+        window = tk.Toplevel(self)
+        window.title("작업내역 검색 및 결과서 불러오기 (일자 · 업체 · 라인번호)")
+        window.geometry("1120x660")
+        window.minsize(880, 500)
+        window.transient(self.winfo_toplevel())
+        window.grab_set()
+
+        # 1. 상단 필터 바
+        filter_box = ttk.LabelFrame(window, text="검색 및 필터 조건", padding=8)
+        filter_box.pack(fill="x", padx=10, pady=(10, 6))
+
+        # 일자 필터
+        row1 = ttk.Frame(filter_box)
+        row1.pack(fill="x", pady=2)
+
+        ttk.Label(row1, text="검사일자:").pack(side="left")
+        all_dates_var = tk.BooleanVar(value=True)
+
+        try:
+            from datetime import timedelta
+            today_dt = datetime.strptime(self._selected_date_key(), '%Y-%m-%d').date()
+        except Exception:
+            today_dt = datetime.now().date()
+        month_ago_dt = today_dt - timedelta(days=30)
+
+        start_date_entry = DateEntry(row1, width=11, background='darkblue', foreground='white',
+                                     date_pattern='yyyy-mm-dd', year=month_ago_dt.year,
+                                     month=month_ago_dt.month, day=month_ago_dt.day)
+        start_date_entry.pack(side="left", padx=4)
+
+        ttk.Label(row1, text="~").pack(side="left")
+        end_date_entry = DateEntry(row1, width=11, background='darkblue', foreground='white',
+                                   date_pattern='yyyy-mm-dd', year=today_dt.year,
+                                   month=today_dt.month, day=today_dt.day)
+        end_date_entry.pack(side="left", padx=4)
+
+        ttk.Checkbutton(row1, text="전체 기간(제한 없음)", variable=all_dates_var, command=lambda: refresh_rows()).pack(side="left", padx=(6, 16))
+
+        ttk.Label(row1, text="업체:").pack(side="left")
+        company_var = tk.StringVar(value="(전체)")
+        company_combo = ttk.Combobox(row1, textvariable=company_var, values=['(전체)'] + sorted(company_set), width=14, state='readonly')
+        company_combo.pack(side="left", padx=(4, 16))
+
+        ttk.Label(row1, text="방법:").pack(side="left")
+        method_var = tk.StringVar(value="(전체)")
+        method_combo = ttk.Combobox(row1, textvariable=method_var, values=['(전체)'] + sorted(method_set), width=8, state='readonly')
+        method_combo.pack(side="left", padx=(4, 16))
+
+        # 라인번호 및 키워드 검색
+        row2 = ttk.Frame(filter_box)
+        row2.pack(fill="x", pady=(4, 2))
+
+        ttk.Label(row2, text="라인번호:").pack(side="left")
+        line_var = tk.StringVar(value="(전체)")
+        line_combo = ttk.Combobox(row2, textvariable=line_var, values=['(전체)'] + sorted(line_set), width=26)
+        line_combo.pack(side="left", padx=(4, 16))
+
+        ttk.Label(row2, text="통합 검색어:").pack(side="left")
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(row2, textvariable=search_var, width=18)
+        search_entry.pack(side="left", padx=(4, 8))
+        ttk.Label(row2, text="(Joint, 구간, 용접사 등)", foreground="#666666").pack(side="left", padx=(0, 16))
+
+        ttk.Button(row2, text="🔍 조회", command=lambda: refresh_rows()).pack(side="left", padx=4)
+        
+        def reset_filters():
+            all_dates_var.set(True)
+            company_var.set("(전체)")
+            method_var.set("(전체)")
+            line_var.set("(전체)")
+            line_combo['values'] = ['(전체)'] + sorted(line_set)
+            search_var.set("")
+            refresh_rows()
+
+        ttk.Button(row2, text="초기화", command=reset_filters).pack(side="left", padx=2)
+
+        # 업체 선택 변경 시 해당 업체의 라인번호로 동적 연동
+        def on_company_change(*_args):
+            sel_co = company_var.get().strip()
+            if not sel_co or sel_co == '(전체)':
+                line_combo['values'] = ['(전체)'] + sorted(line_set)
+            else:
+                co_lines = sorted({r['line_no'] for r in all_records if r['company'] == sel_co and r['line_no']})
+                line_combo['values'] = ['(전체)'] + co_lines
+            line_var.set('(전체)')
+            refresh_rows()
+
+        company_combo.bind('<<ComboboxSelected>>', on_company_change)
+        method_combo.bind('<<ComboboxSelected>>', lambda _e: refresh_rows())
+        line_combo.bind('<<ComboboxSelected>>', lambda _e: refresh_rows())
+        line_combo.bind('<Return>', lambda _e: refresh_rows())
+        search_entry.bind('<Return>', lambda _e: refresh_rows())
+
+        # 2. 중앙 테이블
+        table_frame = ttk.Frame(window, padding=(10, 4, 10, 4))
+        table_frame.pack(fill="both", expand=True)
+
+        cols = ('date', 'company', 'method', 'section', 'line_no', 'joint_no', 'pipe', 'thick', 'welder', 'result', 'spec')
+        tree = ttk.Treeview(table_frame, columns=cols, show='headings', selectmode='extended')
+        
+        headers = {
+            'date': ('검사일자', 90, 'center'),
+            'company': ('업체', 110, 'w'),
+            'method': ('방법', 60, 'center'),
+            'section': ('구간', 80, 'center'),
+            'line_no': ('라인번호', 220, 'w'),
+            'joint_no': ('Joint No.', 85, 'center'),
+            'pipe': ('관경', 65, 'center'),
+            'thick': ('두께', 55, 'center'),
+            'welder': ('용접사', 85, 'center'),
+            'result': ('결과', 60, 'center'),
+            'spec': ('규격/근무', 85, 'center'),
+        }
+        for col_id, (header_text, col_width, align) in headers.items():
+            tree.heading(col_id, text=header_text)
+            tree.column(col_id, width=col_width, minwidth=40, anchor=align)
+
+        v_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
+        h_scroll = ttk.Scrollbar(table_frame, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+
+        tree.grid(row=0, column=0, sticky="nsew")
+        v_scroll.grid(row=0, column=1, sticky="ns")
+        h_scroll.grid(row=1, column=0, sticky="ew")
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+
+        # 3. 하단 상태 및 액션 버튼 바
+        status_var = tk.StringVar()
+        ttk.Label(window, textvariable=status_var, padding=(12, 2, 12, 4), foreground="#1d4ed8").pack(fill="x")
+
+        bottom_frame = ttk.Frame(window, padding=(10, 4, 10, 10))
+        bottom_frame.pack(fill="x")
+
+        ttk.Label(
+            bottom_frame,
+            text="💡 항목 더블클릭 또는 [이동하여 수정]을 누르면 해당 일자의 결과서로 이동해 편집할 수 있습니다.",
+            foreground="#555555"
+        ).pack(side="left")
+
+        filtered_records = []
+
+        def refresh_rows(*_args):
+            nonlocal filtered_records
+            tree.delete(*tree.get_children())
+            
+            sel_co = company_var.get().strip()
+            sel_mth = method_var.get().strip()
+            sel_line = line_var.get().strip()
+            query = search_var.get().strip().lower()
+            all_dates = all_dates_var.get()
+
+            try:
+                start_str = start_date_entry.get_date().strftime('%Y-%m-%d')
+                end_str = end_date_entry.get_date().strftime('%Y-%m-%d')
+            except Exception:
+                start_str, end_str = "0000-00-00", "9999-99-99"
+
+            filtered = []
+            for r in all_records:
+                if not all_dates:
+                    if not (start_str <= r['date'] <= end_str):
+                        continue
+                if sel_co and sel_co != '(전체)' and r['company'] != sel_co:
+                    continue
+                if sel_mth and sel_mth != '(전체)' and r['method'] != sel_mth:
+                    continue
+                if sel_line and sel_line != '(전체)' and sel_line.lower() not in r['line_no'].lower():
+                    continue
+                if query:
+                    search_corpus = f"{r['date']} {r['company']} {r['line_no']} {r['joint_no']} {r['section']} {r['welder']} {r['joint_info']}".lower()
+                    if query not in search_corpus:
+                        continue
+                filtered.append(r)
+
+            filtered_records = filtered
+            for idx, r in enumerate(filtered):
+                spec_display = f"{r['spec']} ({r['shift']})" if r['shift'] else r['spec']
+                tree.insert(
+                    '', 'end', iid=str(idx),
+                    values=(r['date'], r['company'], r['method'], r['section'], r['line_no'],
+                            r['joint_no'], r['pipe'], r['thick'], r['welder'], r['result'], spec_display)
+                )
+
+            status_var.set(f"총 {len(filtered)}건의 작업내역이 조회되었습니다. (선택 후 버튼 클릭)")
+
+        def move_to_selected(_event=None):
+            sel = tree.selection()
+            if not sel:
+                messagebox.showwarning("선택 확인", "이동할 작업내역을 목록에서 먼저 선택하세요.", parent=window)
+                return
+            idx = int(sel[0])
+            record = filtered_records[idx]
+            target_date = record['date']
+            target_line = record['line_no']
+            target_joint = record['joint_no']
+
+            current_date = self._selected_date_key()
+            if target_date != current_date:
+                baseline = getattr(self, '_log_baseline', None)
+                if baseline is not None and self._capture_log_input() != baseline:
+                    if not messagebox.askyesno(
+                        '일보 날짜 이동',
+                        f'현재 {current_date} 일보에 저장하지 않은 작성 내용이 있습니다.\n'
+                        f'작성 내용을 버리고 {target_date} 일보로 이동할까요?',
+                        parent=window
+                    ):
+                        return
+                try:
+                    self.date_entry.set_date(datetime.strptime(target_date, '%Y-%m-%d').date())
+                except Exception:
+                    pass
+                self.on_date_change()
+
+            target_row_idx = None
+            for r_i, row in enumerate(self.ndt_grid_entries):
+                if (row['라인번호'].get().strip() == target_line and
+                    row['Joint No.'].get().strip() == target_joint and
+                    row['업체'].get().strip() == record['company']):
+                    target_row_idx = r_i
+                    break
+            if target_row_idx is None:
+                for r_i, row in enumerate(self.ndt_grid_entries):
+                    if (row['라인번호'].get().strip() == target_line and
+                        row['Joint No.'].get().strip() == target_joint):
+                        target_row_idx = r_i
+                        break
+
+            if target_row_idx is not None:
+                self._clear_ndt_selection()
+                self._select_ndt_row(self.ndt_grid_entries[target_row_idx])
+                self._focus_ndt_joint(target_row_idx)
+
+            window.destroy()
+            if target_row_idx is not None:
+                messagebox.showinfo(
+                    "작업내역 이동 완료",
+                    f"[{target_date}] {record['company']} - {target_line} (Joint {target_joint})\n"
+                    f"해당 행({target_row_idx + 1}행)을 선택했습니다. 수정 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
+                    parent=self
+                )
+
+        def copy_to_current():
+            sel = tree.selection()
+            if not sel:
+                messagebox.showwarning("선택 확인", "가져올 작업내역을 1개 이상 선택하세요.", parent=window)
+                return
+            items_to_copy = [filtered_records[int(i)] for i in sel]
+
+            empty_indices = [
+                idx for idx, row in enumerate(self.ndt_grid_entries)
+                if not any(row[k].get().strip() for k in ('업체', '라인번호', 'Joint No.', '검사방법'))
+            ]
+
+            needed = len(items_to_copy) - len(empty_indices)
+            if needed > 0:
+                self._append_ndt_rows(((needed + 9) // 10) * 10)
+                empty_indices = [
+                    idx for idx, row in enumerate(self.ndt_grid_entries)
+                    if not any(row[k].get().strip() for k in ('업체', '라인번호', 'Joint No.', '검사방법'))
+                ]
+
+            first_filled_idx = None
+            for item, row_idx in zip(items_to_copy, empty_indices):
+                row = self.ndt_grid_entries[row_idx]
+                if first_filled_idx is None:
+                    first_filled_idx = row_idx
+                field_map = {
+                    '업체': item['company'],
+                    '검사방법': item['method'],
+                    '구간': item['section'],
+                    '작업구분': item['work_type'],
+                    '핫태핑개소': item['hot_loc'],
+                    '핫태핑차수': item['hot_deg'],
+                    '핫태핑개소수': item['hot_cnt'],
+                    '라인번호': item['line_no'],
+                    'Joint No.': item['joint_no'],
+                    '관경': item['pipe'],
+                    '두께': item['thick'],
+                    '용접사': item['welder'],
+                    '구간정보': item['joint_info'],
+                    '결과': item['result'] or '합격',
+                    '규격': item['spec'],
+                    '근무구분': item['shift'] or '주간',
+                }
+                for k, v in field_map.items():
+                    if k in row:
+                        if hasattr(row[k], 'set'):
+                            row[k].set(v)
+                        elif hasattr(row[k], 'delete'):
+                            row[k].delete(0, tk.END)
+                            row[k].insert(0, v)
+                self._sync_ndt_spec(row)
+
+            if first_filled_idx is not None:
+                self._clear_ndt_selection()
+                self._select_ndt_row(self.ndt_grid_entries[first_filled_idx])
+                self._focus_ndt_joint(first_filled_idx)
+
+            window.destroy()
+            messagebox.showinfo(
+                "가져오기 완료",
+                f"{len(items_to_copy)}건의 작업내역을 현재 일보({self._selected_date_key()}) 결과서로 가져왔습니다.\n"
+                "수정 또는 확인 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
+                parent=self
+            )
+
+        tree.bind('<Double-1>', move_to_selected)
+        tree.bind('<Return>', move_to_selected)
+
+        ttk.Button(bottom_frame, text="📌 해당 일자로 이동하여 수정", command=move_to_selected).pack(side="right", padx=4)
+        ttk.Button(bottom_frame, text="📋 현재 일보로 행 복사하여 가져오기", command=copy_to_current).pack(side="right", padx=4)
+        ttk.Button(bottom_frame, text="닫기", command=window.destroy).pack(side="right", padx=4)
+
+        refresh_rows()
+        search_entry.focus_set()
 
     def _sync_ndt_spec(self, row):
         import re
