@@ -1230,8 +1230,6 @@ class DailyWorkLogTab(ttk.Frame):
                     btn_text = "🗗 원래 크기로"
                 if 'top_max_btn' in locals() and top_max_btn.winfo_exists():
                     top_max_btn.config(text=btn_text)
-                if 'bottom_max_btn' in locals() and bottom_max_btn.winfo_exists():
-                    bottom_max_btn.config(text=btn_text)
             except Exception:
                 pass
 
@@ -1282,18 +1280,22 @@ class DailyWorkLogTab(ttk.Frame):
         row2 = ttk.Frame(filter_box)
         row2.pack(fill="x", pady=(4, 2))
 
+        # 우측 끝에 최대화 버튼을 가장 먼저 배치하여 글자 잘림 방지 및 고정 공간 확보
+        top_max_btn = ttk.Button(row2, text="⛶ 화면 최대화", command=toggle_maximize, width=13)
+        top_max_btn.pack(side="right", padx=(8, 2))
+
         ttk.Label(row2, text="라인번호:").pack(side="left")
         line_var = tk.StringVar(value="(전체)")
-        line_combo = ttk.Combobox(row2, textvariable=line_var, values=['(전체)'] + sorted(line_set), width=26)
-        line_combo.pack(side="left", padx=(4, 16))
+        line_combo = ttk.Combobox(row2, textvariable=line_var, values=['(전체)'] + sorted(line_set), width=23)
+        line_combo.pack(side="left", padx=(4, 12))
 
         ttk.Label(row2, text="통합 검색어:").pack(side="left")
         search_var = tk.StringVar()
-        search_entry = ttk.Entry(row2, textvariable=search_var, width=18)
-        search_entry.pack(side="left", padx=(4, 8))
-        ttk.Label(row2, text="(Joint, 구간, 용접사 등)", foreground="#666666").pack(side="left", padx=(0, 16))
+        search_entry = ttk.Entry(row2, textvariable=search_var, width=16)
+        search_entry.pack(side="left", padx=(4, 6))
+        ttk.Label(row2, text="(Joint, 구간 등)", foreground="#666666").pack(side="left", padx=(0, 10))
 
-        ttk.Button(row2, text="🔍 조회", command=lambda: refresh_rows()).pack(side="left", padx=4)
+        ttk.Button(row2, text="🔍 조회", command=lambda: refresh_rows()).pack(side="left", padx=3)
         
         def reset_filters():
             all_dates_var.set(True)
@@ -1305,9 +1307,6 @@ class DailyWorkLogTab(ttk.Frame):
             refresh_rows()
 
         ttk.Button(row2, text="초기화", command=reset_filters).pack(side="left", padx=2)
-
-        top_max_btn = ttk.Button(row2, text="⛶ 화면 최대화", command=toggle_maximize)
-        top_max_btn.pack(side="right", padx=2)
 
         # 업체 선택 변경 시 해당 업체의 라인번호로 동적 연동
         def on_company_change(*_args):
@@ -1381,12 +1380,9 @@ class DailyWorkLogTab(ttk.Frame):
         close_on_move_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(guide_row, text="이동/복사 시 창 닫기", variable=close_on_move_var).pack(side="right")
 
-        # 2단: 화면 최대화 버튼(좌측) + 액션 버튼들(우측)
+        # 2단: 액션 버튼들(우측)
         action_row = ttk.Frame(bottom_frame)
         action_row.pack(fill="x")
-
-        bottom_max_btn = ttk.Button(action_row, text="⛶ 화면 최대화", command=toggle_maximize)
-        bottom_max_btn.pack(side="left")
 
         filtered_records = []
 
