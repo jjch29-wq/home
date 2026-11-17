@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import tkinter as tk
+from tkinter import ttk
 from unittest.mock import patch
 import unittest
 
@@ -81,6 +82,21 @@ class CentralDailyWorkLogSearchTests(unittest.TestCase):
 
                     # Verify dialog title and children
                     self.assertIn("작업내역 검색", dialog.title())
+
+                    # Verify maximize buttons exist
+                    buttons = [w for w in dialog.winfo_children() if isinstance(w, (tk.Button, ttk.Button))]
+                    all_buttons = []
+                    def find_buttons(widget):
+                        for c in widget.winfo_children():
+                            if isinstance(c, (tk.Button, ttk.Button)):
+                                all_buttons.append(c)
+                            find_buttons(c)
+                    find_buttons(dialog)
+                    btn_texts = [b.cget("text") for b in all_buttons]
+                    self.assertTrue(any("최대화" in t for t in btn_texts))
+                    self.assertTrue(any("이동하여 수정" in t for t in btn_texts))
+                    self.assertTrue(any("복사하여 가져오기" in t for t in btn_texts))
+
                     dialog.destroy()
 
     def test_copy_to_current_fills_ndt_row(self):

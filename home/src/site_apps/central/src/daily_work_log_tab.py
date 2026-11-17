@@ -1110,7 +1110,27 @@ class DailyWorkLogTab(ttk.Frame):
         window.title("작업내역 검색 및 결과서 불러오기 (일자 · 업체 · 라인번호)")
         window.geometry("1120x660")
         window.minsize(880, 500)
+        window.resizable(True, True)
         window.transient(self.winfo_toplevel())
+
+        # 화면 최대화 / 원래 크기 복원 토글 함수
+        def toggle_maximize(_event=None):
+            try:
+                is_zoomed = (window.state() == 'zoomed')
+                if is_zoomed:
+                    window.state('normal')
+                    btn_text = "⛶ 화면 최대화"
+                else:
+                    window.state('zoomed')
+                    btn_text = "🗗 원래 크기로"
+                if 'top_max_btn' in locals() and top_max_btn.winfo_exists():
+                    top_max_btn.config(text=btn_text)
+                if 'bottom_max_btn' in locals() and bottom_max_btn.winfo_exists():
+                    bottom_max_btn.config(text=btn_text)
+            except Exception:
+                pass
+
+        window.bind("<F11>", toggle_maximize)
 
         # 1. 상단 필터 바
         filter_box = ttk.LabelFrame(window, text="검색 및 필터 조건", padding=8)
@@ -1181,6 +1201,9 @@ class DailyWorkLogTab(ttk.Frame):
 
         ttk.Button(row2, text="초기화", command=reset_filters).pack(side="left", padx=2)
 
+        top_max_btn = ttk.Button(row2, text="⛶ 화면 최대화", command=toggle_maximize)
+        top_max_btn.pack(side="right", padx=2)
+
         # 업체 선택 변경 시 해당 업체의 라인번호로 동적 연동
         def on_company_change(*_args):
             sel_co = company_var.get().strip()
@@ -1236,14 +1259,28 @@ class DailyWorkLogTab(ttk.Frame):
         status_var = tk.StringVar()
         ttk.Label(window, textvariable=status_var, padding=(12, 2, 12, 4), foreground="#1d4ed8").pack(fill="x")
 
-        bottom_frame = ttk.Frame(window, padding=(10, 4, 10, 10))
+        bottom_frame = ttk.Frame(window, padding=(10, 4, 10, 8))
         bottom_frame.pack(fill="x")
 
+        # 1단: 가이드 문구 + 이동/복사 시 창 닫기 체크박스
+        guide_row = ttk.Frame(bottom_frame)
+        guide_row.pack(fill="x", pady=(0, 6))
+
         ttk.Label(
-            bottom_frame,
+            guide_row,
             text="💡 항목 더블클릭 또는 [이동하여 수정]을 누르면 해당 일자의 결과서로 이동해 편집할 수 있습니다.",
             foreground="#555555"
         ).pack(side="left")
+
+        close_on_move_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(guide_row, text="이동/복사 시 창 닫기", variable=close_on_move_var).pack(side="right")
+
+        # 2단: 화면 최대화 버튼(좌측) + 액션 버튼들(우측)
+        action_row = ttk.Frame(bottom_frame)
+        action_row.pack(fill="x")
+
+        bottom_max_btn = ttk.Button(action_row, text="⛶ 화면 최대화", command=toggle_maximize)
+        bottom_max_btn.pack(side="left")
 
         filtered_records = []
 
@@ -1432,12 +1469,9 @@ class DailyWorkLogTab(ttk.Frame):
         tree.bind('<Double-1>', move_to_selected)
         tree.bind('<Return>', move_to_selected)
 
-        close_on_move_var = tk.BooleanVar(value=False)
-
-        ttk.Button(bottom_frame, text="닫기", command=_on_window_close).pack(side="right", padx=4)
-        ttk.Button(bottom_frame, text="📋 현재 일보로 행 복사하여 가져오기", command=copy_to_current).pack(side="right", padx=4)
-        ttk.Button(bottom_frame, text="📌 해당 일자로 이동하여 수정", command=move_to_selected).pack(side="right", padx=4)
-        ttk.Checkbutton(bottom_frame, text="이동/복사 시 창 닫기", variable=close_on_move_var).pack(side="right", padx=(10, 6))
+        ttk.Button(action_row, text="닫기", command=_on_window_close, width=10).pack(side="right", padx=(4, 0))
+        ttk.Button(action_row, text="📋 현재 일보로 행 복사하여 가져오기", command=copy_to_current).pack(side="right", padx=4)
+        ttk.Button(action_row, text="📌 해당 일자로 이동하여 수정", command=move_to_selected).pack(side="right", padx=4)
 
         refresh_rows()
         search_entry.focus_set()
