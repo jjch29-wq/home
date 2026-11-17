@@ -139,6 +139,52 @@ class CentralDailyWorkLogSearchTests(unittest.TestCase):
                     self.assertEqual(first_row['Joint No.'].get(), "HT-S01")
                     dialog.destroy()
 
+    def test_search_dialog_reused_and_stays_open(self):
+        sample_history = {
+            "2026-11-06": {
+                "ndt_results": [
+                    {
+                        "업체": "다림건설(주)",
+                        "검사방법": "MT",
+                        "라인번호": "JA2026-017-007-0-1-350A",
+                        "Joint No.": "HT-S01",
+                        "결과": "합격",
+                    }
+                ]
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            hist_file = Path(tmp_dir) / "daily_work_history.json"
+            with open(hist_file, "w", encoding="utf-8") as f:
+                json.dump(sample_history, f, ensure_ascii=False)
+
+            with patch("site_apps.central.src.daily_work_log_tab.get_history_path", return_value=str(hist_file)):
+                tab = DailyWorkLogTab(self.root)
+                tab.history_path = str(hist_file)
+
+                with patch("tkinter.messagebox.showinfo"), patch("tkinter.messagebox.showwarning"):
+                    tab.open_history_search_dialog()
+                    self.root.update_idletasks()
+                    dialog1 = tab._history_search_window
+                    self.assertIsNotNone(dialog1)
+                    self.assertTrue(dialog1.winfo_exists())
+
+                    # Opening again reuses the existing dialog without creating a second one
+                    tab.open_history_search_dialog()
+                    self.root.update_idletasks()
+                    toplevels = [w for w in tab.winfo_children() if isinstance(w, tk.Toplevel)]
+                    self.assertEqual(len(toplevels), 1)
+
+                    dialog1.destroy()
+                    self.root.update_idletasks()
+                    # After destroying, the reference should be cleaned up on next call
+                    tab.open_history_search_dialog()
+                    self.root.update_idletasks()
+                    dialog2 = tab._history_search_window
+                    self.assertIsNotNone(dialog2)
+                    self.assertTrue(dialog2.winfo_exists())
+                    dialog2.destroy()
+
 
 if __name__ == '__main__':
     unittest.main()

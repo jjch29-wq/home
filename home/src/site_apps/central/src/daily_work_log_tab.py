@@ -1050,6 +1050,16 @@ class DailyWorkLogTab(ttk.Frame):
     def open_history_search_dialog(self):
         """저장된 전체 작업내역에서 일자·업체·라인번호별로 검색하고,
         원하는 행을 선택하여 해당 일자의 결과서로 이동해 수정하거나 현재 일보로 복사해옵니다."""
+        if hasattr(self, '_history_search_window') and self._history_search_window is not None:
+            try:
+                if self._history_search_window.winfo_exists():
+                    self._history_search_window.deiconify()
+                    self._history_search_window.lift()
+                    self._history_search_window.focus_force()
+                    return
+            except Exception:
+                pass
+
         history = self.load_history()
         all_records = []
         company_set = set()
@@ -1090,11 +1100,17 @@ class DailyWorkLogTab(ttk.Frame):
                 })
 
         window = tk.Toplevel(self)
+        self._history_search_window = window
+
+        def _on_window_close():
+            self._history_search_window = None
+            window.destroy()
+
+        window.protocol("WM_DELETE_WINDOW", _on_window_close)
         window.title("작업내역 검색 및 결과서 불러오기 (일자 · 업체 · 라인번호)")
         window.geometry("1120x660")
         window.minsize(880, 500)
         window.transient(self.winfo_toplevel())
-        window.grab_set()
 
         # 1. 상단 필터 바
         filter_box = ttk.LabelFrame(window, text="검색 및 필터 조건", padding=8)
@@ -1322,14 +1338,25 @@ class DailyWorkLogTab(ttk.Frame):
                 self._select_ndt_row(self.ndt_grid_entries[target_row_idx])
                 self._focus_ndt_joint(target_row_idx)
 
-            window.destroy()
-            if target_row_idx is not None:
-                messagebox.showinfo(
-                    "작업내역 이동 완료",
-                    f"[{target_date}] {record['company']} - {target_line} (Joint {target_joint})\n"
-                    f"해당 행({target_row_idx + 1}행)을 선택했습니다. 수정 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
-                    parent=self
-                )
+            if close_on_move_var.get():
+                _on_window_close()
+                if target_row_idx is not None:
+                    messagebox.showinfo(
+                        "작업내역 이동 완료",
+                        f"[{target_date}] {record['company']} - {target_line} (Joint {target_joint})\n"
+                        f"해당 행({target_row_idx + 1}행)을 선택했습니다. 수정 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
+                        parent=self
+                    )
+            else:
+                if target_row_idx is not None:
+                    status_var.set(
+                        f"✅ [{target_date}] {record['company']} · {target_line} · Joint {target_joint} "
+                        f"-> 결과서 {target_row_idx + 1}행 선택 및 포커스 완료! 메인 화면에서 바로 수정 후 [💾 자동 집계/저장]하세요."
+                    )
+                else:
+                    status_var.set(
+                        f"⚠️ [{target_date}] 일보로 이동했으나 결과서에서 일치하는 행을 찾지 못했습니다."
+                    )
 
         def copy_to_current():
             sel = tree.selection()
@@ -1388,20 +1415,29 @@ class DailyWorkLogTab(ttk.Frame):
                 self._select_ndt_row(self.ndt_grid_entries[first_filled_idx])
                 self._focus_ndt_joint(first_filled_idx)
 
-            window.destroy()
-            messagebox.showinfo(
-                "가져오기 완료",
-                f"{len(items_to_copy)}건의 작업내역을 현재 일보({self._selected_date_key()}) 결과서로 가져왔습니다.\n"
-                "수정 또는 확인 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
-                parent=self
-            )
+            if close_on_move_var.get():
+                _on_window_close()
+                messagebox.showinfo(
+                    "가져오기 완료",
+                    f"{len(items_to_copy)}건의 작업내역을 현재 일보({self._selected_date_key()}) 결과서로 가져왔습니다.\n"
+                    "수정 또는 확인 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
+                    parent=self
+                )
+            else:
+                status_var.set(
+                    f"✅ {len(items_to_copy)}건의 작업내역을 현재 일보({self._selected_date_key()}) 결과서로 복사했습니다. "
+                    f"메인 화면에서 확인 후 [💾 자동 집계/저장]하세요."
+                )
 
         tree.bind('<Double-1>', move_to_selected)
         tree.bind('<Return>', move_to_selected)
 
-        ttk.Button(bottom_frame, text="📌 해당 일자로 이동하여 수정", command=move_to_selected).pack(side="right", padx=4)
+        close_on_move_var = tk.BooleanVar(value=False)
+
+        ttk.Button(bottom_frame, text="닫기", command=_on_window_close).pack(side="right", padx=4)
         ttk.Button(bottom_frame, text="📋 현재 일보로 행 복사하여 가져오기", command=copy_to_current).pack(side="right", padx=4)
-        ttk.Button(bottom_frame, text="닫기", command=window.destroy).pack(side="right", padx=4)
+        ttk.Button(bottom_frame, text="📌 해당 일자로 이동하여 수정", command=move_to_selected).pack(side="right", padx=4)
+        ttk.Checkbutton(bottom_frame, text="이동/복사 시 창 닫기", variable=close_on_move_var).pack(side="right", padx=(10, 6))
 
         refresh_rows()
         search_entry.focus_set()
