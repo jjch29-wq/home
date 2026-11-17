@@ -937,7 +937,7 @@ class PMIReportApp:
 
     def load_template_specific_config(self, template_path, mode="RT"):
         """템플릿 파일과 연동된 JSON 설정 파일을 로드하여 UI에 반영"""
-        if not template_path or not os.path.exists(template_path): return
+        if not template_path: return
         
         # [NEW] Template-name based heuristics (e.g. K1/K3/롯데/플랜트 배관용)
         if mode == "PMI":
@@ -947,6 +947,8 @@ class PMIReportApp:
             else:
                 if hasattr(self, 'pmi_layout_mode'):
                     self.pmi_layout_mode.set("STANDARD")
+
+        if not os.path.exists(template_path): return
 
         config_path = os.path.splitext(template_path)[0] + ".json"
         if not os.path.exists(config_path): return
