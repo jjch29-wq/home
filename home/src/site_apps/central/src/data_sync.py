@@ -22,13 +22,25 @@ def _configured_data_dir():
 
 
 def _shared_dir_candidates(custom_dir):
-    yield custom_dir
-    _, relative = os.path.splitdrive(custom_dir)
-    relative = relative.lstrip(r'\/')
-    for drive in 'CDEFGHIJK':
-        candidate = f"{drive}:\\{relative}"
-        if os.path.normcase(candidate) != os.path.normcase(custom_dir):
-            yield candidate
+    norm_custom = os.path.normpath(custom_dir)
+    yield norm_custom
+    _, relative = os.path.splitdrive(norm_custom)
+    rel_clean = relative.replace('/', '\\').lstrip('\\')
+
+    rel_variants = [rel_clean]
+    if rel_clean.startswith('내 드라이브\\'):
+        rel_variants.append('My Drive\\' + rel_clean[len('내 드라이브\\'):])
+    elif rel_clean.startswith('My Drive\\'):
+        rel_variants.append('내 드라이브\\' + rel_clean[len('My Drive\\'):])
+
+    seen = {os.path.normcase(norm_custom)}
+    # 회사(F:)와 집(G:)을 최우선 순위로 자동 탐색
+    for drive in 'GFEDCHIJKLMNOPQRSTUVWXYZ':
+        for rel in rel_variants:
+            candidate = os.path.normpath(f"{drive}:\\{rel}")
+            if os.path.normcase(candidate) not in seen:
+                seen.add(os.path.normcase(candidate))
+                yield candidate
 
 
 def get_data_connection_error():
@@ -36,13 +48,18 @@ def get_data_connection_error():
     custom_dir = _configured_data_dir()
     if not custom_dir:
         return None
-    if any(os.path.isdir(path) for path in _shared_dir_candidates(custom_dir)):
-        return None
+    for path in _shared_dir_candidates(custom_dir):
+        try:
+            if os.path.isdir(path):
+                return None
+        except Exception:
+            continue
     return (
         "중앙지사 공유 작업자료 경로에 연결할 수 없습니다.\n"
-        f"설정 경로: {custom_dir}\n\n"
-        "오래된 로컬 자료에 잘못 저장되는 것을 막기 위해 저장을 중단했습니다. "
-        "Google Drive 또는 공유 드라이브 연결을 복구한 뒤 다시 시도해 주세요."
+        f"설정 경로: {custom_dir}\n"
+        "(회사 컴퓨터 F: 드라이브 / 현재 컴퓨터 G: 드라이브 자동 감지)\n\n"
+        "오래된 로컬 자료에 잘못 저장되는 것을 막기 위해 저장을 중단했습니다.\n"
+        "Google Drive 데스크톱 앱이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
     )
 
 
