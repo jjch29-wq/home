@@ -1334,22 +1334,22 @@ class DailyWorkLogTab(ttk.Frame):
         tree = ttk.Treeview(table_frame, columns=cols, show='headings', selectmode='extended')
         
         headers = {
-            'date': ('검사일자', 90, 'center'),
-            'company': ('업체', 110, 'w'),
-            'work_category': ('공사구분', 75, 'center'),
-            'method': ('방법', 60, 'center'),
-            'section': ('구간', 80, 'center'),
-            'line_no': ('라인번호', 220, 'w'),
-            'joint_no': ('Joint No.', 85, 'center'),
-            'pipe': ('관경', 65, 'center'),
-            'thick': ('두께', 55, 'center'),
-            'welder': ('용접사', 85, 'center'),
-            'result': ('결과', 60, 'center'),
-            'spec': ('규격/근무', 85, 'center'),
+            'date': ('검사일자', 95, 'center'),
+            'company': ('업체', 120, 'w'),
+            'work_category': ('공사구분', 85, 'center'),
+            'method': ('방법', 65, 'center'),
+            'section': ('구간', 85, 'center'),
+            'line_no': ('라인번호', 240, 'w'),
+            'joint_no': ('Joint No.', 90, 'center'),
+            'pipe': ('관경', 70, 'center'),
+            'thick': ('두께', 60, 'center'),
+            'welder': ('용접사', 90, 'center'),
+            'result': ('결과', 65, 'center'),
+            'spec': ('규격/근무', 95, 'center'),
         }
         for col_id, (header_text, col_width, align) in headers.items():
             tree.heading(col_id, text=header_text)
-            tree.column(col_id, width=col_width, minwidth=40, anchor=align)
+            tree.column(col_id, width=col_width, minwidth=40, anchor=align, stretch=False)
 
         v_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
         h_scroll = ttk.Scrollbar(table_frame, orient="horizontal", command=tree.xview)
