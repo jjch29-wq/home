@@ -41,6 +41,16 @@ LEGACY_WELDER_IDS = {
     'W-2023-A-13': 'W-2026-A-05',
 }
 
+COMPANY_WORK_CATEGORIES = {
+    '다림': ['', '제조', '수탁', '건가'],
+    '다림건설': ['', '제조', '수탁', '건가'],
+    '다림건설(주)': ['', '제조', '수탁', '건가'],
+    'GS네오텍': ['', '건가-추가', '건가-개선'],
+    'GS': ['', '건가-추가', '건가-개선'],
+    '지에스네오텍': ['', '건가-추가', '건가-개선'],
+}
+ALL_WORK_CATEGORIES = ['', '제조', '수탁', '건가', '건가-추가', '건가-개선']
+
 class DailyWorkLogTab(ttk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
@@ -282,19 +292,23 @@ class DailyWorkLogTab(ttk.Frame):
         btn_weekly_report = ttk.Button(mid_box, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
         btn_weekly_report.grid(row=1, column=0, columnspan=2, padx=3, pady=(1, 0), sticky="ew")
 
-        # 3. 우측: 비파괴검사결과서 편집 도구 (우측 빈 공간 100% 활용)
+        # 3. 우측: 비파괴검사결과서 편집 도구 (우측 빈 공간 100% 활용 및 2단 배치)
         right_box = ttk.LabelFrame(top_frame, text="비파괴검사결과서 편집", padding=(6, 3))
         right_box.pack(side="left", fill="both", expand=True)
 
-        ttk.Button(right_box, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).grid(row=0, column=0, padx=3, pady=2, sticky="w")
-        ttk.Button(right_box, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row).grid(row=0, column=1, padx=3, pady=2, sticky="w")
-        ttk.Button(right_box, text="✏️ 라인번호 일괄", command=self._edit_ndt_lines).grid(row=0, column=2, padx=3, pady=2, sticky="w")
-        ttk.Button(right_box, text="✏️ 구간 일괄", command=self._edit_ndt_sections).grid(row=0, column=3, padx=3, pady=2, sticky="w")
-        ttk.Button(right_box, text="🔍 작업내역 검색·수정", command=self.open_history_search_dialog).grid(row=0, column=4, padx=3, pady=2, sticky="w")
+        # 1단: 행 추가/삭제 및 작업내역 검색
+        ttk.Button(right_box, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).grid(row=0, column=0, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row).grid(row=0, column=1, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="🔍 작업내역 검색·수정", command=self.open_history_search_dialog).grid(row=0, column=2, padx=2, pady=1, sticky="w")
+
+        # 2단: 일괄 변경 도구 3종 (라인번호, 구간, 공사구분)
+        ttk.Button(right_box, text="✏️ 라인번호 일괄", command=self._edit_ndt_lines).grid(row=1, column=0, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="✏️ 구간 일괄", command=self._edit_ndt_sections).grid(row=1, column=1, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="🏷️ 공사구분 일괄", command=self._edit_ndt_work_categories).grid(row=1, column=2, padx=2, pady=1, sticky="w")
 
         self.ndt_selection_vars = []
         self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
-        ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=1, column=0, columnspan=5, padx=4, pady=2, sticky="w")
+        ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=0, column=3, rowspan=2, padx=(8, 4), pady=1, sticky="w")
 
     def _build_left_pane(self, parent):
         # --- Middle Section: Work Quantities ---
@@ -474,7 +488,7 @@ class DailyWorkLogTab(ttk.Frame):
         grid_frame = ttk.Frame(parent)
         grid_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        self.ndt_cols = ('업체', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
+        self.ndt_cols = ('업체', '공사구분', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
                          'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT')
         history = self.load_history()
         sections = set()
@@ -509,6 +523,8 @@ class DailyWorkLogTab(ttk.Frame):
                 grid_frame.grid_columnconfigure(col_idx, weight=3)
             elif c == '업체':
                 grid_frame.grid_columnconfigure(col_idx, weight=2, minsize=145)
+            elif c == '공사구분':
+                grid_frame.grid_columnconfigure(col_idx, weight=1, minsize=85)
             elif c == '규격':
                 grid_frame.grid_columnconfigure(col_idx, weight=2, minsize=105)
             else:
@@ -681,6 +697,10 @@ class DailyWorkLogTab(ttk.Frame):
                 ent = ttk.Combobox(grid_frame, width=w, values=self.history_companies, justify='center')
                 ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                 row_entries[c] = ent
+            elif c == '공사구분':
+                ent = ttk.Combobox(grid_frame, width=w, values=ALL_WORK_CATEGORIES, justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
             elif c == '구간':
                 ent = ttk.Combobox(grid_frame, width=w, values=self.history_sections, justify='center')
                 ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
@@ -762,6 +782,27 @@ class DailyWorkLogTab(ttk.Frame):
                 r['구간정보'].apply_layout()
 
 
+        def update_work_category_options(r=row_entries):
+            comp = r['업체'].get().strip()
+            cat_cb = r.get('공사구분')
+            if not cat_cb:
+                return
+            matched_opts = None
+            for k, opts in COMPANY_WORK_CATEGORIES.items():
+                if k in comp:
+                    matched_opts = opts
+                    break
+            if matched_opts:
+                cat_cb['values'] = matched_opts
+                curr_val = cat_cb.get().strip()
+                if curr_val and curr_val not in matched_opts:
+                    cat_cb.set('')
+            else:
+                cat_cb['values'] = ALL_WORK_CATEGORIES
+
+        row_entries['업체'].bind('<<ComboboxSelected>>', lambda _e, r=row_entries: update_work_category_options(r), add='+')
+        row_entries['업체'].bind('<FocusOut>', lambda _e, r=row_entries: update_work_category_options(r), add='+')
+
         def on_hot_change(event=None, r=row_entries):
             if r['작업구분'].get() == '핫태핑':
                 self._edit_hot_tapping(r)
@@ -829,6 +870,7 @@ class DailyWorkLogTab(ttk.Frame):
             menu.add_separator()
             menu.add_command(label="✏️ 라인번호 일괄 변경...", command=self._edit_ndt_lines)
             menu.add_command(label="✏️ 구간 일괄 변경...", command=self._edit_ndt_sections)
+            menu.add_command(label="🏷️ 공사구분 일괄 변경...", command=self._edit_ndt_work_categories)
             menu.add_command(label="🔍 작업내역 검색·수정...", command=self.open_history_search_dialog)
             menu.add_separator()
             menu.add_command(label="💾 자동 집계 및 저장", command=self.auto_calculate_and_save)
@@ -1047,9 +1089,81 @@ class DailyWorkLogTab(ttk.Frame):
         dialog.grab_set()
         entry.focus_set()
 
+    def _edit_ndt_work_categories(self):
+        selected = getattr(self, 'selected_ndt_row', None)
+        initial = selected['공사구분'].get().strip() if selected is not None and '공사구분' in selected else ''
+        dialog = tk.Toplevel(self)
+        dialog.title('공사구분 일괄 변경')
+        dialog.transient(self.winfo_toplevel())
+        dialog.resizable(False, False)
+        body = ttk.Frame(dialog, padding=15)
+        body.pack(fill='both', expand=True)
+
+        new = tk.StringVar(value=initial)
+        has_checks = any(bool(v.get()) for v in self.ndt_selection_vars)
+        selected_only = tk.BooleanVar(value=has_checks)
+        preview = tk.StringVar()
+
+        ttk.Label(body, text=f'현재 날짜: {self.date_entry.get()}').grid(row=0, column=0, columnspan=2, sticky='w', pady=(0, 10))
+        ttk.Radiobutton(body, text='왼쪽 체크박스로 선택한 행만 변경', variable=selected_only, value=True).grid(row=1, column=0, columnspan=2, sticky='w')
+        ttk.Radiobutton(body, text='현재 일보의 모든 유효 행 변경', variable=selected_only, value=False).grid(row=2, column=0, columnspan=2, sticky='w')
+
+        ttk.Label(body, text='새 공사구분').grid(row=3, column=0, sticky='w', pady=(8, 4), padx=(0, 10))
+        entry = ttk.Combobox(body, textvariable=new, values=ALL_WORK_CATEGORIES, state='readonly', width=26)
+        entry.grid(row=3, column=1, pady=(8, 4))
+
+        ttk.Label(body, textvariable=preview, foreground="#1d4ed8").grid(row=4, column=0, columnspan=2, sticky='w', pady=10)
+        ttk.Label(body, text='※ 변경 후 상단 [💾 자동 집계/저장] 버튼을 눌러야 최종 저장됩니다.', foreground="#666666").grid(row=5, column=0, columnspan=2, sticky='w')
+
+        def update_preview(*args):
+            only = selected_only.get()
+            if only:
+                count = sum(bool(v.get()) for v in self.ndt_selection_vars)
+            else:
+                count = sum(bool(any(row[k].get().strip() for k in ('업체', '라인번호', 'Joint No.', '검사방법') if k in row)) for row in self.ndt_grid_entries)
+            preview.set(f'변경 대상: {count}행')
+
+        def apply():
+            val = new.get().strip()
+            only = selected_only.get()
+            count = 0
+            for idx, row in enumerate(self.ndt_grid_entries):
+                if '공사구분' not in row:
+                    continue
+                if only:
+                    if idx < len(self.ndt_selection_vars) and self.ndt_selection_vars[idx].get():
+                        row['공사구분'].set(val)
+                        count += 1
+                else:
+                    if any(row[k].get().strip() for k in ('업체', '라인번호', 'Joint No.', '검사방법') if k in row):
+                        row['공사구분'].set(val)
+                        count += 1
+            dialog.destroy()
+            messagebox.showinfo('공사구분 일괄 변경', f'{count}개 행의 공사구분을 [{val or "공란"}]으로 변경했습니다.\n상단 [💾 자동 집계/저장]을 눌러 저장해 주세요.', parent=self)
+
+        selected_only.trace_add('write', update_preview)
+        update_preview()
+
+        buttons = ttk.Frame(body)
+        buttons.grid(row=6, column=0, columnspan=2, sticky='e', pady=(12, 0))
+        ttk.Button(buttons, text='변경 적용', command=apply).pack(side='left', padx=4)
+        ttk.Button(buttons, text='취소', command=dialog.destroy).pack(side='left')
+        dialog.grab_set()
+        entry.focus_set()
+
     def open_history_search_dialog(self):
         """저장된 전체 작업내역에서 일자·업체·라인번호별로 검색하고,
         원하는 행을 선택하여 해당 일자의 결과서로 이동해 수정하거나 현재 일보로 복사해옵니다."""
+        if hasattr(self, '_history_search_window') and self._history_search_window is not None:
+            try:
+                if self._history_search_window.winfo_exists():
+                    self._history_search_window.deiconify()
+                    self._history_search_window.lift()
+                    self._history_search_window.focus_force()
+                    return
+            except Exception:
+                pass
+
         history = self.load_history()
         all_records = []
         company_set = set()
@@ -1071,6 +1185,7 @@ class DailyWorkLogTab(ttk.Frame):
                     'date': str(date_key),
                     'row_idx': row_idx,
                     'company': co,
+                    'work_category': str(r.get('공사구분', '')).strip(),
                     'method': mth,
                     'section': str(r.get('구간', '')).strip(),
                     'work_type': str(r.get('작업구분', '')).strip(),
@@ -1090,11 +1205,35 @@ class DailyWorkLogTab(ttk.Frame):
                 })
 
         window = tk.Toplevel(self)
+        self._history_search_window = window
+
+        def _on_window_close():
+            self._history_search_window = None
+            window.destroy()
+
+        window.protocol("WM_DELETE_WINDOW", _on_window_close)
         window.title("작업내역 검색 및 결과서 불러오기 (일자 · 업체 · 라인번호)")
         window.geometry("1120x660")
         window.minsize(880, 500)
+        window.resizable(True, True)
         window.transient(self.winfo_toplevel())
-        window.grab_set()
+
+        # 화면 최대화 / 원래 크기 복원 토글 함수
+        def toggle_maximize(_event=None):
+            try:
+                is_zoomed = (window.state() == 'zoomed')
+                if is_zoomed:
+                    window.state('normal')
+                    btn_text = "⛶ 화면 최대화"
+                else:
+                    window.state('zoomed')
+                    btn_text = "🗗 원래 크기로"
+                if 'top_max_btn' in locals() and top_max_btn.winfo_exists():
+                    top_max_btn.config(text=btn_text)
+            except Exception:
+                pass
+
+        window.bind("<F11>", toggle_maximize)
 
         # 1. 상단 필터 바
         filter_box = ttk.LabelFrame(window, text="검색 및 필터 조건", padding=8)
@@ -1141,18 +1280,22 @@ class DailyWorkLogTab(ttk.Frame):
         row2 = ttk.Frame(filter_box)
         row2.pack(fill="x", pady=(4, 2))
 
+        # 우측 끝에 최대화 버튼을 가장 먼저 배치하여 글자 잘림 방지 및 고정 공간 확보
+        top_max_btn = ttk.Button(row2, text="⛶ 화면 최대화", command=toggle_maximize, width=13)
+        top_max_btn.pack(side="right", padx=(8, 2))
+
         ttk.Label(row2, text="라인번호:").pack(side="left")
         line_var = tk.StringVar(value="(전체)")
-        line_combo = ttk.Combobox(row2, textvariable=line_var, values=['(전체)'] + sorted(line_set), width=26)
-        line_combo.pack(side="left", padx=(4, 16))
+        line_combo = ttk.Combobox(row2, textvariable=line_var, values=['(전체)'] + sorted(line_set), width=23)
+        line_combo.pack(side="left", padx=(4, 12))
 
         ttk.Label(row2, text="통합 검색어:").pack(side="left")
         search_var = tk.StringVar()
-        search_entry = ttk.Entry(row2, textvariable=search_var, width=18)
-        search_entry.pack(side="left", padx=(4, 8))
-        ttk.Label(row2, text="(Joint, 구간, 용접사 등)", foreground="#666666").pack(side="left", padx=(0, 16))
+        search_entry = ttk.Entry(row2, textvariable=search_var, width=16)
+        search_entry.pack(side="left", padx=(4, 6))
+        ttk.Label(row2, text="(Joint, 구간 등)", foreground="#666666").pack(side="left", padx=(0, 10))
 
-        ttk.Button(row2, text="🔍 조회", command=lambda: refresh_rows()).pack(side="left", padx=4)
+        ttk.Button(row2, text="🔍 조회", command=lambda: refresh_rows()).pack(side="left", padx=3)
         
         def reset_filters():
             all_dates_var.set(True)
@@ -1186,25 +1329,26 @@ class DailyWorkLogTab(ttk.Frame):
         table_frame = ttk.Frame(window, padding=(10, 4, 10, 4))
         table_frame.pack(fill="both", expand=True)
 
-        cols = ('date', 'company', 'method', 'section', 'line_no', 'joint_no', 'pipe', 'thick', 'welder', 'result', 'spec')
+        cols = ('date', 'company', 'work_category', 'method', 'section', 'line_no', 'joint_no', 'pipe', 'thick', 'welder', 'result', 'spec')
         tree = ttk.Treeview(table_frame, columns=cols, show='headings', selectmode='extended')
         
         headers = {
-            'date': ('검사일자', 90, 'center'),
-            'company': ('업체', 110, 'w'),
-            'method': ('방법', 60, 'center'),
-            'section': ('구간', 80, 'center'),
-            'line_no': ('라인번호', 220, 'w'),
-            'joint_no': ('Joint No.', 85, 'center'),
-            'pipe': ('관경', 65, 'center'),
-            'thick': ('두께', 55, 'center'),
-            'welder': ('용접사', 85, 'center'),
-            'result': ('결과', 60, 'center'),
-            'spec': ('규격/근무', 85, 'center'),
+            'date': ('검사일자', 95, 'center'),
+            'company': ('업체', 120, 'w'),
+            'work_category': ('공사구분', 85, 'center'),
+            'method': ('방법', 65, 'center'),
+            'section': ('구간', 85, 'center'),
+            'line_no': ('라인번호', 240, 'w'),
+            'joint_no': ('Joint No.', 90, 'center'),
+            'pipe': ('관경', 70, 'center'),
+            'thick': ('두께', 60, 'center'),
+            'welder': ('용접사', 90, 'center'),
+            'result': ('결과', 65, 'center'),
+            'spec': ('규격/근무', 95, 'center'),
         }
         for col_id, (header_text, col_width, align) in headers.items():
             tree.heading(col_id, text=header_text)
-            tree.column(col_id, width=col_width, minwidth=40, anchor=align)
+            tree.column(col_id, width=col_width, minwidth=40, anchor=align, stretch=False)
 
         v_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
         h_scroll = ttk.Scrollbar(table_frame, orient="horizontal", command=tree.xview)
@@ -1220,14 +1364,25 @@ class DailyWorkLogTab(ttk.Frame):
         status_var = tk.StringVar()
         ttk.Label(window, textvariable=status_var, padding=(12, 2, 12, 4), foreground="#1d4ed8").pack(fill="x")
 
-        bottom_frame = ttk.Frame(window, padding=(10, 4, 10, 10))
+        bottom_frame = ttk.Frame(window, padding=(10, 4, 10, 8))
         bottom_frame.pack(fill="x")
 
+        # 1단: 가이드 문구 + 이동/복사 시 창 닫기 체크박스
+        guide_row = ttk.Frame(bottom_frame)
+        guide_row.pack(fill="x", pady=(0, 6))
+
         ttk.Label(
-            bottom_frame,
+            guide_row,
             text="💡 항목 더블클릭 또는 [이동하여 수정]을 누르면 해당 일자의 결과서로 이동해 편집할 수 있습니다.",
             foreground="#555555"
         ).pack(side="left")
+
+        close_on_move_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(guide_row, text="이동/복사 시 창 닫기", variable=close_on_move_var).pack(side="right")
+
+        # 2단: 액션 버튼들(우측)
+        action_row = ttk.Frame(bottom_frame)
+        action_row.pack(fill="x")
 
         filtered_records = []
 
@@ -1269,7 +1424,7 @@ class DailyWorkLogTab(ttk.Frame):
                 spec_display = f"{r['spec']} ({r['shift']})" if r['shift'] else r['spec']
                 tree.insert(
                     '', 'end', iid=str(idx),
-                    values=(r['date'], r['company'], r['method'], r['section'], r['line_no'],
+                    values=(r['date'], r['company'], r.get('work_category', ''), r['method'], r['section'], r['line_no'],
                             r['joint_no'], r['pipe'], r['thick'], r['welder'], r['result'], spec_display)
                 )
 
@@ -1322,14 +1477,25 @@ class DailyWorkLogTab(ttk.Frame):
                 self._select_ndt_row(self.ndt_grid_entries[target_row_idx])
                 self._focus_ndt_joint(target_row_idx)
 
-            window.destroy()
-            if target_row_idx is not None:
-                messagebox.showinfo(
-                    "작업내역 이동 완료",
-                    f"[{target_date}] {record['company']} - {target_line} (Joint {target_joint})\n"
-                    f"해당 행({target_row_idx + 1}행)을 선택했습니다. 수정 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
-                    parent=self
-                )
+            if close_on_move_var.get():
+                _on_window_close()
+                if target_row_idx is not None:
+                    messagebox.showinfo(
+                        "작업내역 이동 완료",
+                        f"[{target_date}] {record['company']} - {target_line} (Joint {target_joint})\n"
+                        f"해당 행({target_row_idx + 1}행)을 선택했습니다. 수정 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
+                        parent=self
+                    )
+            else:
+                if target_row_idx is not None:
+                    status_var.set(
+                        f"✅ [{target_date}] {record['company']} · {target_line} · Joint {target_joint} "
+                        f"-> 결과서 {target_row_idx + 1}행 선택 및 포커스 완료! 메인 화면에서 바로 수정 후 [💾 자동 집계/저장]하세요."
+                    )
+                else:
+                    status_var.set(
+                        f"⚠️ [{target_date}] 일보로 이동했으나 결과서에서 일치하는 행을 찾지 못했습니다."
+                    )
 
         def copy_to_current():
             sel = tree.selection()
@@ -1358,6 +1524,7 @@ class DailyWorkLogTab(ttk.Frame):
                     first_filled_idx = row_idx
                 field_map = {
                     '업체': item['company'],
+                    '공사구분': item.get('work_category', ''),
                     '검사방법': item['method'],
                     '구간': item['section'],
                     '작업구분': item['work_type'],
@@ -1388,20 +1555,26 @@ class DailyWorkLogTab(ttk.Frame):
                 self._select_ndt_row(self.ndt_grid_entries[first_filled_idx])
                 self._focus_ndt_joint(first_filled_idx)
 
-            window.destroy()
-            messagebox.showinfo(
-                "가져오기 완료",
-                f"{len(items_to_copy)}건의 작업내역을 현재 일보({self._selected_date_key()}) 결과서로 가져왔습니다.\n"
-                "수정 또는 확인 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
-                parent=self
-            )
+            if close_on_move_var.get():
+                _on_window_close()
+                messagebox.showinfo(
+                    "가져오기 완료",
+                    f"{len(items_to_copy)}건의 작업내역을 현재 일보({self._selected_date_key()}) 결과서로 가져왔습니다.\n"
+                    "수정 또는 확인 후 상단 [💾 자동 집계/저장]을 눌러 주세요.",
+                    parent=self
+                )
+            else:
+                status_var.set(
+                    f"✅ {len(items_to_copy)}건의 작업내역을 현재 일보({self._selected_date_key()}) 결과서로 복사했습니다. "
+                    f"메인 화면에서 확인 후 [💾 자동 집계/저장]하세요."
+                )
 
         tree.bind('<Double-1>', move_to_selected)
         tree.bind('<Return>', move_to_selected)
 
-        ttk.Button(bottom_frame, text="📌 해당 일자로 이동하여 수정", command=move_to_selected).pack(side="right", padx=4)
-        ttk.Button(bottom_frame, text="📋 현재 일보로 행 복사하여 가져오기", command=copy_to_current).pack(side="right", padx=4)
-        ttk.Button(bottom_frame, text="닫기", command=window.destroy).pack(side="right", padx=4)
+        ttk.Button(action_row, text="닫기", command=_on_window_close, width=10).pack(side="right", padx=(4, 0))
+        ttk.Button(action_row, text="📋 현재 일보로 행 복사하여 가져오기", command=copy_to_current).pack(side="right", padx=4)
+        ttk.Button(action_row, text="📌 해당 일자로 이동하여 수정", command=move_to_selected).pack(side="right", padx=4)
 
         refresh_rows()
         search_entry.focus_set()
@@ -2434,6 +2607,15 @@ class DailyWorkLogTab(ttk.Frame):
                     
         for widgets in self.ndt_grid_entries:
             self._sync_ndt_spec(widgets)
+            if '공사구분' in widgets and '업체' in widgets:
+                comp = widgets['업체'].get().strip()
+                cat_cb = widgets['공사구분']
+                matched_opts = None
+                for k, opts in COMPANY_WORK_CATEGORIES.items():
+                    if k in comp:
+                        matched_opts = opts
+                        break
+                cat_cb['values'] = matched_opts if matched_opts else ALL_WORK_CATEGORIES
             try:
                 sync_rt_widgets(widgets, all_rows=self._rt_context())
             except ValueError:

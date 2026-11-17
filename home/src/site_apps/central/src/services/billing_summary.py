@@ -97,11 +97,19 @@ def build_company_summaries(records, history, contracts):
             remaining -= quantity
             joint = str(detail.get('Joint No.', '')).strip()
             detail_id = (date, str(detail.get('구간', '')), str(detail.get('라인번호', '')), joint or index)
-            add(comp if comp != '미지정' else explicit_company,
+            work_cat = str(detail.get('공사구분', '') or record.get('work_category', '')).strip()
+            target_comp = comp if comp != '미지정' else explicit_company
+            if work_cat and target_comp != '미지정':
+                target_comp = f"{target_comp} [{work_cat}]"
+            add(target_comp,
                 str(detail.get('구간', '')).strip() or '미지정',
                 str(detail.get('라인번호', '')).strip() or '미지정', quantity, detail_id)
         if remaining:
-            add(company(record.get('company')), '미지정(작업일보 미연결)', '미지정', remaining)
+            fallback_comp = company(record.get('company'))
+            rec_cat = str(record.get('work_category', '')).strip()
+            if rec_cat and fallback_comp != '미지정':
+                fallback_comp = f"{fallback_comp} [{rec_cat}]"
+            add(fallback_comp, '미지정(작업일보 미연결)', '미지정', remaining)
 
     budgets = grouped_billing_totals(records, contracts)
     for category, targets in contributions.items():
