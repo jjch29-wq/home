@@ -201,6 +201,87 @@ class CentralDailyWorkLogSearchTests(unittest.TestCase):
                     self.assertTrue(dialog2.winfo_exists())
                     dialog2.destroy()
 
+    def test_work_category_options_and_batch_edit(self):
+        tab = DailyWorkLogTab(self.root)
+        self.root.update_idletasks()
+
+        # 1. 컬럼에 '공사구분'이 존재하고 위젯이 올바르게 생성되는지 확인
+        self.assertIn('공사구분', tab.ndt_cols)
+        row0 = tab.ndt_grid_entries[0]
+        self.assertIn('공사구분', row0)
+
+        # 2. 다림건설 선택 시 공사구분 드롭다운 옵션 확인
+        row0['업체'].set('다림건설(주)')
+        row0['업체'].event_generate('<<ComboboxSelected>>')
+        self.assertEqual(list(row0['공사구분']['values']), ['', '제조', '수탁', '건가'])
+
+        # 3. GS네오텍 선택 시 공사구분 드롭다운 옵션 확인
+        row0['업체'].set('GS네오텍')
+        row0['업체'].event_generate('<<ComboboxSelected>>')
+        self.assertEqual(list(row0['공사구분']['values']), ['', '건가-추가', '건가-개선'])
+
+        # 4. 일괄 변경 다이얼로그 호출 및 적용 확인
+        row0['공사구분'].set('건가-추가')
+        row1 = tab.ndt_grid_entries[1]
+        row1['라인번호'].insert(0, 'TEST-LINE-01')
+        tab.ndt_selection_vars[1].set(True)
+
+        with patch("tkinter.messagebox.showinfo"):
+            tab._edit_ndt_work_categories()
+            self.root.update_idletasks()
+            toplevels = [w for w in tab.winfo_children() if isinstance(w, tk.Toplevel)]
+            self.assertEqual(len(toplevels), 1)
+            dialog = toplevels[0]
+            self.assertIn("공사구분", dialog.title())
+            dialog.destroy()
+
+    def test_billing_summary_splits_by_work_category(self):
+        from site_apps.central.src.services.billing_summary import build_company_summaries
+        records = [
+            {
+                'date': '2026-11-06',
+                'company': '다림건설(주)',
+                'work_category': '제조',
+                'ndt_type': 'MT',
+                'material_type': 'MT',
+                'work_time': '일반',
+                'qty': 10.0,
+                'loc': '[열배관] 중앙지사 / Sec.07 / JA2026-01',
+                'unit': 'M',
+                'unit_price': 5000,
+                'subtotal': 50000,
+                'source': 'work_log',
+                'history_rows': [0],
+            },
+            {
+                'date': '2026-11-06',
+                'company': '다림건설(주)',
+                'work_category': '수탁',
+                'ndt_type': 'MT',
+                'material_type': 'MT',
+                'work_time': '일반',
+                'qty': 5.0,
+                'loc': '[열배관] 중앙지사 / Sec.07 / JA2026-02',
+                'unit': 'M',
+                'unit_price': 5000,
+                'subtotal': 25000,
+                'source': 'work_log',
+                'history_rows': [1],
+            }
+        ]
+        history = {
+            '2026-11-06': {
+                'ndt_results': [
+                    {'업체': '다림건설(주)', '공사구분': '제조', '검사방법': 'MT', 'MT': 10.0, '구간': 'Sec.07', '라인번호': 'JA2026-01'},
+                    {'업체': '다림건설(주)', '공사구분': '수탁', '검사방법': 'MT', 'MT': 5.0, '구간': 'Sec.07', '라인번호': 'JA2026-02'},
+                ]
+            }
+        }
+        contracts = {'열배관_일반_MT_MT': {'c_price': 5000}}
+        summaries = build_company_summaries(records, history, contracts)
+        self.assertIn('다림건설(주) [제조]', summaries)
+        self.assertIn('다림건설(주) [수탁]', summaries)
+
 
 if __name__ == '__main__':
     unittest.main()

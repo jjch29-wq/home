@@ -25,6 +25,7 @@ def build_work_log_billing_records(history, start, end, *, material_costs, labor
             if method not in ('PAUT', 'RT', 'MT', 'PT', 'UT'):
                 continue
             company = str(detail.get('업체', '') or '').strip() or '미지정'
+            work_category = str(detail.get('공사구분', '') or '').strip()
             if company_filter and company_filter != '전체' and company != company_filter:
                 continue
             try:
@@ -60,12 +61,12 @@ def build_work_log_billing_records(history, start, end, *, material_costs, labor
                 material = method
             section = str(detail.get('구간', '') or '').strip()
             line = str(detail.get('라인번호', '') or '').strip()
-            key = (day, company, method, material, work_time, section, line)
+            key = (day, company, work_category, method, material, work_time, section, line)
             group = groups.setdefault(key, {'qty': Decimal(0), 'indices': []})
             group['qty'] += quantity
             group['indices'].append(index)
     records = []
-    for (day, company, method, material, work_time, section, line), group in groups.items():
+    for (day, company, work_category, method, material, work_time, section, line), group in groups.items():
         qty = float(group['qty'].quantize(Decimal('.0001')))
         costs = calculate_billing(quantity=qty, adjusted_quantity=qty,
                                   material_key=f'{method}_{material}', ndt_type=method,
@@ -81,8 +82,12 @@ def build_work_log_billing_records(history, start, end, *, material_costs, labor
         costs.update(unit_price=int(price), subtotal=subtotal,
                      vat=int(Decimal(subtotal) * Decimal('.1')))
         costs['total_amount'] = subtotal + costs['vat']
+        loc_desc = f'[{location}] 중앙지사 / {section} / {line}'
+        if work_category:
+            loc_desc = f'[{location}] 중앙지사 / {section} / {line} ({work_category})'
         records.append(dict(date=day, company=company, actual_company=company,
-                            loc=f'[{location}] 중앙지사 / {section} / {line}', loc_type=location,
+                            work_category=work_category,
+                            loc=loc_desc, loc_type=location,
                             ndt_type=method, material_type=material, work_time=work_time,
                             qty=qty, adjusted_qty=qty, corr=1.0, unit='매' if method == 'RT' else 'M',
                             section=section, line=line, source='work_log',
