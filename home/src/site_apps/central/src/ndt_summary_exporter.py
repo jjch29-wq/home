@@ -9,7 +9,7 @@ class NDTSummaryExporter:
         self.font_normal = Font(name='맑은 고딕', size=10)
         self.font_bold = Font(name='맑은 고딕', size=10, bold=True)
         
-        self.align_center = Alignment(horizontal='center', vertical='center', wrap_text=False)
+        self.align_center = Alignment(horizontal='center', vertical='center', wrap_text=False, shrink_to_fit=True)
         
         thin = Side(border_style="thin", color="000000")
         self.border_thin = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -63,7 +63,7 @@ class NDTSummaryExporter:
         
     def _write_summary_sheet(self, ws, grouped_data):
         headers = ['업체', '구간(Sec.No)', '라인번호', '관경', '검사방법', '검사 횟수(Joint 카운트)', '물량 누계']
-        col_widths = {'A': 15, 'B': 15, 'C': 25, 'D': 12, 'E': 12, 'F': 22, 'G': 25}
+        col_widths = {'A': 15, 'B': 15, 'C': 38, 'D': 12, 'E': 12, 'F': 22, 'G': 25}
         
         for col_idx, width in enumerate(col_widths.values(), start=1):
             col_letter = get_column_letter(col_idx)
@@ -157,7 +157,7 @@ class NDTSummaryExporter:
         
         # Set column widths
         col_widths = {
-            'A': 12, 'B': 6, 'C': 15, 'D': 12, 'E': 25, 'F': 10, 'G': 8, 'H': 15, 'I': 15, 'J': 10, 'K': 10, 'L': 12, 'M': 12
+            'A': 12, 'B': 6, 'C': 15, 'D': 12, 'E': 38, 'F': 10, 'G': 8, 'H': 15, 'I': 15, 'J': 10, 'K': 10, 'L': 12, 'M': 12
         }
         for col_idx, width in enumerate(col_widths.values(), start=1):
             col_letter = get_column_letter(col_idx)

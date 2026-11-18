@@ -1942,13 +1942,16 @@ class NDTCalculatorTab(ttk.Frame):
                     
                 row += 1
                 
-            # 전체 행 높이 일괄 적용 (표시를 시원하게 하여 갑지와 밸런스 맞춤)
-            ws.Rows(1).RowHeight = 45 # 제목
-            ws.Rows(4).RowHeight = 25 # 서브 타이틀
-            ws.Rows(6).RowHeight = 25 # 헤더 1
-            ws.Rows(7).RowHeight = 25 # 헤더 2
+            # 전체 행 높이 일괄 적용 (A4 가로 1장에 위아래 여백 없이 시원하게 꽉 차도록 최적 배정)
+            ws.Rows(1).RowHeight = 22 # 제목 윗부분 (A1:O2 병합)
+            ws.Rows(2).RowHeight = 22 # 제목 아랫부분
+            ws.Rows(3).RowHeight = 8  # 공백
+            ws.Rows(4).RowHeight = 24 # 서브 타이틀 (공사명 및 청구기간)
+            ws.Rows(5).RowHeight = 8  # 공백
+            ws.Rows(6).RowHeight = 25 # 헤더 1 (공종, 규격, 계약 등)
+            ws.Rows(7).RowHeight = 25 # 헤더 2 (수량, 금액 등)
             for r in range(8, row):
-                ws.Rows(r).RowHeight = 25 # 데이터 행
+                ws.Rows(r).RowHeight = 29.5 # 데이터 행 (29.5pt로 확장하여 가로 축소 배율에서도 하단 백지 없이 꽉 채움)
 
             # --- 세부 내역 테이블 (기성청구 내역서 하단에서 제거됨, 수량 및 금액 계산 로직만 유지) ---
             total_mat = total_lab = total_ovr = total_tech = total_sub = 0
@@ -2026,22 +2029,52 @@ class NDTCalculatorTab(ttk.Frame):
             ws.PageSetup.TopMargin = 20
             ws.PageSetup.BottomMargin = 20
             ws.PageSetup.CenterHorizontally = True # 페이지 가로 가운데 정렬
-            ws.PageSetup.CenterVertically = True # 페이지 세로 가운데 정렬 (위아래 여백 동일하게)
+            ws.PageSetup.CenterVertically = True   # 상하 여백을 갑지처럼 균등하고 얇게 배분하여 꽉 찬 레이아웃 구성
             
-            # --- 열 너비 자동 맞춤 및 여백 넉넉하게 확장 ---
-            ws.Columns("A:O").AutoFit()
+            # --- 열 너비 최적화: 공종 글자 잘림 방지 및 A4 가로 꽉 찬 배율 확보 ---
+            ws.Columns(1).ColumnWidth = 27 # 공종 ("위상배열초음파검사(PAUT)" 완벽 표시)
+            ws.Columns(1).ShrinkToFit = True
+            ws.Columns(2).ColumnWidth = 6.5 # 규격 (병합 좌측)
+            ws.Columns(3).ColumnWidth = 11  # 규격 (병합 우측)
+            ws.Columns(4).ColumnWidth = 5   # 단위
+            ws.Columns(5).ColumnWidth = 11  # 단가
             
-            # 너무 좁은 열들은 최소 너비 확보하여 시원하게 표시
-            if ws.Columns(1).ColumnWidth < 8: ws.Columns(1).ColumnWidth = 8
-            if ws.Columns(2).ColumnWidth < 8: ws.Columns(2).ColumnWidth = 8
-            if ws.Columns(3).ColumnWidth < 20: ws.Columns(3).ColumnWidth = 20
-            if ws.Columns(4).ColumnWidth < 6: ws.Columns(4).ColumnWidth = 6
-            if ws.Columns(5).ColumnWidth < 12: ws.Columns(5).ColumnWidth = 12
-            
-            # 금액/수량 열(F~O) 넓게 설정하여 A4 가로폭 채우기
-            for c in range(6, 16):
-                if ws.Columns(c).ColumnWidth < 12:
-                    ws.Columns(c).ColumnWidth = 12
+            # 수량 열(F, H, J, L, N)과 금액 열(G, I, K, M, O)
+            for c in [6, 8, 10, 12, 14]:
+                ws.Columns(c).ColumnWidth = 8.8 # 수량
+            for c in [7, 9, 11, 13, 15]:
+                ws.Columns(c).ColumnWidth = 12.0 # 금액
+
+            # --- A4 가로 인쇄 영역 비율에 맞춰 행 높이/배율 직접 계산 (자동 맞춤의 빈 여백 방지) ---
+            try:
+                last_row = row - 1
+                page_w = 842 - 40   # A4 가로(pt) - 좌우 여백
+                page_h = 595 - 40   # A4 세로(pt) - 상하 여백
+                tbl_w = ws.Range(f"A1:O{last_row}").Width
+                head_h = sum(ws.Rows(r).RowHeight for r in range(1, 8))
+                n_data = last_row - 7
+                if n_data > 0 and tbl_w > 0:
+                    target_h = tbl_w * page_h / page_w
+                    data_h = max(18.0, min(40.0, (target_h - head_h) / n_data))
+                    for r in range(8, last_row + 1):
+                        ws.Rows(r).RowHeight = data_h
+                    tbl_h = head_h + data_h * n_data
+                    zoom = int(min(page_w / tbl_w, page_h / tbl_h) * 100)
+                    ws.PageSetup.Zoom = max(10, min(400, zoom))
+            except Exception as e:
+                print(f"내역서 배율 계산 실패(자동 맞춤 유지): {e}")
+                ws.PageSetup.Zoom = False
+                ws.PageSetup.FitToPagesWide = 1
+                ws.PageSetup.FitToPagesTall = 1
+
+            # 셀 내부 글자 잘림 원천 차단 (셀 크기 맞춤)
+            ws.Range(f"A6:O{row-1}").ShrinkToFit = True
+
+            # 표 외곽 테두리선 굵게 적용 (청구서 갑지와 동일한 완성도)
+            tbl_box = ws.Range(f"A6:O{row-1}")
+            for edge in (7, 8, 9, 10): # xlEdgeLeft, xlEdgeTop, xlEdgeBottom, xlEdgeRight
+                tbl_box.Borders(edge).LineStyle = 1
+                tbl_box.Borders(edge).Weight = 3
             # --- 표지 (청구서 갑지) 생성 ---
             ws_cover = wb.Sheets.Add(ws)
             ws_cover.Name = "청구서(갑지)"
@@ -2366,6 +2399,11 @@ class NDTCalculatorTab(ttk.Frame):
                             cell.Borders.LineStyle = 1
                             if col in (1, 2, 4): 
                                 cell.HorizontalAlignment = -4108
+                                if col == 2:
+                                    try:
+                                        cell.ShrinkToFit = True
+                                    except Exception:
+                                        pass
                             elif col == 3: 
                                 cell.HorizontalAlignment = -4131
                         
@@ -2439,13 +2477,17 @@ class NDTCalculatorTab(ttk.Frame):
                 ws_summary.Cells(grand_total_row, col).Font.Size = 13
             ws_summary.Rows(grand_total_row).RowHeight = 28
 
-            ws_summary.Columns(1).ColumnWidth = 34
-            ws_summary.Columns(2).ColumnWidth = 25
+            ws_summary.Columns(1).ColumnWidth = 14
+            ws_summary.Columns(2).ColumnWidth = 40
             ws_summary.Columns(3).ColumnWidth = 35
             ws_summary.Columns(4).ColumnWidth = 8
             ws_summary.Columns(5).ColumnWidth = 12
             ws_summary.Columns(6).ColumnWidth = 12
             ws_summary.Columns(7).ColumnWidth = 15
+            try:
+                ws_summary.Columns(2).ShrinkToFit = True
+            except Exception:
+                pass
             
             # --- 업체별 수량내역 시트 생성 ---
             ws_cont = wb.Sheets.Add(None, ws_summary)
@@ -2493,13 +2535,17 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cont.Columns(2).ColumnWidth = 20
             ws_cont.Columns(3).ColumnWidth = 10
             ws_cont.Columns(4).ColumnWidth = 15
-            ws_cont.Columns(5).ColumnWidth = 35
+            ws_cont.Columns(5).ColumnWidth = 38
             ws_cont.Columns(6).ColumnWidth = 10
             ws_cont.Columns(7).ColumnWidth = 10
             ws_cont.Columns(8).ColumnWidth = 10
             ws_cont.Columns(9).ColumnWidth = 12
             ws_cont.Columns(10).ColumnWidth = 12
             ws_cont.Columns(11).ColumnWidth = 10
+            try:
+                ws_cont.Columns(5).ShrinkToFit = True
+            except Exception:
+                pass
             
             # 헤더에 자동 필터 적용 (지원 여부에 따라 선택적 적용)
             try:
@@ -2609,6 +2655,11 @@ class NDTCalculatorTab(ttk.Frame):
                         cell = ws_cont.Cells(cont_row, c)
                         cell.Borders.LineStyle = 1
                         cell.HorizontalAlignment = -4108
+                        if c == 5:
+                            try:
+                                cell.ShrinkToFit = True
+                            except Exception:
+                                pass
                     
                     idx_cont += 1
                     cont_row += 1
