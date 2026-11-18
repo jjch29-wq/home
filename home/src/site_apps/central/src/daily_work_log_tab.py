@@ -1285,9 +1285,179 @@ class DailyWorkLogTab(ttk.Frame):
         top_max_btn.pack(side="right", padx=(8, 2))
 
         ttk.Label(row2, text="라인번호:").pack(side="left")
+        
+        # 라인번호 복수 선택 상태 및 컨테이너
+        selected_lines = set()
+        current_line_pool = sorted(line_set)
+
+        line_frame = ttk.Frame(row2)
+        line_frame.pack(side="left", padx=(4, 12))
+
         line_var = tk.StringVar(value="(전체)")
-        line_combo = ttk.Combobox(row2, textvariable=line_var, values=['(전체)'] + sorted(line_set), width=23)
-        line_combo.pack(side="left", padx=(4, 12))
+        line_entry = ttk.Entry(line_frame, textvariable=line_var, width=22, state='readonly', cursor='hand2')
+        line_entry.pack(side="left")
+
+        def update_line_display():
+            if not selected_lines:
+                line_var.set("(전체)")
+            elif len(selected_lines) == 1:
+                line_var.set(next(iter(selected_lines)))
+            else:
+                sample = sorted(selected_lines)
+                disp = f"{len(selected_lines)}건 선택: {sample[0]}"
+                if len(sample) > 1:
+                    disp += f", {sample[1]}"
+                if len(sample) > 2:
+                    disp += "..."
+                line_var.set(disp)
+
+        def clear_line_selection():
+            selected_lines.clear()
+            update_line_display()
+            refresh_rows()
+
+        def open_line_multiselect_popup():
+            if hasattr(window, '_line_popup') and window._line_popup is not None:
+                try:
+                    if window._line_popup.winfo_exists():
+                        window._line_popup.lift()
+                        window._line_popup.focus_force()
+                        return
+                except Exception:
+                    pass
+
+            popup = tk.Toplevel(window)
+            window._line_popup = popup
+            popup.title("라인번호 복수 선택")
+            popup.transient(window)
+            popup.resizable(True, True)
+
+            try:
+                popup.update_idletasks()
+                rx = line_frame.winfo_rootx()
+                ry = line_frame.winfo_rooty() + line_frame.winfo_height() + 4
+                sw = popup.winfo_screenwidth()
+                sh = popup.winfo_screenheight()
+                pw, ph = 380, 430
+                if rx + pw > sw:
+                    rx = max(10, sw - pw - 20)
+                if ry + ph > sh:
+                    ry = max(10, line_frame.winfo_rooty() - ph - 10)
+                popup.geometry(f"{pw}x{ph}+{rx}+{ry}")
+            except Exception:
+                popup.geometry("380x430")
+
+            top_p = ttk.Frame(popup, padding=(10, 8, 10, 4))
+            top_p.pack(fill="x")
+            ttk.Label(top_p, text="검색할 라인번호를 체크하세요 (복수 선택 가능)", font=("맑은 고딕", 9, "bold")).pack(anchor="w")
+
+            search_box = ttk.Frame(top_p)
+            search_box.pack(fill="x", pady=(6, 4))
+            ttk.Label(search_box, text="🔍 목록 필터:").pack(side="left")
+            p_filter_var = tk.StringVar()
+            p_filter_entry = ttk.Entry(search_box, textvariable=p_filter_var)
+            p_filter_entry.pack(side="left", fill="x", expand=True, padx=(4, 0))
+
+            btn_box = ttk.Frame(top_p)
+            btn_box.pack(fill="x", pady=(2, 4))
+
+            items_container = ttk.Frame(popup, padding=(10, 0, 10, 0))
+            items_container.pack(fill="both", expand=True)
+
+            canvas = tk.Canvas(items_container, highlightthickness=1, relief="sunken", bg="#ffffff")
+            v_scroll = ttk.Scrollbar(items_container, orient="vertical", command=canvas.yview)
+            canvas.configure(yscrollcommand=v_scroll.set)
+            v_scroll.pack(side="right", fill="y")
+            canvas.pack(side="left", fill="both", expand=True)
+
+            inner = ttk.Frame(canvas)
+            inner_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+            def _on_canvas_resize(e):
+                canvas.itemconfig(inner_id, width=e.width)
+            canvas.bind("<Configure>", _on_canvas_resize)
+
+            def _on_inner_resize(_e):
+                canvas.configure(scrollregion=canvas.bbox("all"))
+            inner.bind("<Configure>", _on_inner_resize)
+
+            item_vars = {}
+            for line in current_line_pool:
+                item_vars[line] = tk.BooleanVar(value=(line in selected_lines))
+
+            bottom_p = ttk.Frame(popup, padding=(10, 8, 10, 8))
+            bottom_p.pack(fill="x")
+
+            status_lbl = ttk.Label(bottom_p, text="")
+            status_lbl.pack(side="left")
+
+            def _update_status():
+                cnt = sum(1 for v in item_vars.values() if v.get())
+                if cnt == 0:
+                    status_lbl.config(text="선택: 전체 (0건)")
+                else:
+                    status_lbl.config(text=f"선택: {cnt}건")
+
+            def _render_list():
+                for c in inner.winfo_children():
+                    c.destroy()
+                q = p_filter_var.get().strip().lower()
+                vis = [l for l in current_line_pool if (not q or q in l.lower())]
+                if not vis:
+                    ttk.Label(inner, text="일치하는 라인번호가 없습니다.", foreground="#888888").pack(anchor="w", padx=8, pady=8)
+                    return
+                for line in vis:
+                    row_item = ttk.Frame(inner)
+                    row_item.pack(fill="x", pady=1, padx=4)
+                    cb = ttk.Checkbutton(row_item, text=line, variable=item_vars[line], command=_update_status)
+                    cb.pack(side="left", fill="x", expand=True, anchor="w")
+
+            _render_list()
+            _update_status()
+            p_filter_var.trace_add("write", lambda *_a: _render_list())
+
+            def _select_all():
+                q = p_filter_var.get().strip().lower()
+                for line in current_line_pool:
+                    if not q or q in line.lower():
+                        item_vars[line].set(True)
+                _update_status()
+
+            def _deselect_all():
+                for line in current_line_pool:
+                    item_vars[line].set(False)
+                _update_status()
+
+            ttk.Button(btn_box, text="☑ 전체 선택", width=10, command=_select_all).pack(side="left", padx=(0, 4))
+            ttk.Button(btn_box, text="☐ 전체 해제", width=10, command=_deselect_all).pack(side="left", padx=4)
+
+            def _apply_and_close():
+                selected_lines.clear()
+                for line, var in item_vars.items():
+                    if var.get():
+                        selected_lines.add(line)
+                update_line_display()
+                popup.destroy()
+                refresh_rows()
+
+            ttk.Button(bottom_p, text="닫기", width=8, command=popup.destroy).pack(side="right", padx=(4, 0))
+            ttk.Button(bottom_p, text="선택 적용 (확인)", width=14, command=_apply_and_close).pack(side="right", padx=4)
+
+            popup.bind("<Return>", lambda _e: _apply_and_close())
+            popup.bind("<Escape>", lambda _e: popup.destroy())
+            p_filter_entry.focus_set()
+
+        line_btn = ttk.Button(line_frame, text="선택 ▾", width=6, command=open_line_multiselect_popup)
+        line_btn.pack(side="left", padx=(2, 0))
+
+        line_clear_btn = ttk.Button(line_frame, text="✕", width=2, command=clear_line_selection)
+        line_clear_btn.pack(side="left", padx=(2, 0))
+
+        line_entry.bind('<Button-1>', lambda _e: open_line_multiselect_popup())
+
+        # 호환성을 위한 참조 유지
+        window._selected_lines = selected_lines
+        window._open_line_multiselect_popup = open_line_multiselect_popup
 
         ttk.Label(row2, text="통합 검색어:").pack(side="left")
         search_var = tk.StringVar()
@@ -1301,28 +1471,30 @@ class DailyWorkLogTab(ttk.Frame):
             all_dates_var.set(True)
             company_var.set("(전체)")
             method_var.set("(전체)")
-            line_var.set("(전체)")
-            line_combo['values'] = ['(전체)'] + sorted(line_set)
+            selected_lines.clear()
+            current_line_pool.clear()
+            current_line_pool.extend(sorted(line_set))
+            update_line_display()
             search_var.set("")
             refresh_rows()
 
         ttk.Button(row2, text="초기화", command=reset_filters).pack(side="left", padx=2)
 
-        # 업체 선택 변경 시 해당 업체의 라인번호로 동적 연동
+        # 업체 선택 변경 시 해당 업체의 라인번호 풀 동적 연동 및 기존 선택 정제
         def on_company_change(*_args):
             sel_co = company_var.get().strip()
+            current_line_pool.clear()
             if not sel_co or sel_co == '(전체)':
-                line_combo['values'] = ['(전체)'] + sorted(line_set)
+                current_line_pool.extend(sorted(line_set))
             else:
                 co_lines = sorted({r['line_no'] for r in all_records if r['company'] == sel_co and r['line_no']})
-                line_combo['values'] = ['(전체)'] + co_lines
-            line_var.set('(전체)')
+                current_line_pool.extend(co_lines)
+            selected_lines.intersection_update(current_line_pool)
+            update_line_display()
             refresh_rows()
 
         company_combo.bind('<<ComboboxSelected>>', on_company_change)
         method_combo.bind('<<ComboboxSelected>>', lambda _e: refresh_rows())
-        line_combo.bind('<<ComboboxSelected>>', lambda _e: refresh_rows())
-        line_combo.bind('<Return>', lambda _e: refresh_rows())
         search_entry.bind('<Return>', lambda _e: refresh_rows())
 
         # 2. 중앙 테이블
@@ -1411,8 +1583,12 @@ class DailyWorkLogTab(ttk.Frame):
                     continue
                 if sel_mth and sel_mth != '(전체)' and r['method'] != sel_mth:
                     continue
-                if sel_line and sel_line != '(전체)' and sel_line.lower() not in r['line_no'].lower():
-                    continue
+                if selected_lines:
+                    if r['line_no'] not in selected_lines:
+                        continue
+                elif sel_line and sel_line != '(전체)':
+                    if sel_line.lower() not in r['line_no'].lower():
+                        continue
                 if query:
                     search_corpus = f"{r['date']} {r['company']} {r['line_no']} {r['joint_no']} {r['section']} {r['welder']} {r['joint_info']}".lower()
                     if query not in search_corpus:

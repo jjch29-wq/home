@@ -282,6 +282,85 @@ class CentralDailyWorkLogSearchTests(unittest.TestCase):
         self.assertIn('다림건설(주) [제조]', summaries)
         self.assertIn('다림건설(주) [수탁]', summaries)
 
+    def test_line_number_multiselect_filtering(self):
+        sample_history = {
+            "2026-11-06": {
+                "ndt_results": [
+                    {"업체": "다림건설(주)", "검사방법": "MT", "라인번호": "LINE-01", "Joint No.": "J-01", "결과": "합격"},
+                    {"업체": "다림건설(주)", "검사방법": "MT", "라인번호": "LINE-02", "Joint No.": "J-02", "결과": "합격"},
+                    {"업체": "다림건설(주)", "검사방법": "MT", "라인번호": "LINE-03", "Joint No.": "J-03", "결과": "합격"},
+                ]
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            hist_file = Path(tmp_dir) / "daily_work_history.json"
+            with open(hist_file, "w", encoding="utf-8") as f:
+                json.dump(sample_history, f, ensure_ascii=False)
+
+            with patch("site_apps.central.src.daily_work_log_tab.get_history_path", return_value=str(hist_file)):
+                tab = DailyWorkLogTab(self.root)
+                tab.history_path = str(hist_file)
+
+                with patch("tkinter.messagebox.showinfo"), patch("tkinter.messagebox.showwarning"):
+                    tab.open_history_search_dialog()
+                    self.root.update_idletasks()
+
+                    dialog = tab._history_search_window
+                    self.assertIsNotNone(dialog)
+                    self.assertTrue(hasattr(dialog, '_selected_lines'))
+
+                    # Find treeview
+                    tree = None
+                    for child in dialog.winfo_children():
+                        for sub in child.winfo_children():
+                            if isinstance(sub, ttk.Treeview):
+                                tree = sub
+                                break
+                    self.assertIsNotNone(tree)
+                    # Initially all 3 rows displayed
+                    self.assertEqual(len(tree.get_children()), 3)
+
+                    # 1. Open multi-select popup
+                    dialog._open_line_multiselect_popup()
+                    self.root.update_idletasks()
+                    popup = getattr(dialog, '_line_popup', None)
+                    self.assertIsNotNone(popup)
+                    self.assertTrue(popup.winfo_exists())
+                    self.assertIn("라인번호 복수 선택", popup.title())
+                    popup.destroy()
+
+                    # 2. Test multi-line filtering: Select LINE-01 and LINE-03
+                    dialog._selected_lines.clear()
+                    dialog._selected_lines.update(["LINE-01", "LINE-03"])
+                    # Find refresh button and click (recursive search)
+                    all_buttons = []
+                    def find_buttons(w):
+                        for c in w.winfo_children():
+                            if isinstance(c, (tk.Button, ttk.Button)):
+                                all_buttons.append(c)
+                            find_buttons(c)
+                    find_buttons(dialog)
+                    refresh_btn = next((b for b in all_buttons if "조회" in b.cget("text")), None)
+                    self.assertIsNotNone(refresh_btn)
+                    refresh_btn.invoke()
+                    self.root.update_idletasks()
+
+                    # Tree should have exactly 2 rows
+                    filtered_items = tree.get_children()
+                    self.assertEqual(len(filtered_items), 2)
+                    line_vals = [tree.item(item)['values'][5] for item in filtered_items]
+                    self.assertIn("LINE-01", line_vals)
+                    self.assertIn("LINE-03", line_vals)
+                    self.assertNotIn("LINE-02", line_vals)
+
+                    # 3. Test clear filter: Reset to all
+                    dialog._selected_lines.clear()
+                    refresh_btn.invoke()
+                    self.root.update_idletasks()
+                    self.assertEqual(len(tree.get_children()), 3)
+
+                    dialog.destroy()
+
 
 if __name__ == '__main__':
     unittest.main()

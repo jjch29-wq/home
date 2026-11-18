@@ -12,6 +12,13 @@ from site_apps.central.src import sync_google_sheet as sync
 
 
 class SyncResultTests(unittest.TestCase):
+    def setUp(self):
+        self._dev_patcher = patch.object(sync, 'is_development', return_value=False)
+        self._dev_patcher.start()
+
+    def tearDown(self):
+        self._dev_patcher.stop()
+
     def test_unchanged_legacy_zero_alias_does_not_zero_actual_usage(self):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'stock.xlsx'
