@@ -47,27 +47,66 @@ def setup_daily_usage_tab_impl(self):
     
     # Keep routine actions visible and group secondary actions in menus.
     header_container = ttk.Frame(entry_frame)
-    header_container.pack(fill='x', padx=2, pady=1)
+    header_container.pack(fill='x', padx=4, pady=3)
     
+    # 상단 툴바 전용 파스텔톤 아기자기한 스타일 정의
+    try:
+        self.style.configure("ToolbarGuide.TLabel",
+                             font=('Malgun Gothic', 9, 'bold'),
+                             background='#e8f5e9',
+                             foreground='#2e7d32',
+                             padding=(8, 4),
+                             relief='solid',
+                             borderwidth=1)
+        self.style.configure("ToolbarReset.TButton",
+                             font=('Malgun Gothic', 10),
+                             background='#fff3e0',
+                             foreground='#d84315',
+                             bordercolor='#ffcc80',
+                             padding=(8, 3))
+        self.style.map("ToolbarReset.TButton",
+                       background=[('active', '#ffe0b2'), ('pressed', '#ffcc80')])
+        self.style.configure("ToolbarSync.TButton",
+                             font=('Malgun Gothic', 10, 'bold'),
+                             background='#e3f2fd',
+                             foreground='#0277bd',
+                             bordercolor='#90caf9',
+                             padding=(10, 3))
+        self.style.map("ToolbarSync.TButton",
+                       background=[('active', '#bbdefb'), ('pressed', '#90caf9')])
+        self.style.configure("ToolbarLoad.TButton",
+                             font=('Malgun Gothic', 10, 'bold'),
+                             background='#ede7f6',
+                             foreground='#4527a0',
+                             bordercolor='#b39ddb',
+                             padding=(10, 3))
+        self.style.map("ToolbarLoad.TButton",
+                       background=[('active', '#d1c4e9'), ('pressed', '#b39ddb')])
+        self.style.configure("ToolbarMenu.TMenubutton",
+                             font=('Malgun Gothic', 10),
+                             background='#f5f7f8',
+                             foreground='#37474f',
+                             bordercolor='#cfd8dc',
+                             padding=(8, 3))
+        self.style.map("ToolbarMenu.TMenubutton",
+                       background=[('active', '#e4e7eb'), ('pressed', '#cfd8dc')])
+    except Exception:
+        pass
+
     row1 = ttk.Frame(header_container)
     row1.pack(fill='x', pady=1)
     
-    # Row 1: Primary Actions
-    ttk.Label(row1, text='① 검사 입력 → ② 작업 목록 확인 → ③ 저장').pack(side='left', padx=5)
+    # Row 1: Primary Actions (고정 width 제거 및 파스텔톤 아기자기 스타일 적용)
+    ttk.Label(row1, text='① 검사 입력 → ② 작업 목록 확인 → ③ 저장', style="ToolbarGuide.TLabel").pack(side='left', padx=(2, 6))
     
-    ttk.Button(row1, text="🧹 초기화", command=self.clear_daily_usage_form_all, width=10).pack(side='left', padx=2)
+    ttk.Button(row1, text="🧹 초기화", command=self.clear_daily_usage_form_all, style="ToolbarReset.TButton").pack(side='left', padx=3)
     self.daily_save_status = ttk.Label(row1, text='')
-    self.daily_save_status.pack(side='left', padx=8)
+    self.daily_save_status.pack(side='left', padx=4)
 
     if hasattr(self, 'trigger_mobile_sync'):
-        ttk.Button(row1, text="📱 모바일 동기화", command=self.trigger_mobile_sync, width=13).pack(side='left', padx=3)
+        ttk.Button(row1, text="📱 모바일 동기화", command=self.trigger_mobile_sync, style="ToolbarSync.TButton").pack(side='left', padx=3)
     
-
-
-
-
-
-    tools_button = ttk.Menubutton(row1, text='도구 / 설정')
+    tools_button = ttk.Menubutton(row1, text='도구 / 설정', style="ToolbarMenu.TMenubutton")
     tools_menu = tk.Menu(tools_button, tearoff=False)
     for label, command in (
         ('NDT 품목 매핑', self.open_ndt_product_map_dialog),
@@ -82,20 +121,15 @@ def setup_daily_usage_tab_impl(self):
         tools_menu.add_command(label='📱 구글 클라우드 URL 설정', command=self.open_google_sync_dialog)
     tools_button.configure(menu=tools_menu)
     tools_button.pack(side='right', padx=3)
-    output_button = ttk.Menubutton(row1, text='일보 출력')
+
+    output_button = ttk.Menubutton(row1, text='일보 출력', style="ToolbarMenu.TMenubutton")
     output_menu = tk.Menu(output_button, tearoff=False)
     output_menu.add_command(label='작업일보 출력', command=self.export_daily_work_report)
     output_menu.add_command(label='중앙지사 일보', command=self.export_central_daily_work_report)
     output_button.configure(menu=output_menu)
     output_button.pack(side='right', padx=3)
 
-    # Sash lock button disabled since UI is separated
-    # self.btn_sash_lock = ttk.Button(row1, text="🔒 경계 고정됨" if self.daily_usage_sash_locked else "🔓 경계 고정", command=self.toggle_sash_lock)
-    # self.btn_sash_lock.pack(side='right', padx=5)
-
-    
-    
-    btn_load_prev = ttk.Button(row1, text="⏮️ 전일 데이터 불러오기", command=self.load_previous_day_data, width=20)
+    btn_load_prev = ttk.Button(row1, text="⏮️ 전일 데이터 불러오기", command=self.load_previous_day_data, style="ToolbarLoad.TButton")
     btn_load_prev.pack(side='right', padx=5)
     
     # [UI REVISION] Removed dynamic add buttons (Vehicle, Checklist, Memo) 
