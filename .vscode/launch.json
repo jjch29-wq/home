@@ -22,7 +22,10 @@
             "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
             "cwd": "${workspaceFolder}\\home\\src",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}\\home\\src"
+            }
         },
         {
             "name": "한국가스공사 앱 실행 (독립 창)",
