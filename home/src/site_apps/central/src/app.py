@@ -429,6 +429,94 @@ class MaterialManager:
              except:
                  self.theme_bg = '#f0f0f0' # Standard Windows gray
         
+        # --- 앱 탭별/위젯별 모던 파스텔 아기자기 공통 스타일 정의 ---
+        try:
+            # 1. 메인 및 서브 탭 디자인 (도톰하고 세련된 라운드 탭 스타일)
+            self.style.configure("TNotebook", background=self.theme_bg, tabmargins=[3, 3, 3, 0])
+            self.style.configure("TNotebook.Tab",
+                                 font=('Malgun Gothic', 10, 'bold'),
+                                 padding=[12, 5],
+                                 background='#e2e5e8',
+                                 foreground='#555555',
+                                 borderwidth=1)
+            self.style.map("TNotebook.Tab",
+                           background=[("selected", "#ffffff"), ("active", "#f0f4f8")],
+                           foreground=[("selected", "#1565c0"), ("active", "#0d47a1")])
+
+            # 2. 그룹 상자 (LabelFrame) 제목 및 테두리 정돈
+            self.style.configure("TLabelframe", background=self.theme_bg, bordercolor='#cfd8dc')
+            self.style.configure("TLabelframe.Label",
+                                 font=('Malgun Gothic', 10, 'bold'),
+                                 foreground='#37474f',
+                                 background=self.theme_bg)
+
+            # 3. 기본 버튼 공통 패딩
+            self.style.configure("TButton", font=('Malgun Gothic', 10), padding=[8, 3])
+
+            # 4. Primary 버튼 (산뜻한 소프트 스카이블루 - 작업 추가 등)
+            self.style.configure("Primary.TButton",
+                                 font=('Malgun Gothic', 10, 'bold'),
+                                 background='#e3f2fd',
+                                 foreground='#1565c0',
+                                 bordercolor='#90caf9',
+                                 padding=[12, 4])
+            self.style.map("Primary.TButton",
+                           background=[('active', '#bbdefb'), ('pressed', '#90caf9')],
+                           foreground=[('active', '#0d47a1')])
+
+            # 5. Action / Success 버튼 (산뜻한 에메랄드/그린 - 최종 저장용)
+            self.style.configure("Action.TButton",
+                                 font=('Malgun Gothic', 10, 'bold'),
+                                 background='#e8f5e9',
+                                 foreground='#2e7d32',
+                                 bordercolor='#a5d6a7',
+                                 padding=[14, 5])
+            self.style.map("Action.TButton",
+                           background=[('active', '#c8e6c9'), ('pressed', '#a5d6a7')],
+                           foreground=[('active', '#1b5e20')])
+
+            # 6. Warning 버튼 (따뜻한 피치/오렌지 - 자동산출, 비우기 등)
+            self.style.configure("Warning.TButton",
+                                 font=('Malgun Gothic', 10, 'bold'),
+                                 background='#fff3e0',
+                                 foreground='#e65100',
+                                 bordercolor='#ffcc80',
+                                 padding=[10, 4])
+            self.style.map("Warning.TButton",
+                           background=[('active', '#ffe0b2'), ('pressed', '#ffcc80')])
+
+            # 7. Info 버튼 (부드러운 라벤더/퍼플 - 수정, 조회 등)
+            self.style.configure("Info.TButton",
+                                 font=('Malgun Gothic', 10, 'bold'),
+                                 background='#ede7f6',
+                                 foreground='#4527a0',
+                                 bordercolor='#b39ddb',
+                                 padding=[10, 4])
+            self.style.map("Info.TButton",
+                           background=[('active', '#d1c4e9'), ('pressed', '#b39ddb')])
+
+            # 8. Danger 버튼 (부드러운 로즈/소프트레드 - 삭제용)
+            self.style.configure("Danger.TButton",
+                                 font=('Malgun Gothic', 10),
+                                 background='#ffebee',
+                                 foreground='#c62828',
+                                 bordercolor='#ef9a9a',
+                                 padding=[8, 3])
+            self.style.map("Danger.TButton",
+                           background=[('active', '#ffcdd2'), ('pressed', '#ef9a9a')])
+
+            # 9. Secondary 버튼 (단정한 슬레이트펄 - 보조 도구/안내용)
+            self.style.configure("Secondary.TButton",
+                                 font=('Malgun Gothic', 10),
+                                 background='#f5f7f8',
+                                 foreground='#37474f',
+                                 bordercolor='#cfd8dc',
+                                 padding=[8, 3])
+            self.style.map("Secondary.TButton",
+                           background=[('active', '#e4e7eb'), ('pressed', '#cfd8dc')])
+        except Exception:
+            pass
+
         # Detachable Windows State (pop-up support)
         self.detached_windows = {}
         

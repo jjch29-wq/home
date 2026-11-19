@@ -601,7 +601,7 @@ def setup_daily_usage_tab_impl(self):
             import traceback; traceback.print_exc()
 
     self._calculate_daily_ndt_fee = _calculate_ndt_fee
-    ttk.Button(row2, text="자동 산출", command=_calculate_ndt_fee).pack(side='right', padx=5)
+    ttk.Button(row2, text="⚡ 자동 산출", command=_calculate_ndt_fee, style="Warning.TButton").pack(side='right', padx=5)
 
     def on_batch_pipe_change(*_):
         # Report diameter also determines the PAUT contract bracket.
@@ -1093,8 +1093,9 @@ def setup_daily_usage_tab_impl(self):
     
     input_actions = self.daily_input_actions
     self.btn_daily_add = ttk.Button(input_actions, text='＋ 작업 목록에 추가',
-                                    command=lambda: self.inspection_batch.add())
-    self.btn_daily_add.pack(side='left')
+                                    command=lambda: self.inspection_batch.add(),
+                                    style='Primary.TButton')
+    self.btn_daily_add.pack(side='left', padx=3)
 
     # --- Bottom Dashboard (Recent Entries + Fixed Panels) ---
     self.bottom_dashboard = ttk.PanedWindow(history_panel, orient=tk.HORIZONTAL)
@@ -1109,10 +1110,12 @@ def setup_daily_usage_tab_impl(self):
     recent_tools = ttk.Frame(self.recent_frame)
     recent_tools.pack(side='top', fill='x', padx=2, pady=2)
     from site_apps.central.src.views.daily_date_context import show_recent_scope
-    ttk.Button(recent_tools, text='전체 기록',
-               command=lambda: show_recent_scope(self)).pack(side='left')
-    ttk.Button(recent_tools, text='선택일 기록',
-               command=lambda: show_recent_scope(self, selected_only=True)).pack(side='left', padx=4)
+    ttk.Button(recent_tools, text='📋 전체 기록',
+               command=lambda: show_recent_scope(self),
+               style='Secondary.TButton').pack(side='left', padx=2)
+    ttk.Button(recent_tools, text='📅 선택일 기록',
+               command=lambda: show_recent_scope(self, selected_only=True),
+               style='Secondary.TButton').pack(side='left', padx=3)
     self.recent_scope_status = ttk.Label(recent_tools, text='최근 기록 · 조회 중',
                                         font=('Malgun Gothic', 9, 'bold'))
     self.recent_scope_status.pack(side='left', padx=8)
