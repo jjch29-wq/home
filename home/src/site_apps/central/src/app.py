@@ -6661,20 +6661,20 @@ class MaterialManager:
         top_btn_frame = ttk.Frame(self.tab_budget)
         top_btn_frame.pack(fill='x', padx=10, pady=5)
         
-        ttk.Button(top_btn_frame, text="실적 데이터로 채우기", command=self.fill_budget_from_actuals).pack(side='left', padx=5)
-        ttk.Button(top_btn_frame, text="저장/수정", command=self.save_budget_entry).pack(side='left', padx=5)
-        ttk.Button(top_btn_frame, text="삭제", command=self.delete_budget_entry).pack(side='left', padx=5)
-        ttk.Button(top_btn_frame, text="🧹 초기화", command=self.clear_budget_form).pack(side='left', padx=5)
+        ttk.Button(top_btn_frame, text="📥 실적 데이터 채우기", command=self.fill_budget_from_actuals, style="Primary.TButton").pack(side='left', padx=3)
+        ttk.Button(top_btn_frame, text="💾 저장/수정", command=self.save_budget_entry, style="Action.TButton").pack(side='left', padx=3)
+        ttk.Button(top_btn_frame, text="🗑️ 삭제", command=self.delete_budget_entry, style="Danger.TButton").pack(side='left', padx=3)
+        ttk.Button(top_btn_frame, text="🧹 초기화", command=self.clear_budget_form, style="Warning.TButton").pack(side='left', padx=3)
         
         # Pop-out button
-        ttk.Button(top_btn_frame, text="🔍 팝업창으로 열기", command=self.open_detached_budget_view).pack(side='left', padx=15)
+        ttk.Button(top_btn_frame, text="🗗 팝업창 분리", command=self.open_detached_budget_view, style="Info.TButton").pack(side='left', padx=(10, 4))
         
         # [NEW] Toggle button for bottom pane
-        self.btn_toggle_bottom = ttk.Button(top_btn_frame, text="🔽 하단 일일기록 숨기기")
-        self.btn_toggle_bottom.pack(side='left', padx=15)
+        self.btn_toggle_bottom = ttk.Button(top_btn_frame, text="🔽 하단 일일기록 숨기기", style="Secondary.TButton")
+        self.btn_toggle_bottom.pack(side='left', padx=4)
         
-        ttk.Button(top_btn_frame, text="사정원가 출력", command=self.export_budget_estimation).pack(side='right', padx=10)
-        ttk.Button(top_btn_frame, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
+        ttk.Button(top_btn_frame, text="📊 사전원가 출력", command=self.export_budget_estimation, style="Action.TButton").pack(side='right', padx=4)
+        ttk.Button(top_btn_frame, text="📑 엑셀 내보내기", command=self.export_budget_sales_status, style="Secondary.TButton").pack(side='right', padx=4)
 
         main_paned = ttk.PanedWindow(self.tab_budget, orient='vertical')
         main_paned.pack(fill='both', expand=True, padx=10, pady=(0, 5))
@@ -6702,7 +6702,7 @@ class MaterialManager:
         v_scroll.pack(side="right", fill="y")
         
         # 1. Main Budget Form
-        form_frame = ttk.LabelFrame(form_scrollable, text="실행예산 입력/수정", padding=10)
+        form_frame = ttk.LabelFrame(form_scrollable, text="📋 실행예산 입력/수정", padding=10)
         form_frame.pack(fill='x', pady=(0, 10), padx=5)
         
         # Grid layout for form fields
@@ -6940,33 +6940,33 @@ class MaterialManager:
         bottom_filter = ttk.Frame(bottom_container)
         bottom_filter.pack(fill='x', pady=(5, 2))
 
-        ttk.Label(bottom_filter, text="현장별 실적 조회", font=('Malgun Gothic', 10, 'bold')).pack(side='left', padx=(0, 15))
+        ttk.Label(bottom_filter, text="📊 현장별 실적 조회", font=('Malgun Gothic', 10, 'bold')).pack(side='left', padx=(0, 10))
 
-        ttk.Label(bottom_filter, text="현장:").pack(side='left', padx=5)
-        self.cb_budget_view_site = ttk.Combobox(bottom_filter, width=20, state='readonly')
+        ttk.Label(bottom_filter, text="🏢 현장:").pack(side='left', padx=(4, 2))
+        self.cb_budget_view_site = ttk.Combobox(bottom_filter, width=18, state='readonly')
         site_values = ['전체'] + sorted([str(s).strip() for s in (self.sites or []) if str(s).strip()])
         self.cb_budget_view_site['values'] = site_values
-        self.cb_budget_view_site.pack(side='left', padx=5)
+        self.cb_budget_view_site.pack(side='left', padx=(0, 6))
         self.cb_budget_view_site.set('전체')
         self.cb_budget_view_site.bind('<<ComboboxSelected>>', lambda e: self.update_budget_site_view())
 
-        ttk.Label(bottom_filter, text="시작일:").pack(side='left', padx=(10, 2))
+        ttk.Label(bottom_filter, text="🗓️ 시작일:").pack(side='left', padx=(6, 2))
         self.budget_view_start = DateEntry(bottom_filter, width=12, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
-        self.budget_view_start.pack(side='left', padx=2)
+        self.budget_view_start.pack(side='left', padx=(0, 4))
         today = datetime.datetime.now()
         self.budget_view_start.set_date(datetime.date(2024, 1, 1))
 
-        ttk.Label(bottom_filter, text="종료일:").pack(side='left', padx=(5, 2))
+        ttk.Label(bottom_filter, text=" ~ 📅 종료일:").pack(side='left', padx=(4, 2))
         self.budget_view_end = DateEntry(bottom_filter, width=12, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
-        self.budget_view_end.pack(side='left', padx=2)
+        self.budget_view_end.pack(side='left', padx=(0, 6))
         self.budget_view_end.set_date(today)
 
-        ttk.Button(bottom_filter, text="조회", command=self.update_budget_site_view).pack(side='left', padx=8)
-        ttk.Button(bottom_filter, text="예산 수정/불러오기",
-                   command=lambda: self._load_budget_to_form(self.cb_budget_view_site.get())).pack(side='left', padx=4)
-        ttk.Button(bottom_filter, text="컬럼 추가", command=self.add_budget_view_custom_column).pack(side='left', padx=4)
-        ttk.Button(bottom_filter, text="컬럼 관리", command=self.show_budget_view_column_dialog).pack(side='left', padx=4)
-        ttk.Button(bottom_filter, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
+        ttk.Button(bottom_filter, text="🔍 조회", command=self.update_budget_site_view, style="Primary.TButton").pack(side='left', padx=3)
+        ttk.Button(bottom_filter, text="📥 예산 수정/불러오기",
+                   command=lambda: self._load_budget_to_form(self.cb_budget_view_site.get()), style="Info.TButton").pack(side='left', padx=3)
+        ttk.Button(bottom_filter, text="➕ 컬럼 추가", command=self.add_budget_view_custom_column, style="Secondary.TButton").pack(side='left', padx=3)
+        ttk.Button(bottom_filter, text="⚙️ 컬럼 관리", command=self.show_budget_view_column_dialog, style="Secondary.TButton").pack(side='left', padx=3)
+        ttk.Button(bottom_filter, text="📊 엑셀 내보내기", command=self.export_budget_sales_status, style="Action.TButton").pack(side='right', padx=10)
 
         # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
         # Treeview (일일사용량 코럼)
