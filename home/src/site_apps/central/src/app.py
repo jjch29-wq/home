@@ -416,9 +416,16 @@ class MaterialManager:
         except:
             pass
             
-        self.style.configure(".", font=('Malgun Gothic', 12))
-        self.style.configure("Treeview.Heading", font=('Malgun Gothic', 12, 'bold'))
-        self.style.configure("Treeview", font=('Malgun Gothic', 12), rowheight=35) # Increased row height for "boxed" look
+        self.style.configure(".", font=('Malgun Gothic', 11))
+        self.style.configure("Treeview.Heading",
+                             font=('Malgun Gothic', 10, 'bold'),
+                             background='#eef2f6',
+                             foreground='#263238',
+                             relief='raised',
+                             padding=[6, 4])
+        self.style.map("Treeview.Heading",
+                       background=[('active', '#dbe3eb'), ('pressed', '#cfd8dc')])
+        self.style.configure("Treeview", font=('Malgun Gothic', 10), rowheight=32)
         
         # Detect system background color for tk widgets (Canvas, Text)
         self.theme_bg = self.root.cget('bg')
@@ -1701,7 +1708,7 @@ class MaterialManager:
         self.inout_top_paned.add(reg_container, weight=1)
         
         # Frame for Registration (Directly packed)
-        reg_frame = ttk.LabelFrame(reg_container, text="자재 / 장비 신규 등록")
+        reg_frame = ttk.LabelFrame(reg_container, text="📦 자재 / 장비 신규 등록")
         reg_frame.pack(fill='both', expand=True, padx=10, pady=5)
         reg_frame.grid_columnconfigure(1, weight=1)
         reg_frame.grid_columnconfigure(3, weight=1)
@@ -1811,7 +1818,7 @@ class MaterialManager:
         self.ent_cost.bind('<Return>', lambda e: btn_reg.focus_set())
         
         # Row 8
-        btn_reg = ttk.Button(reg_frame, text="자재 / 장비 등록", command=self.register_material)
+        btn_reg = ttk.Button(reg_frame, text="➕ 자재 / 장비 등록", command=self.register_material, style="Primary.TButton")
         btn_reg.grid(row=8, column=0, columnspan=4, pady=10)
         
 
@@ -1821,7 +1828,7 @@ class MaterialManager:
         self.inout_top_paned.add(trans_reg_container, weight=1)
         
         # Frame for In/Out Transaction (Directly packed)
-        trans_frame = ttk.LabelFrame(trans_reg_container, text="자재 / 장비 입출고 기록")
+        trans_frame = ttk.LabelFrame(trans_reg_container, text="🚚 자재 / 장비 입출고 기록")
         trans_frame.pack(fill='both', expand=True, padx=10, pady=5)
         trans_frame.grid_columnconfigure(1, weight=1)
         trans_frame.grid_columnconfigure(3, weight=1)
@@ -1894,11 +1901,11 @@ class MaterialManager:
         self.ent_note.grid(row=3, column=3, padx=5, pady=2, sticky='ew')
         self.ent_note.bind('<Return>', lambda e: btn_trans.focus_set())
         
-        btn_trans = ttk.Button(trans_frame, text="기록 저장", command=self.add_transaction)
+        btn_trans = ttk.Button(trans_frame, text="💾 기록 저장", command=self.add_transaction, style="Action.TButton")
         btn_trans.grid(row=5, column=0, columnspan=4, pady=10)
         
         # Frame for displaying transaction history
-        history_frame = ttk.LabelFrame(history_container, text="최근 입출고 내역")
+        history_frame = ttk.LabelFrame(history_container, text="📜 최근 입출고 내역")
         history_frame.pack(fill='both', expand=True, padx=10, pady=5)
         
         # Filter/Control frame for history
@@ -1909,18 +1916,18 @@ class MaterialManager:
         filter_row1 = ttk.Frame(history_ctrl_frame)
         filter_row1.pack(fill='x', pady=2)
         
-        btn_del_trans = ttk.Button(filter_row1, text="선택 항목 삭제", command=self.delete_transaction_entry)
-        btn_del_trans.pack(side='left', padx=5)
+        btn_del_trans = ttk.Button(filter_row1, text="🗑️ 선택 삭제", command=self.delete_transaction_entry, style="Danger.TButton")
+        btn_del_trans.pack(side='left', padx=3)
         
-        btn_export_trans = ttk.Button(filter_row1, text="엑셀 내보내기", command=self.export_transaction_history)
-        btn_export_trans.pack(side='left', padx=5)
+        btn_export_trans = ttk.Button(filter_row1, text="📊 엑셀 내보내기", command=self.export_transaction_history, style="Action.TButton")
+        btn_export_trans.pack(side='left', padx=3)
 
-        btn_refresh_trans = ttk.Button(filter_row1, text="입출고 내역 새로고침", command=self.refresh_inout_history)
-        btn_refresh_trans.pack(side='left', padx=5)
+        btn_refresh_trans = ttk.Button(filter_row1, text="🔄 내역 새로고침", command=self.refresh_inout_history, style="Primary.TButton")
+        btn_refresh_trans.pack(side='left', padx=3)
 
         # [NEW] Cleanup button for automatic transactions (Equipment only)
-        btn_cleanup_trans = ttk.Button(filter_row1, text="🧹 장비류 자동기록 클린업", command=self.cleanup_auto_transactions)
-        btn_cleanup_trans.pack(side='left', padx=10)
+        btn_cleanup_trans = ttk.Button(filter_row1, text="🧹 자동기록 정리", command=self.cleanup_auto_transactions, style="Warning.TButton")
+        btn_cleanup_trans.pack(side='left', padx=6)
         
         # Second row of filters
         filter_row2 = ttk.Frame(history_ctrl_frame)
@@ -6243,33 +6250,33 @@ class MaterialManager:
         btn_row.pack(fill='x', pady=(4, 2))
         
         # [그룹 1: 조회 제어]
-        btn_filter = ttk.Button(btn_row, text="🔍 조회", style='Action.TButton', command=self.update_daily_usage_view)
-        btn_filter.pack(side='left', padx=(5, 2))
+        btn_filter = ttk.Button(btn_row, text="🔍 조회", style='Primary.TButton', command=self.update_daily_usage_view)
+        btn_filter.pack(side='left', padx=(5, 3))
         
-        btn_filter_reset = ttk.Button(btn_row, text="♻️ 필터 초기화", command=self.reset_daily_usage_filters)
-        btn_filter_reset.pack(side='left', padx=2)
+        btn_filter_reset = ttk.Button(btn_row, text="♻️ 필터 초기화", style='Warning.TButton', command=self.reset_daily_usage_filters)
+        btn_filter_reset.pack(side='left', padx=3)
 
-        btn_col_manage = ttk.Button(btn_row, text="⚙️ 컬럼 관리", command=self.show_column_visibility_dialog)
-        btn_col_manage.pack(side='left', padx=(2, 10))
+        btn_col_manage = ttk.Button(btn_row, text="⚙️ 컬럼 관리", style='Secondary.TButton', command=self.show_column_visibility_dialog)
+        btn_col_manage.pack(side='left', padx=(3, 8))
         
         # [그룹 2: 레코드 편집 및 저장]
-        btn_edit = ttk.Button(btn_row, text="✏️ 선택 항목 수정", command=self.open_edit_daily_usage_dialog)
-        ttk.Button(btn_row, text="입력 화면에 불러오기",
-                   command=lambda: self._on_daily_usage_select(None)).pack(side='left', padx=5)
-        btn_edit.pack(side='left', padx=2)
+        ttk.Button(btn_row, text="📥 입력폼에 불러오기", style='Primary.TButton',
+                   command=lambda: self._on_daily_usage_select(None)).pack(side='left', padx=3)
+        btn_edit = ttk.Button(btn_row, text="✏️ 선택 수정", style='Info.TButton', command=self.open_edit_daily_usage_dialog)
+        btn_edit.pack(side='left', padx=3)
 
-        btn_delete = ttk.Button(btn_row, text="🗑️ 선택 항목 삭제", command=self.delete_daily_usage_entry)
-        btn_delete.pack(side='left', padx=2)
+        btn_delete = ttk.Button(btn_row, text="🗑️ 선택 삭제", style='Danger.TButton', command=self.delete_daily_usage_entry)
+        btn_delete.pack(side='left', padx=3)
 
-        self.btn_daily_save_list = ttk.Button(btn_row, text="💾 목록 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
-        self.btn_daily_save_list.pack(side='left', padx=(2, 10))
+        self.btn_daily_save_list = ttk.Button(btn_row, text="💾 변경사항 저장", command=self.save_all_daily_usage_changes, style='Action.TButton')
+        self.btn_daily_save_list.pack(side='left', padx=(3, 8))
 
         # [그룹 3: 데이터 내보내기 및 백업]
-        btn_export = ttk.Button(btn_row, text="📥 조회결과 엑셀 내보내기", command=self.export_daily_usage_history)
-        btn_export.pack(side='left', padx=2)
+        btn_export = ttk.Button(btn_row, text="📊 엑셀 내보내기", style='Action.TButton', command=self.export_daily_usage_history)
+        btn_export.pack(side='left', padx=3)
 
-        btn_export_all = ttk.Button(btn_row, text="📦 전체 기록 백업", command=self.export_all_daily_usage)
-        btn_export_all.pack(side='left', padx=2)
+        btn_export_all = ttk.Button(btn_row, text="📦 전체 백업", style='Secondary.TButton', command=self.export_all_daily_usage)
+        btn_export_all.pack(side='left', padx=3)
 
         # Bindings
         filter_widgets = [
