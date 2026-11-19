@@ -12,29 +12,29 @@ import traceback
 def setup_monthly_usage_tab_impl(self):
     """Setup the monthly usage aggregation tab (auto-aggregated from daily usage)"""
     # Display frame for aggregated monthly data
-    display_frame = ttk.LabelFrame(self.tab_monthly_usage, text="월별 사용량 집계 (현장별 데이터 자동 집계)")
+    display_frame = ttk.LabelFrame(self.tab_monthly_usage, text="📊 월별 사용량 집계 (현장별 데이터 자동 집계)")
     display_frame.pack(expand=True, fill='both', padx=10, pady=10)
     
     # Filter controls
     filter_frame = ttk.Frame(display_frame)
     filter_frame.pack(fill='x', padx=5, pady=5)
     
-    ttk.Label(filter_frame, text="연도:").pack(side='left', padx=5)
+    ttk.Label(filter_frame, text="🗓️ 연도:").pack(side='left', padx=(5, 2))
     current_year = datetime.datetime.now().year
     year_values = ['전체'] + [str(y) for y in range(max(2024, current_year-1), current_year + 3)]
-    self.cb_filter_year = ttk.Combobox(filter_frame, values=year_values, width=10)
-    self.cb_filter_year.pack(side='left', padx=5)
+    self.cb_filter_year = ttk.Combobox(filter_frame, values=year_values, width=9)
+    self.cb_filter_year.pack(side='left', padx=(0, 5))
     self.cb_filter_year.set('전체')
     
-    ttk.Label(filter_frame, text="월:").pack(side='left', padx=5)
+    ttk.Label(filter_frame, text="📅 월:").pack(side='left', padx=(5, 2))
     current_month = datetime.datetime.now().month
-    self.cb_filter_month = ttk.Combobox(filter_frame, values=['전체'] + [str(m) for m in range(1, 13)], width=10)
-    self.cb_filter_month.pack(side='left', padx=5)
+    self.cb_filter_month = ttk.Combobox(filter_frame, values=['전체'] + [str(m) for m in range(1, 13)], width=7)
+    self.cb_filter_month.pack(side='left', padx=(0, 5))
     self.cb_filter_month.set('전체')
     
-    ttk.Label(filter_frame, text="현장:").pack(side='left', padx=5)
-    self.cb_filter_site_monthly = ttk.Combobox(filter_frame, width=15)
-    self.cb_filter_site_monthly.pack(side='left', padx=5)
+    ttk.Label(filter_frame, text="🏢 현장:").pack(side='left', padx=(5, 2))
+    self.cb_filter_site_monthly = ttk.Combobox(filter_frame, width=14)
+    self.cb_filter_site_monthly.pack(side='left', padx=(0, 5))
     self.cb_filter_site_monthly.set('전체')
     
     btn_site_mgr_monthly = tk.Button(filter_frame, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
@@ -42,14 +42,14 @@ def setup_monthly_usage_tab_impl(self):
     btn_site_mgr_monthly.place(in_=self.cb_filter_site_monthly, relx=1.0, x=-18, rely=0.5, anchor='e', width=16, height=16)
     
     # [NEW] 특정 검사방법 필터 (전체, RT, PAUT, MT, PT)
-    ttk.Label(filter_frame, text="검사방법:").pack(side='left', padx=5)
-    self.cb_filter_method_monthly = ttk.Combobox(filter_frame, values=['전체', 'RT', 'PAUT', 'MT', 'PT'], width=10)
-    self.cb_filter_method_monthly.pack(side='left', padx=5)
+    ttk.Label(filter_frame, text="🔬 검사방법:").pack(side='left', padx=(5, 2))
+    self.cb_filter_method_monthly = ttk.Combobox(filter_frame, values=['전체', 'RT', 'PAUT', 'MT', 'PT'], width=9)
+    self.cb_filter_method_monthly.pack(side='left', padx=(0, 5))
     self.cb_filter_method_monthly.set('전체')
 
-    ttk.Label(filter_frame, text="자재명:").pack(side='left', padx=5)
-    self.cb_filter_material_monthly = ttk.Combobox(filter_frame, width=25)
-    self.cb_filter_material_monthly.pack(side='left', padx=5)
+    ttk.Label(filter_frame, text="📦 자재명:").pack(side='left', padx=(5, 2))
+    self.cb_filter_material_monthly = ttk.Combobox(filter_frame, width=20)
+    self.cb_filter_material_monthly.pack(side='left', padx=(0, 5))
     self.cb_filter_material_monthly.set('전체')
     
     # [UX IMPROVEMENT] 드롭다운(연도, 월, 현장, 검사방법, 자재명) 항목 클릭/선택 시 즉시 자동 조회 적용
@@ -58,12 +58,12 @@ def setup_monthly_usage_tab_impl(self):
         cb.bind("<Return>", lambda e: self.update_monthly_usage_view())
 
     btn_filter = ttk.Button(filter_frame, text="🔍 조회", command=self.update_monthly_usage_view, style="Primary.TButton")
-    btn_filter.pack(side='left', padx=8)
+    btn_filter.pack(side='left', padx=6)
     
     btn_export = ttk.Button(filter_frame, text="📊 엑셀 내보내기", command=self.export_monthly_usage_history, style="Action.TButton")
     btn_export.pack(side='left', padx=4)
 
-    btn_popout = ttk.Button(filter_frame, text="🗗 팝업창으로 열기", command=self.open_detached_monthly_usage_view, style="Info.TButton")
+    btn_popout = ttk.Button(filter_frame, text="🗗 팝업창 분리", command=self.open_detached_monthly_usage_view, style="Info.TButton")
     btn_popout.pack(side='left', padx=4)
     
     # Use a PanedWindow to allow resizing between main tree and summaries

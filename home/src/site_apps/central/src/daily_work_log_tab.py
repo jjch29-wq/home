@@ -137,6 +137,7 @@ class DailyWorkLogTab(ttk.Frame):
         toolbar.pack(fill='x', padx=5, pady=(4, 0))
         self.left_pane_toggle = ttk.Button(
             toolbar, text='◀ 좌측 숨기기', command=self._toggle_left_pane,
+            style="Secondary.TButton"
         )
         self.left_pane_toggle.pack(side='left')
 
@@ -241,11 +242,11 @@ class DailyWorkLogTab(ttk.Frame):
 
     def _build_basic_info(self, parent):
         # --- Top Section: General Info & Unified Work Toolbar ---
-        top_frame = ttk.LabelFrame(parent, text="기본 정보 및 통합 작업 도구", padding=6)
+        top_frame = ttk.LabelFrame(parent, text="📋 기본 정보 및 통합 작업 도구", padding=6)
         top_frame.pack(fill="x", padx=5, pady=5)
         
         # 1. 좌측: 기본 정보 입력 및 저장
-        left_box = ttk.LabelFrame(top_frame, text="기본 정보", padding=(6, 3))
+        left_box = ttk.LabelFrame(top_frame, text="📌 기본 정보", padding=(6, 3))
         left_box.pack(side="left", fill="y", padx=(0, 6))
         
         ttk.Label(left_box, text="검사일자:").grid(row=0, column=0, padx=(0, 4), pady=2, sticky="e")
@@ -270,41 +271,41 @@ class DailyWorkLogTab(ttk.Frame):
         self.weather_entry = ttk.Entry(left_box, width=8)
         self.weather_entry.grid(row=0, column=3, padx=(0, 6), pady=2, sticky="w")
         
-        btn_calc = ttk.Button(left_box, text="💾 자동 집계/저장", command=self.auto_calculate_and_save)
+        btn_calc = ttk.Button(left_box, text="💾 자동 집계/저장", command=self.auto_calculate_and_save, style="Action.TButton")
         btn_calc.grid(row=0, column=4, padx=(0, 3), pady=2)
         
-        btn_delete = ttk.Button(left_box, text="🗑️ 삭제", command=self.delete_current_date_data)
+        btn_delete = ttk.Button(left_box, text="🗑️ 삭제", command=self.delete_current_date_data, style="Danger.TButton")
         btn_delete.grid(row=0, column=5, padx=0, pady=2)
         
-        btn_export = ttk.Button(left_box, text="📊 엑셀 출력 (일보)", command=self.export_excel)
-        btn_export.grid(row=1, column=4, columnspan=2, padx=0, pady=(1, 0), sticky="ew")
+        btn_export = ttk.Button(left_box, text="📊 엑셀 출력 (일보)", command=self.export_excel, style="Action.TButton")
+        btn_export.grid(row=1, column=4, columnspan=2, padx=0, pady=(2, 0), sticky="ew")
         
         # 2. 중앙: 보고서 발행
-        mid_box = ttk.LabelFrame(top_frame, text="보고서 발행", padding=(6, 3))
+        mid_box = ttk.LabelFrame(top_frame, text="📑 보고서 발행", padding=(6, 3))
         mid_box.pack(side="left", fill="y", padx=(0, 6))
         
-        btn_export_ndt = ttk.Button(mid_box, text="📗 NDT 누계대장", command=self.export_ndt_summary)
-        btn_export_ndt.grid(row=0, column=0, padx=3, pady=2, sticky="ew")
+        btn_export_ndt = ttk.Button(mid_box, text="📗 NDT 누계대장", command=self.export_ndt_summary, style="Primary.TButton")
+        btn_export_ndt.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
         
-        btn_export_monthly = ttk.Button(mid_box, text="📈 월간진도보고서", command=self.export_monthly_report)
-        btn_export_monthly.grid(row=0, column=1, padx=3, pady=2, sticky="ew")
+        btn_export_monthly = ttk.Button(mid_box, text="📈 월간진도보고서", command=self.export_monthly_report, style="Info.TButton")
+        btn_export_monthly.grid(row=0, column=1, padx=2, pady=2, sticky="ew")
         
-        btn_weekly_report = ttk.Button(mid_box, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
-        btn_weekly_report.grid(row=1, column=0, columnspan=2, padx=3, pady=(1, 0), sticky="ew")
+        btn_weekly_report = ttk.Button(mid_box, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None, style="Secondary.TButton")
+        btn_weekly_report.grid(row=1, column=0, columnspan=2, padx=2, pady=(2, 0), sticky="ew")
 
         # 3. 우측: 비파괴검사결과서 편집 도구 (우측 빈 공간 100% 활용 및 2단 배치)
-        right_box = ttk.LabelFrame(top_frame, text="비파괴검사결과서 편집", padding=(6, 3))
+        right_box = ttk.LabelFrame(top_frame, text="✏️ 비파괴검사결과서 편집", padding=(6, 3))
         right_box.pack(side="left", fill="both", expand=True)
 
         # 1단: 행 추가/삭제 및 작업내역 검색
-        ttk.Button(right_box, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).grid(row=0, column=0, padx=2, pady=1, sticky="w")
-        ttk.Button(right_box, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row).grid(row=0, column=1, padx=2, pady=1, sticky="w")
-        ttk.Button(right_box, text="🔍 작업내역 검색·수정", command=self.open_history_search_dialog).grid(row=0, column=2, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True), style="Primary.TButton").grid(row=0, column=0, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row, style="Danger.TButton").grid(row=0, column=1, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="🔍 작업내역 검색·수정", command=self.open_history_search_dialog, style="Info.TButton").grid(row=0, column=2, padx=2, pady=1, sticky="w")
 
         # 2단: 일괄 변경 도구 3종 (라인번호, 구간, 공사구분)
-        ttk.Button(right_box, text="✏️ 라인번호 일괄", command=self._edit_ndt_lines).grid(row=1, column=0, padx=2, pady=1, sticky="w")
-        ttk.Button(right_box, text="✏️ 구간 일괄", command=self._edit_ndt_sections).grid(row=1, column=1, padx=2, pady=1, sticky="w")
-        ttk.Button(right_box, text="🏷️ 공사구분 일괄", command=self._edit_ndt_work_categories).grid(row=1, column=2, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="✏️ 라인번호 일괄", command=self._edit_ndt_lines, style="Secondary.TButton").grid(row=1, column=0, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="✏️ 구간 일괄", command=self._edit_ndt_sections, style="Secondary.TButton").grid(row=1, column=1, padx=2, pady=1, sticky="w")
+        ttk.Button(right_box, text="🏷️ 공사구분 일괄", command=self._edit_ndt_work_categories, style="Warning.TButton").grid(row=1, column=2, padx=2, pady=1, sticky="w")
 
         self.ndt_selection_vars = []
         self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
@@ -361,7 +362,7 @@ class DailyWorkLogTab(ttk.Frame):
         bot_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Equipment
-        eq_frame = ttk.LabelFrame(bot_frame, text="장비투입 현황", padding=10)
+        eq_frame = ttk.LabelFrame(bot_frame, text="🚜 장비투입 현황", padding=10)
         eq_frame.pack(side="left", fill="y", padx=5)
         
         ttk.Label(eq_frame, text="장비명").grid(row=0, column=0)
@@ -379,7 +380,7 @@ class DailyWorkLogTab(ttk.Frame):
             self.equip_entries[eq] = {'금일': e_today, '누계': e_cum}
             
         # Personnel
-        pe_frame = ttk.LabelFrame(bot_frame, text="금일 투입 인원", padding=10)
+        pe_frame = ttk.LabelFrame(bot_frame, text="👥 금일 투입 인원", padding=10)
         pe_frame.pack(side="left", fill="y", padx=5)
         
         ttk.Label(pe_frame, text="구분").grid(row=0, column=0)
@@ -398,12 +399,12 @@ class DailyWorkLogTab(ttk.Frame):
             self.personnel_entries[f'안전_{lbl}'] = ent2
             
         # Remarks
-        rm_frame = ttk.LabelFrame(bot_frame, text="특이사항 및 계획", padding=10)
+        rm_frame = ttk.LabelFrame(bot_frame, text="📝 특이사항 및 계획", padding=10)
         rm_frame.pack(side="left", fill="both", expand=True, padx=5)
         memo_toolbar = ttk.Frame(rm_frame)
         memo_toolbar.pack(fill="x", pady=(0, 5))
         ttk.Label(memo_toolbar, text="선택한 검사일자의 메모").pack(side="left")
-        ttk.Button(memo_toolbar, text="메모 이력", command=self.open_memo_history).pack(side="right")
+        ttk.Button(memo_toolbar, text="📜 메모 이력", command=self.open_memo_history, style="Secondary.TButton").pack(side="right")
         self.remarks_text = tk.Text(rm_frame, width=20, height=8)
         self.remarks_text.pack(fill="both", expand=True)
 
