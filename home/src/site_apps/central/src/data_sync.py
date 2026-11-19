@@ -22,10 +22,12 @@ def _configured_data_dir():
         return None
 
 
+_CACHED_SHARED_DIR = None
+
+
 def _shared_dir_candidates(custom_dir):
     norm_custom = os.path.normpath(custom_dir)
-    yield norm_custom
-    _, relative = os.path.splitdrive(norm_custom)
+    orig_drive, relative = os.path.splitdrive(norm_custom)
     rel_clean = relative.replace('/', '\\').lstrip('\\')
 
     rel_variants = [rel_clean]
@@ -34,23 +36,64 @@ def _shared_dir_candidates(custom_dir):
     elif rel_clean.startswith('My Drive\\'):
         rel_variants.append('내 드라이브\\' + rel_clean[len('My Drive\\'):])
 
-    seen = {os.path.normcase(norm_custom)}
-    # 회사(F:)와 집(G:)을 최우선 순위로 자동 탐색
-    for drive in 'GFEDCHIJKLMNOPQRSTUVWXYZ':
+    seen = set()
+
+    # 1. 설정된 원래 경로의 드라이브 루트가 실존하면 최우선 탐색
+    if orig_drive:
+        try:
+            if os.path.exists(f"{orig_drive}\\"):
+                seen.add(os.path.normcase(norm_custom))
+                yield norm_custom
+        except Exception:
+            pass
+
+    # 2. 회사(F:)와 집(G:)을 최우선 순위로 탐색하되, 활성화된 드라이브 먼저 탐색
+    priority_drives = [d for d in 'GFEDCBAHIJKLMNOPQRSTUVWXYZ']
+    active_drives = []
+    for d in priority_drives:
+        try:
+            if os.path.exists(f"{d}:\\"):
+                active_drives.append(d)
+        except Exception:
+            continue
+
+    # 활성 드라이브 후보 먼저 산출
+    for drive in active_drives:
         for rel in rel_variants:
             candidate = os.path.normpath(f"{drive}:\\{rel}")
-            if os.path.normcase(candidate) not in seen:
-                seen.add(os.path.normcase(candidate))
+            key = os.path.normcase(candidate)
+            if key not in seen:
+                seen.add(key)
+                yield candidate
+
+    # 비활성 드라이브는 후순위로 시도 (일시적 마운트 대기)
+    for drive in priority_drives:
+        if drive in active_drives:
+            continue
+        for rel in rel_variants:
+            candidate = os.path.normpath(f"{drive}:\\{rel}")
+            key = os.path.normcase(candidate)
+            if key not in seen:
+                seen.add(key)
                 yield candidate
 
 
-def _find_available_shared_dir(custom_dir, retries=2, delay=0.3):
+def _find_available_shared_dir(custom_dir, retries=3, delay=0.4):
     """Google Drive 가상 드라이브의 일시적 마운트 지연/응답 대기를 고려하여 재시도하며 유효 경로를 찾는다."""
+    global _CACHED_SHARED_DIR
+    if _CACHED_SHARED_DIR:
+        try:
+            if os.path.isdir(_CACHED_SHARED_DIR):
+                return _CACHED_SHARED_DIR
+        except Exception:
+            _CACHED_SHARED_DIR = None
+
     candidates = list(_shared_dir_candidates(custom_dir))
     for attempt in range(retries + 1):
         for path in candidates:
             try:
                 if os.path.isdir(path):
+                    _CACHED_SHARED_DIR = path
                     return path
             except Exception:
                 continue
