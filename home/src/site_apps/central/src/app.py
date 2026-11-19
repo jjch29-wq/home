@@ -6486,38 +6486,66 @@ class MaterialManager:
     
 
     def export_budget_estimation(self):
-        """Export the estimated budget details to Excel"""
+        """Export the estimated budget details (Planned & Actuals) to Excel"""
         site = self.cb_budget_site.get()
         if not site:
-            messagebox.showwarning("현장 미선택", "사정원가를 내보낼 현장을 선택하거나 입력해주세요.")
+            messagebox.showwarning("현장 미선택", "실행예산서를 내보낼 현장을 선택하거나 입력해주세요.")
             return
             
         file_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             filetypes=[("Excel files", "*.xlsx")],
-            initialfile=f"사정예산서_{site}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            initialfile=f"공사실행예산서_{site}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         )
         if not file_path:
             return
             
-        # Collect Summary Data
+        # Collect Summary Data (Plan, Actual, Diff)
+        def get_val(attr):
+            return getattr(self, attr).get().strip() if hasattr(self, attr) else ""
+
         summary_data = {
             'site': site,
-            'period': getattr(self, 'ent_budget_period').get() if hasattr(self, 'ent_budget_period') else "",
-            'revenue': getattr(self, 'ent_budget_revenue').get() if hasattr(self, 'ent_budget_revenue') else "",
-            'unitprice': getattr(self, 'ent_budget_unit_price').get() if hasattr(self, 'ent_budget_unit_price') else "",
-            'labor': getattr(self, 'ent_budget_labor').get() if hasattr(self, 'ent_budget_labor') else "",
-            'material': getattr(self, 'ent_budget_material').get() if hasattr(self, 'ent_budget_material') else "",
-            'expense': getattr(self, 'ent_budget_expense').get() if hasattr(self, 'ent_budget_expense') else "",
-            'outsource': getattr(self, 'ent_budget_outsource').get() if hasattr(self, 'ent_budget_outsource') else "",
-            'profit': getattr(self, 'ent_budget_profit').get() if hasattr(self, 'ent_budget_profit') else "",
-            'margin': getattr(self, 'ent_budget_margin').get() if hasattr(self, 'ent_budget_margin') else ""
+            'period': get_val('ent_budget_period'),
+            'actual_period': get_val('ent_budget_actual_period'),
+            'diff_period': get_val('ent_budget_diff_period'),
+            
+            'revenue': get_val('ent_budget_revenue'),
+            'actual_revenue': get_val('ent_budget_actual_revenue'),
+            'diff_revenue': get_val('ent_budget_diff_revenue'),
+            
+            'unitprice': get_val('ent_budget_unit_price'),
+            'actual_unitprice': get_val('ent_budget_actual_unit_price'),
+            'diff_unitprice': get_val('ent_budget_diff_unit_price'),
+            
+            'labor': get_val('ent_budget_labor'),
+            'actual_labor': get_val('ent_budget_actual_labor'),
+            'diff_labor': get_val('ent_budget_diff_labor'),
+            
+            'material': get_val('ent_budget_material'),
+            'actual_material': get_val('ent_budget_actual_material'),
+            'diff_material': get_val('ent_budget_diff_material'),
+            
+            'expense': get_val('ent_budget_expense'),
+            'actual_expense': get_val('ent_budget_actual_expense'),
+            'diff_expense': get_val('ent_budget_diff_expense'),
+            
+            'outsource': get_val('ent_budget_outsource'),
+            'actual_outsource': get_val('ent_budget_actual_outsource'),
+            'diff_outsource': get_val('ent_budget_diff_outsource'),
+            
+            'profit': get_val('ent_budget_profit'),
+            'actual_profit': get_val('ent_budget_actual_profit'),
+            'diff_profit': get_val('ent_budget_diff_profit'),
+            
+            'margin': get_val('ent_budget_margin'),
+            'actual_margin': get_val('ent_budget_actual_margin'),
+            'diff_margin': get_val('ent_budget_diff_margin')
         }
         
-        # Details
+        # Details - Planned
         labor_data = self.labor_detail_widget.get_data() if hasattr(self, 'labor_detail_widget') else {}
         
-        # Material Details - need to augment with name/spec/unit from default_items
         raw_mat = self.material_detail_widget.get_data() if hasattr(self, 'material_detail_widget') else []
         material_data = []
         defaults = self.material_detail_widget.default_items if hasattr(self, 'material_detail_widget') else []
@@ -6530,11 +6558,40 @@ class MaterialManager:
                 material_data.append(row)
                 
         expense_data = self.expense_detail_widget.get_data() if hasattr(self, 'expense_detail_widget') else {}
+
+        # Details - Actuals
+        actual_labor_data = self.actual_labor_detail_widget.get_data() if hasattr(self, 'actual_labor_detail_widget') else {}
+        
+        raw_act_mat = self.actual_material_detail_widget.get_data() if hasattr(self, 'actual_material_detail_widget') else []
+        actual_material_data = []
+        act_defaults = getattr(self.actual_material_detail_widget, 'default_items', defaults)
+        for i, row in enumerate(raw_act_mat):
+            if i < len(act_defaults):
+                name, spec, unit, _ = act_defaults[i]
+                row['name'] = name
+                row['spec'] = spec
+                row['unit'] = unit
+                actual_material_data.append(row)
+                
+        actual_expense_data = self.actual_expense_detail_widget.get_data() if hasattr(self, 'actual_expense_detail_widget') else {}
+
+        # Base salaries for reference
+        base_salaries = self.get_base_salaries() if hasattr(self, 'get_base_salaries') else getattr(self.labor_detail_widget, 'base_salaries', {})
         
         try:
             from site_apps.central.src.utils.export_helper import export_budget_estimation_to_excel
-            if export_budget_estimation_to_excel(file_path, summary_data, labor_data, material_data, expense_data):
-                messagebox.showinfo("내보내기 완료", f"사정예산서가 성공적으로 저장되었습니다.\n{file_path}")
+            if export_budget_estimation_to_excel(
+                file_path,
+                summary_data,
+                labor_data,
+                material_data,
+                expense_data,
+                actual_labor_data=actual_labor_data,
+                actual_material_data=actual_material_data,
+                actual_expense_data=actual_expense_data,
+                base_salaries=base_salaries
+            ):
+                messagebox.showinfo("내보내기 완료", f"공사실행예산서(총괄/사전상세/사후원가 3개 시트)가 성공적으로 저장되었습니다.\n{file_path}")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -6592,13 +6649,15 @@ class MaterialManager:
         df = pd.DataFrame(data, columns=columns)
         
         try:
+            from openpyxl.utils import get_column_letter
             with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='SalesStatus', index=False)
                 # Auto-adjust columns
                 worksheet = writer.sheets['SalesStatus']
                 for i, col in enumerate(df.columns):
                     max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
-                    worksheet.column_dimensions[chr(65 + i)].width = max_len
+                    col_letter = get_column_letter(i + 1)
+                    worksheet.column_dimensions[col_letter].width = max_len
             
             messagebox.showinfo("내보내기 완료", "매출현황이 엑셀로 저장되었습니다.")
         except Exception as e:
@@ -6673,7 +6732,7 @@ class MaterialManager:
         self.btn_toggle_bottom = ttk.Button(top_btn_frame, text="🔽 하단 일일기록 숨기기", style="Secondary.TButton")
         self.btn_toggle_bottom.pack(side='left', padx=4)
         
-        ttk.Button(top_btn_frame, text="📊 사전원가 출력", command=self.export_budget_estimation, style="Action.TButton").pack(side='right', padx=4)
+        ttk.Button(top_btn_frame, text="📊 실행예산(상세) 출력", command=self.export_budget_estimation, style="Action.TButton").pack(side='right', padx=4)
         ttk.Button(top_btn_frame, text="📑 엑셀 내보내기", command=self.export_budget_sales_status, style="Secondary.TButton").pack(side='right', padx=4)
 
         main_paned = ttk.PanedWindow(self.tab_budget, orient='vertical')
