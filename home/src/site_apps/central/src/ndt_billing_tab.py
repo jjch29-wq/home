@@ -725,34 +725,26 @@ class NDTCalculatorTab(ttk.Frame):
         columns = ("date", "company", "loc", "type", "time", "mat", "qty", "unit", "unit_price", "total_amt")
         self.tree = ttk.Treeview(tree_container, columns=columns, show="headings", height=8)
         
-        self.tree.heading("date", text="일자", anchor="center")
-        self.tree.heading("company", text="업체명", anchor="center")
-        self.tree.heading("loc", text="구간/위치", anchor="center")
-        self.tree.heading("type", text="종류", anchor="center")
-        self.tree.heading("time", text="형태", anchor="center")
-        self.tree.heading("mat", text="자재", anchor="center")
-        self.tree.heading("qty", text="실물량", anchor="center")
-        self.tree.heading("unit", text="단위", anchor="center")
-        self.tree.heading("unit_price", text="단가(원)", anchor="center")
-        self.tree.heading("total_amt", text="공급가액(원)", anchor="center")
+        headers_text = {
+            "date": "일자", "company": "업체명", "loc": "구간/위치", "type": "종류", "time": "형태",
+            "mat": "자재", "qty": "실물량", "unit": "단위", "unit_price": "단가(원)", "total_amt": "공급가액(원)"
+        }
+        for col in columns:
+            self.tree.heading(col, text=headers_text[col], anchor="center",
+                              command=lambda c=col: self.treeview_sort_column(self.tree, c, False))
         
         default_widths = {
-            "date": 80, "company": 80, "loc": 120, "type": 40, "time": 40, "mat": 90, 
-            "qty": 40, "unit": 40,
-            "unit_price": 90, "total_amt": 90
+            "date": 90, "company": 100, "loc": 140, "type": 65, "time": 65, "mat": 100, 
+            "qty": 70, "unit": 50,
+            "unit_price": 95, "total_amt": 105
         }
         saved_widths = CONFIG.get("TREE_WIDTHS", {})
         
-        self.tree.column("date", width=saved_widths.get("date", default_widths["date"]), anchor="center")
-        self.tree.column("company", width=saved_widths.get("company", default_widths["company"]), anchor="center")
-        self.tree.column("loc", width=saved_widths.get("loc", default_widths["loc"]), anchor="w")
-        self.tree.column("type", width=saved_widths.get("type", default_widths["type"]), anchor="center")
-        self.tree.column("time", width=saved_widths.get("time", default_widths["time"]), anchor="center")
-        self.tree.column("mat", width=saved_widths.get("mat", default_widths["mat"]), anchor="center")
-        self.tree.column("qty", width=saved_widths.get("qty", default_widths["qty"]), anchor="center")
-        self.tree.column("unit", width=saved_widths.get("unit", default_widths["unit"]), anchor="center")
-        self.tree.column("unit_price", width=saved_widths.get("unit_price", default_widths["unit_price"]), anchor="center")
-        self.tree.column("total_amt", width=saved_widths.get("total_amt", default_widths["total_amt"]), anchor="center")
+        anchors = {"loc": "w"}
+        for col in columns:
+            w = saved_widths.get(col, default_widths.get(col, 80))
+            anchor = anchors.get(col, "center")
+            self.tree.column(col, width=w, minwidth=35, anchor=anchor, stretch=False)
         
         tree_scroll = ttk.Scrollbar(tree_container, orient="vertical", command=self.tree.yview)
         tree_hscroll = ttk.Scrollbar(tree_container, orient="horizontal", command=self.tree.xview)
@@ -765,6 +757,19 @@ class NDTCalculatorTab(ttk.Frame):
         self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
         self.tree.bind('<Delete>', self.delete_selected_records)
         self.tree.bind('<BackSpace>', self.delete_selected_records)
+
+        def save_billing_tree_widths(event=None):
+            try:
+                widths = {}
+                for c in columns:
+                    w = self.tree.column(c, 'width')
+                    if w:
+                        widths[c] = int(w)
+                CONFIG["TREE_WIDTHS"] = widths
+                save_config(CONFIG)
+            except Exception:
+                pass
+        self.tree.bind('<ButtonRelease-1>', save_billing_tree_widths, add='+')
 
         def _show_billing_tree_context_menu(event):
             item = self.tree.identify_row(event.y)
@@ -786,6 +791,8 @@ class NDTCalculatorTab(ttk.Frame):
                     menu.grab_release()
 
         self.tree.bind('<Button-3>', _show_billing_tree_context_menu)
+        if hasattr(self, 'main_app') and hasattr(self.main_app, 'enable_tree_column_drag'):
+            self.main_app.enable_tree_column_drag(self.tree, context_menu_handler=_show_billing_tree_context_menu)
         
         # 저장된 탭 영역(Sash) 너비 복원
         # 저장된 탭 영역(Sash) 너비 복원 (안정화 후 적용을 위한 타이머 방식)
@@ -1005,6 +1012,17 @@ class NDTCalculatorTab(ttk.Frame):
         except ValueError:
             messagebox.showerror("입력 오류", "숫자를 정확히 입력해주세요.")
             return None
+
+    def treeview_sort_column(self, tv, col, reverse):
+        """기성 정산 테이블 컬럼 헤더 클릭 시 오름차순/내림차순 정렬"""
+        l = [(tv.set(k, col), k) for k in tv.get_children('')]
+        try:
+            l.sort(key=lambda t: float(str(t[0]).replace(',', '').strip()) if str(t[0]).replace(',', '').strip() else 0, reverse=reverse)
+        except (ValueError, TypeError):
+            l.sort(reverse=reverse)
+        for index, (val, k) in enumerate(l):
+            tv.move(k, '', index)
+        tv.heading(col, command=lambda: self.treeview_sort_column(tv, col, not reverse))
 
     def on_tree_select(self, event):
         selected_items = self.tree.selection()
