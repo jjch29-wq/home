@@ -18,38 +18,38 @@ def setup_stock_tab_impl(self):
     action_row = ttk.Frame(control_frame)
     action_row.pack(fill='x', side='top', pady=(0, 5))
     
-    btn_refresh = ttk.Button(action_row, text="재고 새로고침", command=self.reload_and_update_stock_view)
-    btn_refresh.pack(side='left', padx=5)
+    btn_refresh = ttk.Button(action_row, text="🔄 재고 새로고침", command=self.reload_and_update_stock_view, style="Primary.TButton")
+    btn_refresh.pack(side='left', padx=3)
     
-    btn_alert = ttk.Button(action_row, text="재주문 필요 항목 보기", command=self.show_low_stock)
-    btn_alert.pack(side='left', padx=5)
+    btn_alert = ttk.Button(action_row, text="⚠️ 재주문 필요 항목", command=self.show_low_stock, style="Warning.TButton")
+    btn_alert.pack(side='left', padx=3)
     
-    btn_delete = ttk.Button(action_row, text="품목 삭제", command=self.delete_selected_material)
-    btn_delete.pack(side='left', padx=5)
-    
-    btn_edit = ttk.Button(action_row, text="품목 수정", command=self.open_edit_material_dialog)
-    btn_edit.pack(side='left', padx=5)
-    
-    from site_apps.central.src.views.stock_history import show_material_history
-    ttk.Button(action_row, text="품목 이력", command=lambda: show_material_history(self)).pack(side='left', padx=5)
+    btn_edit = ttk.Button(action_row, text="✏️ 품목 수정", command=self.open_edit_material_dialog, style="Info.TButton")
+    btn_edit.pack(side='left', padx=3)
 
-    btn_export = ttk.Button(action_row, text="엑셀 내보내기", command=self.export_stock_to_excel)
-    btn_export.pack(side='left', padx=5)
+    from site_apps.central.src.views.stock_history import show_material_history
+    ttk.Button(action_row, text="📜 품목 이력", command=lambda: show_material_history(self), style="Secondary.TButton").pack(side='left', padx=3)
+
+    btn_delete = ttk.Button(action_row, text="🗑️ 품목 삭제", command=self.delete_selected_material, style="Danger.TButton")
+    btn_delete.pack(side='left', padx=3)
+
+    btn_export = ttk.Button(action_row, text="📊 엑셀 내보내기", command=self.export_stock_to_excel, style="Action.TButton")
+    btn_export.pack(side='left', padx=3)
     
-    btn_select_all = ttk.Button(action_row, text="전체 선택", command=self.select_all_stock)
-    btn_select_all.pack(side='left', padx=5)
+    btn_select_all = ttk.Button(action_row, text="전체 선택", command=self.select_all_stock, style="Secondary.TButton")
+    btn_select_all.pack(side='left', padx=3)
     self.stock_allocation_notice = ttk.Label(control_frame, foreground='#A33A00')
     self.stock_allocation_notice.pack(fill='x')
     
     # [NEW] Popout Button
-    btn_popout_stock = ttk.Button(action_row, text="🔍 팝업창으로 열기", command=self.open_detached_stock_view)
+    btn_popout_stock = ttk.Button(action_row, text="🗗 팝업창으로 열기", command=self.open_detached_stock_view, style="Info.TButton")
     btn_popout_stock.pack(side='right', padx=5)
     
     # Row 2: Search and Filter Frame
     filter_row = ttk.Frame(control_frame)
     filter_row.pack(fill='x', side='top')
     
-    filter_frame = ttk.LabelFrame(filter_row, text="검색 필터")
+    filter_frame = ttk.LabelFrame(filter_row, text="🔍 검색 필터")
     filter_frame.pack(fill='x', padx=5, pady=2)
     
     # Row 0 of Filter Frame (Grid)

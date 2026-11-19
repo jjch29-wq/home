@@ -57,14 +57,14 @@ def setup_monthly_usage_tab_impl(self):
         cb.bind("<<ComboboxSelected>>", lambda e: self.update_monthly_usage_view())
         cb.bind("<Return>", lambda e: self.update_monthly_usage_view())
 
-    btn_filter = ttk.Button(filter_frame, text="조회", command=self.update_monthly_usage_view)
-    btn_filter.pack(side='left', padx=10)
+    btn_filter = ttk.Button(filter_frame, text="🔍 조회", command=self.update_monthly_usage_view, style="Primary.TButton")
+    btn_filter.pack(side='left', padx=8)
     
-    btn_export = ttk.Button(filter_frame, text="엑셀 내보내기", command=self.export_monthly_usage_history)
-    btn_export.pack(side='left', padx=5)
+    btn_export = ttk.Button(filter_frame, text="📊 엑셀 내보내기", command=self.export_monthly_usage_history, style="Action.TButton")
+    btn_export.pack(side='left', padx=4)
 
-    btn_popout = ttk.Button(filter_frame, text="🔍 팝업창으로 열기", command=self.open_detached_monthly_usage_view)
-    btn_popout.pack(side='left', padx=5)
+    btn_popout = ttk.Button(filter_frame, text="🗗 팝업창으로 열기", command=self.open_detached_monthly_usage_view, style="Info.TButton")
+    btn_popout.pack(side='left', padx=4)
     
     # Use a PanedWindow to allow resizing between main tree and summaries
     self.monthly_paned = ttk.PanedWindow(display_frame, orient="vertical")
@@ -152,7 +152,7 @@ def setup_monthly_usage_tab_impl(self):
     self.monthly_usage_tree.bind('<<TreeviewSelect>>', self.on_monthly_usage_select)
 
     # 2. Middle pane: Site Summary
-    site_frame = ttk.LabelFrame(self.monthly_paned, text="현장별 누계")
+    site_frame = ttk.LabelFrame(self.monthly_paned, text="🏢 현장별 누계")
     self.monthly_paned.add(site_frame, weight=1)
     
     self.monthly_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.monthly_usage_tree), add="+")
@@ -181,7 +181,7 @@ def setup_monthly_usage_tab_impl(self):
     site_vsb.pack(side='right', fill='y')
     
     # 3. Bottom pane: Worker Summary
-    worker_frame = ttk.LabelFrame(self.monthly_paned, text="작업자별 누계")
+    worker_frame = ttk.LabelFrame(self.monthly_paned, text="👷 작업자별 누계")
     self.monthly_paned.add(worker_frame, weight=1)
     
     worker_cols = ('작업자', '총공수', '연장(시간)', '야간(시간)', '휴일(시간)', '총OT(시간)', '연장(금액)', '야간(금액)', '휴일(금액)', '총OT(금액)')
@@ -229,7 +229,8 @@ def setup_monthly_usage_tab_impl(self):
     btn_apply_frame.pack(fill='x', pady=3)
     ttk.Button(btn_apply_frame,
                text="📋 사후원가 특별근무에 적용",
-               command=self.apply_worker_shift_hours_to_budget).pack(side='right', padx=5)
+               command=self.apply_worker_shift_hours_to_budget,
+               style="Warning.TButton").pack(side='right', padx=5)
 
     # [NEW] 사용자가 구분선을 마우스로 조절했을 때 높이 자동 저장
     self.monthly_paned.bind('<ButtonRelease-1>', self._on_monthly_sash_changed, add="+")
