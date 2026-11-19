@@ -223,10 +223,10 @@ class NDTCalculatorTab(ttk.Frame):
         self.notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
         tab_work = ttk.Frame(self.notebook)
-        self.notebook.add(tab_work, text="1. 일일 작업 기록 및 목록")
+        self.notebook.add(tab_work, text="📋 1. 일일 작업 기록 및 목록")
         
         tab_billing = ttk.Frame(self.notebook)
-        self.notebook.add(tab_billing, text="2. 기성 계약관리")
+        self.notebook.add(tab_billing, text="📑 2. 기성 계약관리")
         # --- TAB 1: WORK (입력 폼 및 목록 사이드바이사이드) ---
         self.work_pane = tk.PanedWindow(tab_work, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=5, bg="#b0b0b0")
         self.work_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -347,8 +347,8 @@ class NDTCalculatorTab(ttk.Frame):
         btn_frame = ttk.Frame(left_frame)
         btn_frame.pack(fill=tk.X, pady=15)
         
-        ttk.Button(btn_frame, text="금액 계산하기", command=self.calculate).pack(side=tk.TOP, expand=True, fill=tk.X, pady=2, ipady=4)
-        ttk.Button(btn_frame, text="기록 목록에 추가", command=self.add_to_record).pack(side=tk.TOP, expand=True, fill=tk.X, pady=2, ipady=4)
+        ttk.Button(btn_frame, text="🧮 금액 계산하기", command=self.calculate, style="Secondary.TButton").pack(side=tk.TOP, expand=True, fill=tk.X, pady=2, ipady=4)
+        ttk.Button(btn_frame, text="➕ 기록 목록에 추가", command=self.add_to_record, style="Primary.TButton").pack(side=tk.TOP, expand=True, fill=tk.X, pady=2, ipady=4)
         
         ttk.Label(left_frame, text="[ 단일 계산 결과 ]", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(0, 5))
         self.result_text = tk.Text(left_frame, height=10, width=25, state=tk.DISABLED, font=("Consolas", 11), wrap=tk.WORD)
@@ -370,8 +370,8 @@ class NDTCalculatorTab(ttk.Frame):
         # self.billing_period_var = tk.StringVar(value="")
         # ttk.Entry(round_frame, textvariable=self.billing_period_var, width=25, font=("Arial", 11)).pack(side=tk.LEFT)
         
-        ttk.Button(round_frame, text="다음 회차로 이월하기 (전회 누적 & 금회 초기화)", command=self.carry_over_round).pack(side=tk.RIGHT)
-        ttk.Button(round_frame, text="이전 백업 불러오기 (.ndt)", command=self.load_project).pack(side=tk.RIGHT, padx=10)
+        ttk.Button(round_frame, text="📦 다음 회차로 이월 (전회 누적 & 금회 초기화)", command=self.carry_over_round, style="Warning.TButton").pack(side=tk.RIGHT)
+        ttk.Button(round_frame, text="📂 이전 백업 불러오기 (.ndt)", command=self.load_project, style="Info.TButton").pack(side=tk.RIGHT, padx=10)
         # ttk.Button(round_frame, text="✨ 엑셀 보고서 생성기 열기", command=self.open_report_hub).pack(side=tk.RIGHT, padx=5)
         
         content_frame = ttk.Frame(billing_container)
@@ -383,7 +383,7 @@ class NDTCalculatorTab(ttk.Frame):
         contract_frame = ttk.LabelFrame(content_frame, text="항목별 계약 및 전회 기성 (세액 미포함)", padding=10)
         contract_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
         
-        ttk.Button(contract_frame, text="프로젝트 총 계약수량 자동입력", command=self.auto_load_contract_qty).pack(fill=tk.X, pady=(0, 10))
+        ttk.Button(contract_frame, text="⚡ 프로젝트 총 계약수량 자동입력", command=self.auto_load_contract_qty, style="Primary.TButton").pack(fill=tk.X, pady=(0, 10))
         
         def format_currency(*args, var=None):
             try:
@@ -659,9 +659,9 @@ class NDTCalculatorTab(ttk.Frame):
         
         lbl_frame = ttk.Frame(bottom_frame)
         lbl_frame.pack(fill=tk.X, pady=(0, 5))
-        ttk.Label(lbl_frame, text="[ 월별 작업 기록 목록 ]", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
+        ttk.Label(lbl_frame, text="📅 월별 작업 기록 목록", font=('Malgun Gothic', 10, 'bold'), foreground='#1e293b').pack(side=tk.LEFT)
         
-        ttk.Label(lbl_frame, text="  |  기성청구 기간: ", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Label(lbl_frame, text="  |  🗓️ 기성청구 기간: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(6, 2))
         
         self.billing_start_date = tk.StringVar(value=datetime.now().strftime('%Y-%m-01'))
         self.billing_end_date = tk.StringVar(value=datetime.now().strftime('%Y-%m-%d'))
@@ -673,7 +673,7 @@ class NDTCalculatorTab(ttk.Frame):
             self.ent_billing_start = ttk.Entry(lbl_frame, textvariable=self.billing_start_date, width=12)
             self.ent_billing_start.pack(side=tk.LEFT)
             
-        ttk.Label(lbl_frame, text=" ~ ", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
+        ttk.Label(lbl_frame, text=" ~ ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT)
         
         try:
             self.ent_billing_end = DateEntry(lbl_frame, textvariable=self.billing_end_date, width=12, date_pattern='yyyy-mm-dd', background='darkblue', foreground='white', borderwidth=2)
@@ -682,11 +682,11 @@ class NDTCalculatorTab(ttk.Frame):
             self.ent_billing_end = ttk.Entry(lbl_frame, textvariable=self.billing_end_date, width=12)
             self.ent_billing_end.pack(side=tk.LEFT)
             
-        ttk.Label(lbl_frame, text="  |  시공업체: ", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Label(lbl_frame, text="  |  🏢 시공업체: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(6, 2))
         
         # [NEW] Dropdown for site filter
-        self.cb_billing_site = ttk.Combobox(lbl_frame, width=20, state='readonly')
-        self.cb_billing_site.pack(side=tk.LEFT, padx=(0, 10))
+        self.cb_billing_site = ttk.Combobox(lbl_frame, width=16, state='readonly')
+        self.cb_billing_site.pack(side=tk.LEFT, padx=(0, 6))
         
         def _populate_sites(event=None):
             try:
@@ -706,14 +706,14 @@ class NDTCalculatorTab(ttk.Frame):
         _populate_sites()
         self.cb_billing_site.bind('<Button-1>', _populate_sites)
             
-        ttk.Button(lbl_frame, text="조회(일보 연동)", command=self.import_from_work_log).pack(side=tk.LEFT, padx=(5, 0))
+        ttk.Button(lbl_frame, text="🔍 조회(일보 연동)", command=self.import_from_work_log, style="Primary.TButton").pack(side=tk.LEFT, padx=(3, 0))
             
-        ttk.Button(lbl_frame, text="📊 구간/라인별 기성청구", command=self.open_section_line_billing_dialog).pack(side=tk.RIGHT, padx=(0, 6))
-        ttk.Button(lbl_frame, text="기성청구", command=self.export_to_excel).pack(side=tk.RIGHT)
-        ttk.Button(lbl_frame, text="기록 초기화", command=self.clear_records).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(lbl_frame, text="작업/감독일보에서 연동", command=self.import_from_work_log).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(lbl_frame, text="선택 삭제", command=self.delete_selected_records).pack(side=tk.RIGHT)
-        ttk.Button(lbl_frame, text="전체 선택", command=self.select_all_records).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(lbl_frame, text="📊 구간/라인별 기성청구", command=self.open_section_line_billing_dialog, style="Primary.TButton").pack(side=tk.RIGHT, padx=(2, 4))
+        ttk.Button(lbl_frame, text="📑 기성청구(엑셀)", command=self.export_to_excel, style="Action.TButton").pack(side=tk.RIGHT, padx=2)
+        ttk.Button(lbl_frame, text="🧹 기록 초기화", command=self.clear_records, style="Warning.TButton").pack(side=tk.RIGHT, padx=2)
+        ttk.Button(lbl_frame, text="📥 일보 연동", command=self.import_from_work_log, style="Info.TButton").pack(side=tk.RIGHT, padx=2)
+        ttk.Button(lbl_frame, text="🗑️ 선택 삭제", command=self.delete_selected_records, style="Danger.TButton").pack(side=tk.RIGHT, padx=2)
+        ttk.Button(lbl_frame, text="☑️ 전체 선택", command=self.select_all_records, style="Secondary.TButton").pack(side=tk.RIGHT, padx=2)
 
         self.subtotal_var = tk.StringVar(value="[소계] PAUT: 0.0000 M  |  RT: 0 매  |  MT: 0.0000 M  |  총 공급가액: 0 원")
         subtotal_lbl = ttk.Label(bottom_frame, textvariable=self.subtotal_var, font=("Arial", 11, "bold"), foreground="blue")
