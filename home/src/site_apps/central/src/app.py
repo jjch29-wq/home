@@ -15263,40 +15263,40 @@ class MaterialManager:
             self.cb_filter_material_monthly.set(p_cb_mat.get())
             self.update_monthly_usage_view()
 
-        ttk.Label(filter_row, text="연도:").pack(side='left', padx=2)
+        ttk.Label(filter_row, text="🗓️ 연도:").pack(side='left', padx=2)
         p_cb_year = ttk.Combobox(filter_row, values=self.cb_filter_year['values'], width=8)
         p_cb_year.pack(side='left', padx=2)
         p_cb_year.set(self.cb_filter_year.get())
         p_cb_year.bind("<<ComboboxSelected>>", sync_and_refresh)
 
-        ttk.Label(filter_row, text="월:").pack(side='left', padx=2)
+        ttk.Label(filter_row, text="📅 월:").pack(side='left', padx=2)
         p_cb_month = ttk.Combobox(filter_row, values=self.cb_filter_month['values'], width=6)
         p_cb_month.pack(side='left', padx=2)
         p_cb_month.set(self.cb_filter_month.get())
         p_cb_month.bind("<<ComboboxSelected>>", sync_and_refresh)
 
-        ttk.Label(filter_row, text="현장:").pack(side='left', padx=2)
+        ttk.Label(filter_row, text="🏢 현장:").pack(side='left', padx=2)
         p_cb_site = ttk.Combobox(filter_row, values=self.cb_filter_site_monthly['values'], width=12)
         p_cb_site.pack(side='left', padx=2)
         p_cb_site.set(self.cb_filter_site_monthly.get())
         p_cb_site.bind("<<ComboboxSelected>>", sync_and_refresh)
 
-        ttk.Label(filter_row, text="방법:").pack(side='left', padx=2)
+        ttk.Label(filter_row, text="🔬 방법:").pack(side='left', padx=2)
         method_vals = getattr(self, 'cb_filter_method_monthly', {}).get('values', ['전체', 'RT', 'PAUT', 'MT', 'PT']) if hasattr(self, 'cb_filter_method_monthly') else ['전체', 'RT', 'PAUT', 'MT', 'PT']
         p_cb_method = ttk.Combobox(filter_row, values=method_vals, width=8)
         p_cb_method.pack(side='left', padx=2)
         p_cb_method.set(self.cb_filter_method_monthly.get() if hasattr(self, 'cb_filter_method_monthly') else '전체')
         p_cb_method.bind("<<ComboboxSelected>>", sync_and_refresh)
 
-        ttk.Label(filter_row, text="품목:").pack(side='left', padx=2)
+        ttk.Label(filter_row, text="📦 품목:").pack(side='left', padx=2)
         p_cb_mat = ttk.Combobox(filter_row, values=self.cb_filter_material_monthly['values'], width=18)
         p_cb_mat.pack(side='left', padx=2)
         p_cb_mat.set(self.cb_filter_material_monthly.get())
         p_cb_mat.bind("<<ComboboxSelected>>", sync_and_refresh)
 
-        ttk.Button(filter_row, text="조회", width=6, command=sync_and_refresh).pack(side='left', padx=5)
+        ttk.Button(filter_row, text="🔍 조회", command=sync_and_refresh, style="Primary.TButton").pack(side='left', padx=5)
         
-        ttk.Button(filter_row, text="🔄 새로고침", command=sync_and_refresh).pack(side='right', padx=5)
+        ttk.Button(filter_row, text="🔄 새로고침", command=sync_and_refresh, style="Secondary.TButton").pack(side='right', padx=5)
         
         paned = ttk.PanedWindow(main_frame, orient="vertical")
         paned.pack(expand=True, fill='both')
@@ -15334,7 +15334,7 @@ class MaterialManager:
         tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
 
         # 2. 현장별 요약 (중단 - 메인 UI는 3단 수직 분할)
-        site_frame = ttk.LabelFrame(paned, text="현장별 누계")
+        site_frame = ttk.LabelFrame(paned, text="🏢 현장별 누계")
         paned.add(site_frame, weight=1)
         site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '제경비', '기술료', '환산물량', '재료비', '인건비', '형광자분', '흑색자분', '백색페인트', 
                      '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
@@ -15352,7 +15352,7 @@ class MaterialManager:
         site_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
         
         # 3. 작업자별 요약 (하단)
-        worker_frame = ttk.LabelFrame(paned, text="작업자별 누계")
+        worker_frame = ttk.LabelFrame(paned, text="👷 작업자별 누계")
         paned.add(worker_frame, weight=1)
         worker_cols = ('작업자', '총공수', '연장(시간)', '야간(시간)', '휴일(시간)', '총OT(시간)', '연장(금액)', '야간(금액)', '휴일(금액)', '총OT(금액)')
         worker_tree = ttk.Treeview(worker_frame, columns=worker_cols, show='headings')
