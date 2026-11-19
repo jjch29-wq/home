@@ -6495,12 +6495,12 @@ class MaterialManager:
         file_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             filetypes=[("Excel files", "*.xlsx")],
-            initialfile=f"사정예산서_{site}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            initialfile=f"공사실행예산정산서_{site}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         )
         if not file_path:
             return
             
-        # Collect Summary Data
+        # Collect Summary Data (Planned & Actual)
         summary_data = {
             'site': site,
             'period': getattr(self, 'ent_budget_period').get() if hasattr(self, 'ent_budget_period') else "",
@@ -6511,13 +6511,22 @@ class MaterialManager:
             'expense': getattr(self, 'ent_budget_expense').get() if hasattr(self, 'ent_budget_expense') else "",
             'outsource': getattr(self, 'ent_budget_outsource').get() if hasattr(self, 'ent_budget_outsource') else "",
             'profit': getattr(self, 'ent_budget_profit').get() if hasattr(self, 'ent_budget_profit') else "",
-            'margin': getattr(self, 'ent_budget_margin').get() if hasattr(self, 'ent_budget_margin') else ""
+            'margin': getattr(self, 'ent_budget_margin').get() if hasattr(self, 'ent_budget_margin') else "",
+            # Actual Data
+            'actual_period': getattr(self, 'ent_budget_actual_period').get() if hasattr(self, 'ent_budget_actual_period') else "",
+            'actual_revenue': getattr(self, 'ent_budget_actual_revenue').get() if hasattr(self, 'ent_budget_actual_revenue') else "",
+            'actual_unitprice': getattr(self, 'ent_budget_actual_unit_price').get() if hasattr(self, 'ent_budget_actual_unit_price') else "",
+            'actual_labor': getattr(self, 'ent_budget_actual_labor').get() if hasattr(self, 'ent_budget_actual_labor') else "",
+            'actual_material': getattr(self, 'ent_budget_actual_material').get() if hasattr(self, 'ent_budget_actual_material') else "",
+            'actual_expense': getattr(self, 'ent_budget_actual_expense').get() if hasattr(self, 'ent_budget_actual_expense') else "",
+            'actual_outsource': getattr(self, 'ent_budget_actual_outsource').get() if hasattr(self, 'ent_budget_actual_outsource') else "",
+            'actual_profit': getattr(self, 'ent_budget_actual_profit').get() if hasattr(self, 'ent_budget_actual_profit') else "",
+            'actual_margin': getattr(self, 'ent_budget_actual_margin').get() if hasattr(self, 'ent_budget_actual_margin') else ""
         }
         
-        # Details
+        # Planned Details
         labor_data = self.labor_detail_widget.get_data() if hasattr(self, 'labor_detail_widget') else {}
         
-        # Material Details - need to augment with name/spec/unit from default_items
         raw_mat = self.material_detail_widget.get_data() if hasattr(self, 'material_detail_widget') else []
         material_data = []
         defaults = self.material_detail_widget.default_items if hasattr(self, 'material_detail_widget') else []
@@ -6530,11 +6539,32 @@ class MaterialManager:
                 material_data.append(row)
                 
         expense_data = self.expense_detail_widget.get_data() if hasattr(self, 'expense_detail_widget') else {}
+
+        # Actual Details
+        actual_labor_data = self.actual_labor_detail_widget.get_data() if hasattr(self, 'actual_labor_detail_widget') else {}
+        
+        raw_a_mat = self.actual_material_detail_widget.get_data() if hasattr(self, 'actual_material_detail_widget') else []
+        actual_material_data = []
+        a_defaults = self.actual_material_detail_widget.default_items if hasattr(self, 'actual_material_detail_widget') else []
+        for i, row in enumerate(raw_a_mat):
+            if i < len(a_defaults):
+                name, spec, unit, _ = a_defaults[i]
+                row['name'] = name
+                row['spec'] = spec
+                row['unit'] = unit
+                actual_material_data.append(row)
+                
+        actual_expense_data = self.actual_expense_detail_widget.get_data() if hasattr(self, 'actual_expense_detail_widget') else {}
         
         try:
             from site_apps.central.src.utils.export_helper import export_budget_estimation_to_excel
-            if export_budget_estimation_to_excel(file_path, summary_data, labor_data, material_data, expense_data):
-                messagebox.showinfo("내보내기 완료", f"사정예산서가 성공적으로 저장되었습니다.\n{file_path}")
+            if export_budget_estimation_to_excel(
+                file_path, summary_data, labor_data, material_data, expense_data,
+                actual_labor_data=actual_labor_data,
+                actual_material_data=actual_material_data,
+                actual_expense_data=actual_expense_data
+            ):
+                messagebox.showinfo("내보내기 완료", f"공사실행예산 및 정산서(본사 표준 15개 시트)가 성공적으로 저장되었습니다.\n{file_path}")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -6673,7 +6703,7 @@ class MaterialManager:
         self.btn_toggle_bottom = ttk.Button(top_btn_frame, text="🔽 하단 일일기록 숨기기", style="Secondary.TButton")
         self.btn_toggle_bottom.pack(side='left', padx=4)
         
-        ttk.Button(top_btn_frame, text="📊 사전원가 출력", command=self.export_budget_estimation, style="Action.TButton").pack(side='right', padx=4)
+        ttk.Button(top_btn_frame, text="📊 실행예산·정산서 출력", command=self.export_budget_estimation, style="Action.TButton").pack(side='right', padx=4)
         ttk.Button(top_btn_frame, text="📑 엑셀 내보내기", command=self.export_budget_sales_status, style="Secondary.TButton").pack(side='right', padx=4)
 
         main_paned = ttk.PanedWindow(self.tab_budget, orient='vertical')

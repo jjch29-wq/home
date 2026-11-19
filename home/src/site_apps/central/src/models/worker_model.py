@@ -7,17 +7,17 @@ import math
 from site_apps.central.src.utils.helpers import *
 
 def get_base_salaries_impl(self):
-    """Extract labor base salaries from settings_df"""
+    """Extract labor base salaries from settings_df (2026년 비파괴사업본부 신규 표준 기준급여 5% 인상 반영)"""
     if not hasattr(self, 'settings_df') or self.settings_df.empty:
         return {
-            "이사": 55250000, "부장": 55250000, "차장": 47670000, "과장": 41170000,
-            "대리": 37920000, "계장": 34670000, "주임": 31420000, "기사": 29250000
+            "이사": 58012500, "부장": 58012500, "차장": 50053500, "과장": 43228500,
+            "대리": 39816000, "계장": 36403500, "주임": 32991000, "기사": 30712500
         }
     df = self.settings_df[self.settings_df['Category'] == 'Labor']
     if df.empty:
         return {
-            "이사": 55250000, "부장": 55250000, "차장": 47670000, "과장": 41170000,
-            "대리": 37920000, "계장": 34670000, "주임": 31420000, "기사": 29250000
+            "이사": 58012500, "부장": 58012500, "차장": 50053500, "과장": 43228500,
+            "대리": 39816000, "계장": 36403500, "주임": 32991000, "기사": 30712500
         }
     return df.set_index('Name')['Rate'].to_dict()
 

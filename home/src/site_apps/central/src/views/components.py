@@ -593,8 +593,8 @@ class LaborCostDetailWidget(ttk.Frame):
             self.base_salaries = master.get_base_salaries()
         else:
              self.base_salaries = {
-                "이사": 55250000, "부장": 55250000, "차장": 47670000, "과장": 41170000,
-                "대리": 37920000, "계장": 34670000, "주임": 31420000, "기사": 29250000
+                "이사": 58012500, "부장": 58012500, "차장": 50053500, "과장": 43228500,
+                "대리": 39816000, "계장": 36403500, "주임": 32991000, "기사": 30712500
             }
         
         self.entries = {} # Key -> Rank/Type -> Column -> Entry
@@ -1290,7 +1290,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         ttk.Label(insurance_table, text="산출인건비 X 요율(2026.1.1 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
         self.lbl_insurance_base = ttk.Label(insurance_table, text="₩ 0", relief='solid', padding=5, anchor='e')
         self.lbl_insurance_base.grid(row=1, column=2, sticky='nsew')
-        ttk.Label(insurance_table, text="10.97%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
+        ttk.Label(insurance_table, text="10.8644%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
         self.lbl_insurance_amount = ttk.Label(insurance_table, text="0", relief='solid', padding=5, anchor='e')
         self.lbl_insurance_amount.grid(row=1, column=4, sticky='nsew')
 
@@ -1362,10 +1362,10 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         enable_column_resize(indirect_table, len(headers_ind))
         
         ttk.Label(indirect_table, text="간접비", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
-        ttk.Label(indirect_table, text="산출직접비 x 간접비율(2026년 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
+        ttk.Label(indirect_table, text="산출직접비(외주비 제외) x 간접비율(2026년 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
         self.lbl_indirect_base = ttk.Label(indirect_table, text="₩ 0", relief='solid', padding=5, anchor='e')
         self.lbl_indirect_base.grid(row=1, column=2, sticky='nsew')
-        ttk.Label(indirect_table, text="18%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
+        ttk.Label(indirect_table, text="17%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
         self.lbl_indirect_total = ttk.Label(indirect_table, text="₩ 0", font=('Malgun Gothic', 10, 'bold'), background='#00ffff', relief='solid', anchor='e', padding=5)
         self.lbl_indirect_total.grid(row=1, column=4, sticky='nsew')
 
@@ -1505,9 +1505,9 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             w['amount'].config(text=f"{amt:,.0f}")
             t3 += amt
             
-        # 4. Insurance
+        # 4. Insurance (2026.1.1 기준 10.8644%)
         labor_total = self.get_labor_total() if self.get_labor_total else 0.0
-        t4 = labor_total * 0.109744
+        t4 = labor_total * 0.108644
         self.lbl_insurance_base.config(text=f"₩ {labor_total:,.0f}")
         self.lbl_insurance_amount.config(text=f"{t4:,.0f}")
         
@@ -1589,9 +1589,10 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         direct_cost = labor_total + mat_total + exp_total + t3
         self.lbl_sales_cost_total.config(text=f"₩ {direct_cost:,.0f}")
         
-        # 7. Indirect Cost (17.8% ≈ 18% 표시, 정확 계산은 17.8%)
-        self.lbl_indirect_base.config(text=f"₩ {direct_cost:,.0f}")
-        indirect_cost = (direct_cost - t3) * 0.178 if lotte_rules else direct_cost * 0.178
+        # 7. Indirect Cost (2026년 기준: 산출 직접비(외주비 제외) × 17%)
+        direct_without_outsource = direct_cost - t3
+        self.lbl_indirect_base.config(text=f"₩ {direct_without_outsource:,.0f}")
+        indirect_cost = direct_without_outsource * 0.17
         self.lbl_indirect_total.config(text=f"₩ {indirect_cost:,.0f}")
         
         grand_total_cost = direct_cost + indirect_cost

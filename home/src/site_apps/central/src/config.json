@@ -98,7 +98,8 @@
             "date": "2026-08-07",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.13-2 / JA2026-013-013-0-2-400A",
+            "work_category": "건가-개선",
+            "loc": "[열배관] 중앙지사 / Sec.13-2 / JA2026-013-013-0-2-400A (건가-개선)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "300A 이상",
@@ -141,7 +142,8 @@
             "date": "2026-08-22",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.08 / JA2026-013-08-0-0-300A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.08 / JA2026-013-08-0-1-300A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "300A 이상",
@@ -151,7 +153,7 @@
             "corr": 1.0,
             "unit": "M",
             "section": "Sec.08",
-            "line": "JA2026-013-08-0-0-300A",
+            "line": "JA2026-013-08-0-1-300A",
             "source": "work_log",
             "history_rows": [
                 0,
@@ -172,7 +174,8 @@
             "date": "2026-09-03",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.12 / JA2026-013-012-0-1-700A",
+            "work_category": "건가-개선",
+            "loc": "[열배관] 중앙지사 / Sec.12 / JA2026-013-012-0-1-700A (건가-개선)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "300A 이상",
@@ -209,7 +212,8 @@
             "date": "2026-09-08",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.12-3 / JA2026-013-012-0-3-200A",
+            "work_category": "건가-개선",
+            "loc": "[열배관] 중앙지사 / Sec.12-2 / JA2026-013-012-0-2-200A (건가-개선)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "200A",
@@ -218,8 +222,8 @@
             "adjusted_qty": 2.0385,
             "corr": 1.0,
             "unit": "M",
-            "section": "Sec.12-3",
-            "line": "JA2026-013-012-0-3-200A",
+            "section": "Sec.12-2",
+            "line": "JA2026-013-012-0-2-200A",
             "source": "work_log",
             "history_rows": [
                 0,
@@ -239,7 +243,8 @@
             "date": "2026-09-08",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.12 / JA2026-013-012-0-1-700A",
+            "work_category": "건가-개선",
+            "loc": "[열배관] 중앙지사 / Sec.12 / JA2026-013-012-0-1-700A (건가-개선)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "300A 이상",
@@ -274,7 +279,8 @@
             "date": "2026-09-17",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.16 / JA2026-013-016-0-1-300A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.16 / JA2026-013-016-0-1-300A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "300A 이상",
@@ -304,7 +310,8 @@
             "date": "2026-09-18",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.16 / JA2026-013-016-0-1-300A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.16 / JA2026-013-016-0-1-300A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "300A 이상",
@@ -342,7 +349,8 @@
             "date": "2026-09-18",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.16-2 / JA2026-013-016-0-2-200A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.16-2 / JA2026-013-016-0-2-200A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "200A",
@@ -377,7 +385,8 @@
             "date": "2026-09-29",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.01 / JA2026-017-001-0-1-80A",
+            "work_category": "제조",
+            "loc": "[열배관] 중앙지사 / Sec.01 / JA2026-017-001-0-1-80A (제조)",
             "loc_type": "열배관",
             "ndt_type": "RT",
             "material_type": "3 1/3 x 6\"",
@@ -406,7 +415,8 @@
             "date": "2026-10-03",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.03 / JA2026-017-003-0-1-100A",
+            "work_category": "제조",
+            "loc": "[열배관] 중앙지사 / Sec.03 / JA2026-017-003-0-1-100A (제조)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "100A 이하",
@@ -439,7 +449,8 @@
             "date": "2026-10-06",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.15-3 / JA2026-013-015-0-3-100A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.15-3 / JA2026-013-015-0-3-100A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "RT",
             "material_type": "3 1/3 x 12\"",
@@ -485,7 +496,8 @@
             "date": "2026-10-07",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.15-3 / JA2026-013-015-0-3-100A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.15-3 / JA2026-013-015-0-3-100A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "RT",
             "material_type": "3 1/3 x 12\"",
@@ -531,7 +543,8 @@
             "date": "2026-10-12",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.01 / JA2026-017-001-0-1-125A",
+            "work_category": "제조",
+            "loc": "[열배관] 중앙지사 / Sec.05 / JA2026-017-005-0-1-125A (제조)",
             "loc_type": "열배관",
             "ndt_type": "MT",
             "material_type": "MT",
@@ -540,8 +553,8 @@
             "adjusted_qty": 0.8784,
             "corr": 1.0,
             "unit": "M",
-            "section": "Sec.01",
-            "line": "JA2026-017-001-0-1-125A",
+            "section": "Sec.05",
+            "line": "JA2026-017-005-0-1-125A",
             "source": "work_log",
             "history_rows": [
                 0,
@@ -560,7 +573,8 @@
             "date": "2026-10-16",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.06 / JA2026-017-006-0-1-400A",
+            "work_category": "건가",
+            "loc": "[열배관] 중앙지사 / Sec.201 / JA2026-017-201-0-1-400A (건가)",
             "loc_type": "열배관",
             "ndt_type": "MT",
             "material_type": "MT",
@@ -569,8 +583,8 @@
             "adjusted_qty": 18.6816,
             "corr": 1.0,
             "unit": "M",
-            "section": "Sec.06",
-            "line": "JA2026-017-006-0-1-400A",
+            "section": "Sec.201",
+            "line": "JA2026-017-201-0-1-400A",
             "source": "work_log",
             "history_rows": [
                 0,
@@ -591,7 +605,8 @@
             "date": "2026-10-19",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.15-3 / JA2026-013-015-0-3-100A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.15-3 / JA2026-013-015-0-3-100A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "RT",
             "material_type": "3 1/3 x 12\"",
@@ -646,7 +661,8 @@
             "date": "2026-10-19",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.15-1 / JA2026-013-015-0-1-250A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.15-1 / JA2026-013-015-0-1-250A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "250A",
@@ -675,7 +691,8 @@
             "date": "2026-10-19",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.06 / JA2026-017-006-0-1-400A",
+            "work_category": "건가",
+            "loc": "[열배관] 중앙지사 / Sec.201 / JA2026-017-201-0-1-400A (건가)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "300A 이상",
@@ -684,8 +701,8 @@
             "adjusted_qty": 8.9369,
             "corr": 1.0,
             "unit": "M",
-            "section": "Sec.06",
-            "line": "JA2026-017-006-0-1-400A",
+            "section": "Sec.201",
+            "line": "JA2026-017-201-0-1-400A",
             "source": "work_log",
             "history_rows": [
                 30,
@@ -709,7 +726,8 @@
             "date": "2026-10-20",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.06 / JA2026-017-006-0-1-400A",
+            "work_category": "건가",
+            "loc": "[열배관] 중앙지사 / Sec.201 / JA2026-017-201-0-1-400A (건가)",
             "loc_type": "열배관",
             "ndt_type": "MT",
             "material_type": "MT",
@@ -718,8 +736,8 @@
             "adjusted_qty": 6.2,
             "corr": 1.0,
             "unit": "M",
-            "section": "Sec.06",
-            "line": "JA2026-017-006-0-1-400A",
+            "section": "Sec.201",
+            "line": "JA2026-017-201-0-1-400A",
             "source": "work_log",
             "history_rows": [
                 0,
@@ -740,7 +758,8 @@
             "date": "2026-10-21",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.15-4 / JA2026-013-015-0-4-100A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.15-4 / JA2026-013-015-0-4-100A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "RT",
             "material_type": "3 1/3 x 12\"",
@@ -771,7 +790,8 @@
             "date": "2026-10-21",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.15-2 / JA2026-013-015-0-2-150A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.15-2 / JA2026-013-015-0-2-150A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "RT",
             "material_type": "3 1/3 x 12\"",
@@ -808,7 +828,8 @@
             "date": "2026-10-23",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.15-2 / JA2026-013-015-0-2-150A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.15-2 / JA2026-013-015-0-2-150A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "RT",
             "material_type": "3 1/3 x 12\"",
@@ -841,7 +862,8 @@
             "date": "2026-10-23",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.15-4 / JA2026-013-015-0-4-100A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.15-4 / JA2026-013-015-0-4-100A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "RT",
             "material_type": "3 1/3 x 12\"",
@@ -877,7 +899,8 @@
             "date": "2026-10-23",
             "company": "GS네오텍",
             "actual_company": "GS네오텍",
-            "loc": "[열배관] 중앙지사 / Sec.15 / JA2026-013-015-0-1-250A",
+            "work_category": "건가-추가",
+            "loc": "[열배관] 중앙지사 / Sec.15 / JA2026-013-015-0-1-250A (건가-추가)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "250A",
@@ -906,7 +929,8 @@
             "date": "2026-10-24",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.101 / JA2026-017-101-0-1-250A",
+            "work_category": "수탁",
+            "loc": "[열배관] 중앙지사 / Sec.101 / JA2026-017-101-0-1-250A (수탁)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "250A",
@@ -941,7 +965,8 @@
             "date": "2026-10-24",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.101 / JA2026-017-101-0-1-250A",
+            "work_category": "수탁",
+            "loc": "[열배관] 중앙지사 / Sec.101 / JA2026-017-101-0-1-250A (수탁)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "250A",
@@ -982,7 +1007,8 @@
             "date": "2026-11-04",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.07 / JA2026-017-007-0-1-350A",
+            "work_category": "제조",
+            "loc": "[열배관] 중앙지사 / Sec.06 / JA2026-017-006-0-1-350A (제조)",
             "loc_type": "열배관",
             "ndt_type": "MT",
             "material_type": "MT",
@@ -991,8 +1017,8 @@
             "adjusted_qty": 8.3008,
             "corr": 1.0,
             "unit": "M",
-            "section": "Sec.07",
-            "line": "JA2026-017-007-0-1-350A",
+            "section": "Sec.06",
+            "line": "JA2026-017-006-0-1-350A",
             "source": "work_log",
             "history_rows": [
                 0,
@@ -1011,7 +1037,8 @@
             "date": "2026-11-05",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.07 / JA2026-017-007-0-1-350A",
+            "work_category": "제조",
+            "loc": "[열배관] 중앙지사 / Sec.06 / JA2026-017-006-0-1-350A (제조)",
             "loc_type": "열배관",
             "ndt_type": "PAUT",
             "material_type": "300A 이상",
@@ -1020,8 +1047,8 @@
             "adjusted_qty": 3.3516,
             "corr": 1.0,
             "unit": "M",
-            "section": "Sec.07",
-            "line": "JA2026-017-007-0-1-350A",
+            "section": "Sec.06",
+            "line": "JA2026-017-006-0-1-350A",
             "source": "work_log",
             "history_rows": [
                 0,
@@ -1041,7 +1068,8 @@
             "date": "2026-11-05",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.07 / 중경고등학교 내 주차장 300A(가배관)",
+            "work_category": "제조",
+            "loc": "[열배관] 중앙지사 / Sec.06 / 중경고등학교 내 주차장 300A(가배관) (제조)",
             "loc_type": "열배관",
             "ndt_type": "MT",
             "material_type": "MT",
@@ -1050,7 +1078,7 @@
             "adjusted_qty": 9.0054,
             "corr": 1.0,
             "unit": "M",
-            "section": "Sec.07",
+            "section": "Sec.06",
             "line": "중경고등학교 내 주차장 300A(가배관)",
             "source": "work_log",
             "history_rows": [
@@ -1077,7 +1105,8 @@
             "date": "2026-11-06",
             "company": "다림건설(주)",
             "actual_company": "다림건설(주)",
-            "loc": "[열배관] 중앙지사 / Sec.07 / JA2026-017-007-0-1-350A",
+            "work_category": "제조",
+            "loc": "[열배관] 중앙지사 / Sec.06 / JA2026-017-006-0-1-350A (제조)",
             "loc_type": "열배관",
             "ndt_type": "MT",
             "material_type": "MT",
@@ -1086,8 +1115,8 @@
             "adjusted_qty": 2.774,
             "corr": 1.0,
             "unit": "M",
-            "section": "Sec.07",
-            "line": "JA2026-017-007-0-1-350A",
+            "section": "Sec.06",
+            "line": "JA2026-017-006-0-1-350A",
             "source": "work_log",
             "history_rows": [
                 0,
@@ -1102,5 +1131,149 @@
             "vat": 20925,
             "total_amount": 230176
         }
-    ]
+    ],
+    "BILLING_STATE": {
+        "round": 1,
+        "contract": {
+            "열배관_일반_PAUT_300A 이상": {
+                "c_qty": "129",
+                "contract": "26,040,327",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_일반_PAUT_250A": {
+                "c_qty": "4",
+                "contract": "917,956",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_일반_PAUT_200A": {
+                "c_qty": "4",
+                "contract": "1,030,700",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_일반_PAUT_150A-125A": {
+                "c_qty": "1",
+                "contract": "286,600",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_일반_PAUT_100A 이하": {
+                "c_qty": "1",
+                "contract": "270,981",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_일반_RT_3 1/3 x 12\"": {
+                "c_qty": "293",
+                "contract": "41,026,739",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_일반_RT_3 1/3 x 6\"": {
+                "c_qty": "105",
+                "contract": "14,573,265",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_일반_MT_MT": {
+                "c_qty": "26",
+                "contract": "1,961,258",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_일반_PT_PT": {
+                "c_qty": "26",
+                "contract": "2,051,660",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_야간_PAUT_300A 이상": {
+                "c_qty": "624",
+                "contract": "177,225,360",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_야간_PAUT_250A": {
+                "c_qty": "1",
+                "contract": "325,451",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_야간_PAUT_200A": {
+                "c_qty": "2",
+                "contract": "735,462",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_야간_PAUT_150A-125A": {
+                "c_qty": "1",
+                "contract": "410,788",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_야간_PAUT_100A 이하": {
+                "c_qty": "1",
+                "contract": "387,359",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_야간_RT_3 1/3 x 12\"": {
+                "c_qty": "43",
+                "contract": "8,832,716",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_야간_RT_3 1/3 x 6\"": {
+                "c_qty": "49",
+                "contract": "10,004,918",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_야간_MT_MT": {
+                "c_qty": "1",
+                "contract": "112,950",
+                "p_qty": "0",
+                "prev": "0"
+            },
+            "열배관_야간_PT_PT": {
+                "c_qty": "1",
+                "contract": "117,782",
+                "p_qty": "0",
+                "prev": "0"
+            }
+        },
+        "expenses": {
+            "equip": {
+                "budget": "343,000",
+                "prev": "0",
+                "curr": 0
+            },
+            "safety": {
+                "budget": "0",
+                "prev": "0",
+                "curr": 0
+            },
+            "travel": {
+                "budget": "0",
+                "prev": "0",
+                "curr": 0
+            },
+            "print": {
+                "budget": "0",
+                "prev": "0",
+                "curr": 0
+            },
+            "liability": {
+                "budget": "1,613,000",
+                "prev": "0",
+                "curr": 0
+            }
+        },
+        "total": {
+            "contract": "288,268,000",
+            "prev": "0"
+        }
+    }
 }

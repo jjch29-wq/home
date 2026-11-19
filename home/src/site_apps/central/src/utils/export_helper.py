@@ -5,9 +5,427 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
-def export_budget_estimation_to_excel(filepath, summary_data, labor_data, material_data, expense_data):
+def export_budget_estimation_to_excel(filepath, summary_data, labor_data, material_data, expense_data,
+                                       actual_labor_data=None, actual_material_data=None, actual_expense_data=None):
     """
     Export the detailed budget estimation to a formatted Excel file.
+    Prefers the official company standard 15-sheet template if available.
+    """
+    template_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+        'templates', 
+        '공사실행예산_정산서_신규양식.xlsx'
+    )
+    if os.path.exists(template_path):
+        try:
+            return export_budget_to_standard_template(
+                filepath, summary_data, labor_data, material_data, expense_data,
+                actual_labor_data=actual_labor_data,
+                actual_material_data=actual_material_data,
+                actual_expense_data=actual_expense_data,
+                template_path=template_path
+            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return _export_budget_legacy_excel(filepath, summary_data, labor_data, material_data, expense_data)
+    else:
+        return _export_budget_legacy_excel(filepath, summary_data, labor_data, material_data, expense_data)
+
+
+def export_budget_to_standard_template(filepath, summary_data, labor_data, material_data, expense_data,
+                                       actual_labor_data=None, actual_material_data=None, actual_expense_data=None,
+                                       template_path=None):
+    """
+    Fill the company standard 15-sheet execution budget & settlement template.
+    Preserves all formulas, styles, links, and calculation chains.
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(template_path)
+
+    def _to_f(val):
+        try:
+            return float(str(val).replace(',', '').replace('₩', '').replace('%', '').strip() or 0)
+        except:
+            return 0.0
+
+    def _parse_dates(period_str):
+        if not period_str or '~' not in str(period_str):
+            return None, None
+        try:
+            parts = str(period_str).split('~')
+            s_date = datetime.datetime.strptime(parts[0].strip(), '%Y.%m.%d').date()
+            e_date = datetime.datetime.strptime(parts[1].strip(), '%Y.%m.%d').date()
+            return s_date, e_date
+        except Exception:
+            return None, None
+
+    # 1. Sheet: 공사정보
+    if '공사정보' in wb.sheetnames:
+        ws_info = wb['공사정보']
+        site_raw = summary_data.get('site', '중앙지사')
+        site_title = "한국지역난방공사 중앙지사 열수송관 비파괴검사" if "중앙" in site_raw else f"{site_raw} 비파괴검사"
+        ws_info['C4'] = site_title
+        ws_info['C5'] = "한국지역난방공사"
+        ws_info['C6'] = "중앙지사 : 부장 주진철"
+
+        p_start, p_end = _parse_dates(summary_data.get('period', ''))
+        if p_start and p_end:
+            ws_info['C8'] = p_start
+            ws_info['C9'] = p_end
+
+        a_start, a_end = _parse_dates(summary_data.get('actual_period', ''))
+        if a_start and a_end:
+            ws_info['D8'] = a_start
+            ws_info['D9'] = a_end
+        elif p_start and p_end:
+            ws_info['D8'] = p_start
+            ws_info['D9'] = p_end
+
+        rev = _to_f(summary_data.get('revenue', 0))
+        if rev > 0:
+            ws_info['C14'] = rev
+            ws_info['C15'] = 1.0  # 지분율 100% (단독수행)
+            ws_info['C17'] = f"도급금액 ₩{rev:,.0f} (한국지역난방공사 중앙지사)"
+
+        a_rev = _to_f(summary_data.get('actual_revenue', 0))
+        if a_rev > 0:
+            ws_info['D14'] = a_rev
+            ws_info['D15'] = 1.0
+            ws_info['D17'] = f"정산(기성) 누계 ₩{a_rev:,.0f}"
+        elif rev > 0:
+            ws_info['D14'] = rev
+            ws_info['D15'] = 1.0
+            ws_info['D17'] = "정산 진행중"
+
+    central_workers = [
+        ("주진철", "부장", "중앙", "자사", "PAUT/MT/PT"),
+        ("우명광", "대리", "중앙", "자사", "PAUT/MT/PT"),
+        ("장승대", "계장", "중앙", "자사", "PAUT/MT/PT"),
+        ("김진환", "주임", "중앙", "자사", "PAUT/MT/PT"),
+        ("김성렬", "주임", "중앙", "자사", "PAUT/MT/PT"),
+        ("박광복", "부장", "중앙", "자사", "PAUT/MT/PT"),
+        ("주영광", "과장", "중앙", "자사", "PAUT/MT/PT"),
+        ("박상태", "계장", "중앙", "자사", "PAUT/MT/PT")
+    ]
+
+    rank_to_row = {
+        '이사': 42,
+        '부장': 43,
+        '차장': 44,
+        '과장': 45,
+        '대리': 46,
+        '계장': 47,
+        '주임': 48,
+        '기사': 49,
+        '여사원': 49
+    }
+
+    # 2. Sheet: 인원투입계획 (사전)
+    if '인원투입계획' in wb.sheetnames:
+        ws_p_labor = wb['인원투입계획']
+        for idx, w_info in enumerate(central_workers):
+            r_w = 7 + idx
+            ws_p_labor[f'B{r_w}'] = w_info[0]
+            ws_p_labor[f'C{r_w}'] = w_info[1]
+            ws_p_labor[f'D{r_w}'] = w_info[2]
+            ws_p_labor[f'E{r_w}'] = w_info[3]
+            ws_p_labor[f'F{r_w}'] = w_info[4]
+            for c_col in range(13, 58):
+                ws_p_labor.cell(r_w, c_col).value = None
+
+        for r_clear in range(7 + len(central_workers), 37):
+            ws_p_labor[f'B{r_clear}'] = ""
+            ws_p_labor[f'C{r_clear}'] = ""
+            ws_p_labor[f'D{r_clear}'] = ""
+            ws_p_labor[f'E{r_clear}'] = ""
+            ws_p_labor[f'F{r_clear}'] = ""
+            for c_col in range(13, 58):
+                ws_p_labor.cell(r_clear, c_col).value = None
+
+        if labor_data:
+            for rank, r_idx in rank_to_row.items():
+                if rank in labor_data:
+                    vals = labor_data[rank]
+                    p = _to_f(vals.get('personnel'))
+                    d = _to_f(vals.get('period'))
+                    ws_p_labor[f'E{r_idx}'] = p if p > 0 else ""
+                    ws_p_labor[f'F{r_idx}'] = d if d > 0 else ""
+
+    # 3. Sheet: 경비예상지출항목 (사전)
+    if '경비예상지출항목' in wb.sheetnames:
+        ws_p_exp = wb['경비예상지출항목']
+        if labor_data:
+            ws_p_exp['D6'] = _to_f(labor_data.get('연장근무', {}).get('period', 0))
+            ws_p_exp['D7'] = _to_f(labor_data.get('야간근무', {}).get('period', 0))
+            ws_p_exp['D8'] = _to_f(labor_data.get('휴일근무', {}).get('period', 0))
+
+        for r_mat in range(14, 20):
+            ws_p_exp[f'D{r_mat}'] = 0
+        if material_data:
+            for idx, m_item in enumerate(material_data[:6]):
+                r_mat = 14 + idx
+                ws_p_exp[f'B{r_mat}'] = m_item.get('name', '')
+                ws_p_exp[f'C{r_mat}'] = m_item.get('spec', '')
+                ws_p_exp[f'D{r_mat}'] = _to_f(m_item.get('qty', 0))
+                ws_p_exp[f'F{r_mat}'] = _to_f(m_item.get('price', 0))
+                ws_p_exp[f'I{r_mat}'] = '○'
+
+        for r_clr in range(25, 44):
+            ws_p_exp[f'D{r_clr}'] = 0
+            ws_p_exp[f'E{r_clr}'] = ""
+            ws_p_exp[f'G{r_clr}'] = 1.0
+
+        if expense_data:
+            for exp_item in expense_data.get('site_expense', []):
+                cat = str(exp_item.get('cat', '')).strip()
+                cont = str(exp_item.get('cont', '')).strip()
+                ppl = _to_f(exp_item.get('ppl', 0))
+                qty = _to_f(exp_item.get('qty', 0))
+                price = _to_f(exp_item.get('price', 0))
+
+                if '차량' in cat or '차량' in cont:
+                    ws_p_exp['D31'] = ppl if ppl > 0 else 1
+                    ws_p_exp['E31'] = qty if qty > 0 else 1
+                    ws_p_exp['F31'] = price
+                    ws_p_exp['G31'] = 1.0
+                elif '소모품' in cat or '소모품' in cont:
+                    ws_p_exp['D32'] = ppl if ppl > 0 else 1
+                    ws_p_exp['E32'] = qty if qty > 0 else 1
+                    ws_p_exp['F32'] = price
+                    ws_p_exp['G32'] = 1.0
+                elif '복리' in cat or '복리' in cont:
+                    ws_p_exp['D36'] = ppl if ppl > 0 else 1
+                    ws_p_exp['E36'] = qty if qty > 0 else 1
+                    ws_p_exp['F36'] = price
+                    ws_p_exp['G36'] = 1.0
+                elif '식비' in cat or '식비' in cont:
+                    ws_p_exp['D27'] = ppl if ppl > 0 else 1
+                    ws_p_exp['E27'] = qty if qty > 0 else 1
+                    ws_p_exp['F27'] = price
+                    ws_p_exp['G27'] = 1.0
+                elif '숙박' in cat or '숙박' in cont:
+                    ws_p_exp['D25'] = ppl if ppl > 0 else 1
+                    ws_p_exp['E25'] = qty if qty > 0 else 1
+                    ws_p_exp['F25'] = price
+                    ws_p_exp['G25'] = 1.0
+
+            for r_clr in range(49, 53):
+                ws_p_exp[f'D{r_clr}'] = 0
+                ws_p_exp[f'E{r_clr}'] = ""
+                ws_p_exp[f'G{r_clr}'] = 1.0
+            for idx, r_item in enumerate(expense_data.get('rental', [])[:4]):
+                r_row = 49 + idx
+                cat = r_item.get('cat', '')
+                spec = r_item.get('spec', '')
+                qty = _to_f(r_item.get('qty', 0))
+                period = _to_f(r_item.get('period', 0))
+                price = _to_f(r_item.get('price', 0))
+                if cat or qty > 0:
+                    ws_p_exp[f'B{r_row}'] = cat
+                    ws_p_exp[f'C{r_row}'] = spec
+                    ws_p_exp[f'D{r_row}'] = qty
+                    ws_p_exp[f'E{r_row}'] = period if period > 0 else 1
+                    ws_p_exp[f'F{r_row}'] = price
+                    ws_p_exp[f'G{r_row}'] = 1.0
+
+            for r_clr in range(58, 64):
+                ws_p_exp[f'D{r_clr}'] = 0
+                ws_p_exp[f'E{r_clr}'] = ""
+                ws_p_exp[f'G{r_clr}'] = 1.0
+            for idx, o_item in enumerate(expense_data.get('outsource', [])[:6]):
+                o_row = 58 + idx
+                cat = o_item.get('cat', '')
+                work = o_item.get('work', '')
+                count = _to_f(o_item.get('count', 0))
+                price = _to_f(o_item.get('price', 0))
+                if cat or count > 0:
+                    ws_p_exp[f'B{o_row}'] = cat
+                    ws_p_exp[f'C{o_row}'] = work
+                    ws_p_exp[f'D{o_row}'] = count
+                    ws_p_exp[f'E{o_row}'] = 1
+                    ws_p_exp[f'F{o_row}'] = price
+                    ws_p_exp[f'G{o_row}'] = 1.0
+
+    # 4. Sheet: 장비감가상각 (사전)
+    if '장비감가상각' in wb.sheetnames and expense_data:
+        ws_p_dep = wb['장비감가상각']
+        for idx, d_item in enumerate(expense_data.get('depreciation', [])[:8]):
+            d_row = 5 + idx
+            item_name = d_item.get('item', '')
+            spec = d_item.get('spec', '')
+            qty = _to_f(d_item.get('qty', 0))
+            days = _to_f(d_item.get('days', 0))
+            rate = _to_f(d_item.get('rate', 0))
+            if item_name:
+                ws_p_dep[f'B{d_row}'] = item_name
+                ws_p_dep[f'C{d_row}'] = spec
+                ws_p_dep[f'D{d_row}'] = qty
+                ws_p_dep[f'G{d_row}'] = days
+                ws_p_dep[f'H{d_row}'] = rate
+
+    # 5. Sheet: 인원투입계획_사후
+    if '인원투입계획_사후' in wb.sheetnames:
+        ws_a_labor = wb['인원투입계획_사후']
+        for idx, w_info in enumerate(central_workers):
+            r_w = 7 + idx
+            ws_a_labor[f'B{r_w}'] = w_info[0]
+            ws_a_labor[f'C{r_w}'] = w_info[1]
+            ws_a_labor[f'D{r_w}'] = w_info[2]
+            ws_a_labor[f'E{r_w}'] = w_info[3]
+            ws_a_labor[f'F{r_w}'] = w_info[4]
+            for c_col in range(13, 58):
+                ws_a_labor.cell(r_w, c_col).value = None
+
+        for r_clear in range(7 + len(central_workers), 37):
+            ws_a_labor[f'B{r_clear}'] = ""
+            ws_a_labor[f'C{r_clear}'] = ""
+            ws_a_labor[f'D{r_clear}'] = ""
+            ws_a_labor[f'E{r_clear}'] = ""
+            ws_a_labor[f'F{r_clear}'] = ""
+            for c_col in range(13, 58):
+                ws_a_labor.cell(r_clear, c_col).value = None
+
+        target_a_labor = actual_labor_data if actual_labor_data else labor_data
+        if target_a_labor:
+            for rank, r_idx in rank_to_row.items():
+                if rank in target_a_labor:
+                    vals = target_a_labor[rank]
+                    p = _to_f(vals.get('personnel'))
+                    d = _to_f(vals.get('period'))
+                    ws_a_labor[f'E{r_idx}'] = p if p > 0 else ""
+                    ws_a_labor[f'F{r_idx}'] = d if d > 0 else ""
+
+    # 6. Sheet: 경비지출항목_사후
+    if '경비지출항목_사후' in wb.sheetnames:
+        ws_a_exp = wb['경비지출항목_사후']
+        target_a_labor = actual_labor_data if actual_labor_data else labor_data
+        if target_a_labor:
+            ws_a_exp['D6'] = _to_f(target_a_labor.get('연장근무', {}).get('period', 0))
+            ws_a_exp['D7'] = _to_f(target_a_labor.get('야간근무', {}).get('period', 0))
+            ws_a_exp['D8'] = _to_f(target_a_labor.get('휴일근무', {}).get('period', 0))
+
+        target_a_mat = actual_material_data if actual_material_data else material_data
+        for r_mat in range(14, 20):
+            ws_a_exp[f'D{r_mat}'] = 0
+        if target_a_mat:
+            for idx, m_item in enumerate(target_a_mat[:6]):
+                r_mat = 14 + idx
+                ws_a_exp[f'B{r_mat}'] = m_item.get('name', '')
+                ws_a_exp[f'C{r_mat}'] = m_item.get('spec', '')
+                ws_a_exp[f'D{r_mat}'] = _to_f(m_item.get('qty', 0))
+                ws_a_exp[f'F{r_mat}'] = _to_f(m_item.get('price', 0))
+                ws_a_exp[f'I{r_mat}'] = '○'
+
+        for r_clr in range(25, 44):
+            ws_a_exp[f'D{r_clr}'] = 0
+            ws_a_exp[f'E{r_clr}'] = ""
+            ws_a_exp[f'G{r_clr}'] = 1.0
+
+        target_a_exp = actual_expense_data if actual_expense_data else expense_data
+        if target_a_exp:
+            for exp_item in target_a_exp.get('site_expense', []):
+                cat = str(exp_item.get('cat', '')).strip()
+                cont = str(exp_item.get('cont', '')).strip()
+                ppl = _to_f(exp_item.get('ppl', 0))
+                qty = _to_f(exp_item.get('qty', 0))
+                price = _to_f(exp_item.get('price', 0))
+
+                if '차량' in cat or '차량' in cont:
+                    ws_a_exp['D31'] = ppl if ppl > 0 else 1
+                    ws_a_exp['E31'] = qty if qty > 0 else 1
+                    ws_a_exp['F31'] = price
+                    ws_a_exp['G31'] = 1.0
+                elif '소모품' in cat or '소모품' in cont:
+                    ws_a_exp['D32'] = ppl if ppl > 0 else 1
+                    ws_a_exp['E32'] = qty if qty > 0 else 1
+                    ws_a_exp['F32'] = price
+                    ws_a_exp['G32'] = 1.0
+                elif '복리' in cat or '복리' in cont:
+                    ws_a_exp['D36'] = ppl if ppl > 0 else 1
+                    ws_a_exp['E36'] = qty if qty > 0 else 1
+                    ws_a_exp['F36'] = price
+                    ws_a_exp['G36'] = 1.0
+                elif '식비' in cat or '식비' in cont:
+                    ws_a_exp['D27'] = ppl if ppl > 0 else 1
+                    ws_a_exp['E27'] = qty if qty > 0 else 1
+                    ws_a_exp['F27'] = price
+                    ws_a_exp['G27'] = 1.0
+                elif '숙박' in cat or '숙박' in cont:
+                    ws_a_exp['D25'] = ppl if ppl > 0 else 1
+                    ws_a_exp['E25'] = qty if qty > 0 else 1
+                    ws_a_exp['F25'] = price
+                    ws_a_exp['G25'] = 1.0
+
+            for r_clr in range(49, 53):
+                ws_a_exp[f'D{r_clr}'] = 0
+                ws_a_exp[f'E{r_clr}'] = ""
+                ws_a_exp[f'G{r_clr}'] = 1.0
+            for idx, r_item in enumerate(target_a_exp.get('rental', [])[:4]):
+                r_row = 49 + idx
+                cat = r_item.get('cat', '')
+                spec = r_item.get('spec', '')
+                qty = _to_f(r_item.get('qty', 0))
+                period = _to_f(r_item.get('period', 0))
+                price = _to_f(r_item.get('price', 0))
+                if cat or qty > 0:
+                    ws_a_exp[f'B{r_row}'] = cat
+                    ws_a_exp[f'C{r_row}'] = spec
+                    ws_a_exp[f'D{r_row}'] = qty
+                    ws_a_exp[f'E{r_row}'] = period if period > 0 else 1
+                    ws_a_exp[f'F{r_row}'] = price
+                    ws_a_exp[f'G{r_row}'] = 1.0
+
+            for r_clr in range(58, 64):
+                ws_a_exp[f'D{r_clr}'] = 0
+                ws_a_exp[f'E{r_clr}'] = ""
+                ws_a_exp[f'G{r_clr}'] = 1.0
+            for idx, o_item in enumerate(target_a_exp.get('outsource', [])[:6]):
+                o_row = 58 + idx
+                cat = o_item.get('cat', '')
+                work = o_item.get('work', '')
+                count = _to_f(o_item.get('count', 0))
+                price = _to_f(o_item.get('price', 0))
+                if cat or count > 0:
+                    ws_a_exp[f'B{o_row}'] = cat
+                    ws_a_exp[f'C{o_row}'] = work
+                    ws_a_exp[f'D{o_row}'] = count
+                    ws_a_exp[f'E{o_row}'] = 1
+                    ws_a_exp[f'F{o_row}'] = price
+                    ws_a_exp[f'G{o_row}'] = 1.0
+
+    # 7. Sheet: 장비감가상각_사후
+    if '장비감가상각_사후' in wb.sheetnames:
+        ws_a_dep = wb['장비감가상각_사후']
+        target_a_exp = actual_expense_data if actual_expense_data else expense_data
+        if target_a_exp:
+            for idx, d_item in enumerate(target_a_exp.get('depreciation', [])[:8]):
+                d_row = 5 + idx
+                item_name = d_item.get('item', '')
+                spec = d_item.get('spec', '')
+                qty = _to_f(d_item.get('qty', 0))
+                days = _to_f(d_item.get('days', 0))
+                rate = _to_f(d_item.get('rate', 0))
+                if item_name:
+                    ws_a_dep[f'B{d_row}'] = item_name
+                    ws_a_dep[f'C{d_row}'] = spec
+                    ws_a_dep[f'D{d_row}'] = qty
+                    ws_a_dep[f'G{d_row}'] = days
+                    ws_a_dep[f'H{d_row}'] = rate
+
+    # 8. Sheet: 실적배분
+    if '실적배분' in wb.sheetnames:
+        ws_dist = wb['실적배분']
+        ws_dist['F2'] = site_title
+        ws_dist['F4'] = a_rev if a_rev > 0 else rev
+
+    wb.save(filepath)
+    return True
+
+
+def _export_budget_legacy_excel(filepath, summary_data, labor_data, material_data, expense_data):
+    """
+    Fallback legacy single-sheet export when standard template is absent.
     """
     wb = Workbook()
     ws = wb.active
