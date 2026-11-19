@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from site_apps.central.src.runtime_profile import is_development
 
 
@@ -43,17 +44,28 @@ def _shared_dir_candidates(custom_dir):
                 yield candidate
 
 
+def _find_available_shared_dir(custom_dir, retries=2, delay=0.3):
+    """Google Drive 가상 드라이브의 일시적 마운트 지연/응답 대기를 고려하여 재시도하며 유효 경로를 찾는다."""
+    candidates = list(_shared_dir_candidates(custom_dir))
+    for attempt in range(retries + 1):
+        for path in candidates:
+            try:
+                if os.path.isdir(path):
+                    return path
+            except Exception:
+                continue
+        if attempt < retries:
+            time.sleep(delay)
+    return None
+
+
 def get_data_connection_error():
     """Explain a configured-but-unavailable shared data directory."""
     custom_dir = _configured_data_dir()
     if not custom_dir:
         return None
-    for path in _shared_dir_candidates(custom_dir):
-        try:
-            if os.path.isdir(path):
-                return None
-        except Exception:
-            continue
+    if _find_available_shared_dir(custom_dir) is not None:
+        return None
     return (
         "중앙지사 공유 작업자료 경로에 연결할 수 없습니다.\n"
         f"설정 경로: {custom_dir}\n"
@@ -73,9 +85,9 @@ def get_data_dir():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     custom_dir = _configured_data_dir()
     if custom_dir:
-        for candidate in _shared_dir_candidates(custom_dir):
-            if os.path.isdir(candidate):
-                return candidate
+        found = _find_available_shared_dir(custom_dir)
+        if found:
+            return found
     return base_dir
 
 
