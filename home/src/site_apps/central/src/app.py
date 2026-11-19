@@ -2321,13 +2321,15 @@ class MaterialManager:
                 combobox.after_cancel(combobox._suggest_after_id)
             
             def _do_suggest():
-                if combobox.winfo_exists():
+                # 방금 목록에서 선택한 직후에는 값 목록/포커스를 다시 만지지 않는다(선택 지연 방지).
+                if combobox.winfo_exists() and not getattr(combobox, '_just_selected', False):
                     self._apply_combobox_word_suggest(combobox, source_getter(), open_dropdown=open)
             
             combobox._suggest_after_id = self.root.after(300, _do_suggest)
 
         combobox.bind('<KeyRelease>', lambda e: _on_interaction(e, open=True), add='+')
-        combobox.bind('<FocusIn>', lambda e: _on_interaction(e, open=False), add='+')
+        # FocusIn에서 목록·포커스를 재설정하면 드롭다운을 여는 순간 값 목록이 바뀌어 선택이 지연될 수 있어
+        # 타이핑(KeyRelease) 때만 제안 목록을 갱신한다.
         
         # [NEW] Guard against "sticky" dropdown after selection
         def _on_selected(e=None):
@@ -10753,8 +10755,45 @@ class MaterialManager:
                     self.daily_usage_tree.yview_moveto(1.0)
                 
                 messagebox.showinfo("성공", f"{saved_count}건의 기록이 안전하게 저장되었습니다.")
+                self._recover_combobox_interaction()
         except Exception as e:
             messagebox.showerror("오류", f"기록 저장 중 오류 발생: {e}")
+            self._recover_combobox_interaction()
+
+    def _recover_combobox_interaction(self):
+        """저장 직후 드롭다운이 열리지 않는 현상 방지: 남은 입력 점유(grab)·디바운스 상태를 정리한다."""
+        try:
+            # 1. 이미 사라졌거나 모달이 아닌 위젯이 잡고 있는 grab 해제
+            holder = self.root.grab_current()
+            if holder is not None:
+                keep = False
+                try:
+                    keep = holder.winfo_exists() and holder.winfo_ismapped() and holder is not self.root
+                except Exception:
+                    keep = False
+                if not keep:
+                    try: holder.grab_release()
+                    except Exception: pass
+            # 2. 예약된 자동 제안(디바운스)·열림 플래그 초기화
+            for name in ('cb_daily_company', 'cb_daily_site', 'cb_daily_material', 'cb_daily_equip',
+                         'cb_daily_test_method', 'cb_daily_unit', 'ent_daily_inspection_item',
+                         'ent_daily_applied_code'):
+                cb = getattr(self, name, None)
+                if cb is None:
+                    continue
+                try:
+                    after_id = getattr(cb, '_suggest_after_id', None)
+                    if after_id:
+                        cb.after_cancel(after_id)
+                        cb._suggest_after_id = None
+                    cb._auto_opening = False
+                    cb._just_selected = False
+                except Exception:
+                    pass
+            # 3. 포커스를 메인 창으로 복귀시켜 첫 클릭이 드롭다운으로 전달되게 함
+            self.root.after_idle(lambda: self.root.focus_force())
+        except Exception as e:
+            print(f"[WARN] 콤보박스 상태 복구 실패: {e}")
 
     def load_report_mapping(self):
         """Load report mapping from JSON file or return defaults"""
