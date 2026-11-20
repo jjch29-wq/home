@@ -566,30 +566,36 @@
 
         billingArea.innerHTML = `
         <div class="progress-billing-card">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
             <div>
-              <span style="font-size:12px;font-weight:800;color:#475569;">💳 누적 기성 공급가액 (NDT)</span>
-              <div class="progress-billing-total">${Number(b.total_amount || 0).toLocaleString()} <span style="font-size:14px;font-weight:700;color:#64748b;">원</span></div>
+              <span id="billing-card-title" style="font-size:12px;font-weight:800;color:#94a3b8;">💳 누적 기성 공급가액 (전체)</span>
+              <div id="billing-total-amount" class="progress-billing-total" style="margin-top:2px;">${Number(b.total_amount || 0).toLocaleString()} <span style="font-size:14px;font-weight:700;color:#64748b;">원</span></div>
             </div>
-            <span style="font-size:11px;font-weight:800;background:#dbeafe;color:#1e40af;padding:3px 8px;border-radius:8px;">PC 일보 연동</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:11px;font-weight:700;color:#94a3b8;">시공업체 필터:</span>
+              <select id="select-billing-company-filter" style="padding:4px 8px;border:1px solid #334155;background:#1e293b;color:#f8fafc;border-radius:8px;font-size:12px;font-weight:800;outline:none;cursor:pointer;">
+                ${companies.map(c => `<option value="${c}">${c}</option>`).join('')}
+              </select>
+              <span style="font-size:11px;font-weight:800;background:#dbeafe;color:#1e40af;padding:3px 8px;border-radius:8px;">PC 일보 연동</span>
+            </div>
           </div>
 
           <div class="billing-sub-grid">
             <div class="billing-sub-item">
-              <div class="title">PAUT 기성 (${Number(b.paut_qty || 0).toFixed(4)}M)</div>
-              <div class="amount">${Number(b.paut_amount || 0).toLocaleString()}원</div>
+              <div id="billing-paut-title" class="title">PAUT 기성 (${Number(b.paut_qty || 0).toFixed(4)}M)</div>
+              <div id="billing-paut-amount" class="amount">${Number(b.paut_amount || 0).toLocaleString()}원</div>
             </div>
             <div class="billing-sub-item">
-              <div class="title">RT 기성 (${Number(b.rt_qty || 0)}매)</div>
-              <div class="amount">${Number(b.rt_amount || 0).toLocaleString()}원</div>
+              <div id="billing-rt-title" class="title">RT 기성 (${Number(b.rt_qty || 0)}매)</div>
+              <div id="billing-rt-amount" class="amount">${Number(b.rt_amount || 0).toLocaleString()}원</div>
             </div>
             <div class="billing-sub-item">
-              <div class="title">MT 기성 (${Number(b.mt_qty || 0).toFixed(4)}M)</div>
-              <div class="amount">${Number(b.mt_amount || 0).toLocaleString()}원</div>
+              <div id="billing-mt-title" class="title">MT 기성 (${Number(b.mt_qty || 0).toFixed(4)}M)</div>
+              <div id="billing-mt-amount" class="amount">${Number(b.mt_amount || 0).toLocaleString()}원</div>
             </div>
             <div class="billing-sub-item">
-              <div class="title">PT 기성 (${Number(b.pt_qty || 0).toFixed(4)}M)</div>
-              <div class="amount">${Number(b.pt_amount || 0).toLocaleString()}원</div>
+              <div id="billing-pt-title" class="title">PT 기성 (${Number(b.pt_qty || 0).toFixed(4)}M)</div>
+              <div id="billing-pt-amount" class="amount">${Number(b.pt_amount || 0).toLocaleString()}원</div>
             </div>
           </div>
 
@@ -598,14 +604,8 @@
           </button>
 
           <div id="workspace-billing-detail-wrap" style="display:none;margin-top:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <label style="font-size:11px;font-weight:700;color:#475569;">
-                시공업체 필터:
-                <select id="select-billing-company-filter" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:11px;font-weight:700;margin-left:4px;">
-                  ${companies.map(c => `<option value="${c}">${c}</option>`).join('')}
-                </select>
-              </label>
-              <span id="billing-filter-count" style="font-size:11px;color:#64748b;">${allBillingRecords.length}건 표시</span>
+            <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:8px;">
+              <span id="billing-filter-count" style="font-size:11px;color:#94a3b8;">${allBillingRecords.length}건 표시</span>
             </div>
 
             <div class="progress-table-wrap" style="max-height:360px;overflow-y:auto;">
@@ -632,11 +632,70 @@
         </div>
       `;
 
+        function updateBillingSummary(records, filterComp) {
+          let totalAmt = 0;
+          let pautQty = 0, pautAmt = 0;
+          let rtQty = 0, rtAmt = 0;
+          let mtQty = 0, mtAmt = 0;
+          let ptQty = 0, ptAmt = 0;
+
+          records.forEach(r => {
+            const fee = Number(r.subtotal || 0);
+            const q = Number(r.qty || 0);
+            totalAmt += fee;
+            const m = String(r.ndt_type || '').toUpperCase();
+            if (m === 'PAUT') { pautQty += q; pautAmt += fee; }
+            else if (m === 'RT') { rtQty += q; rtAmt += fee; }
+            else if (m === 'MT') { mtQty += q; mtAmt += fee; }
+            else if (m === 'PT') { ptQty += q; ptAmt += fee; }
+          });
+
+          const titleEl = document.getElementById('billing-card-title');
+          if (titleEl) {
+            titleEl.textContent = filterComp === '전체' ? '💳 누적 기성 공급가액 (전체)' : `💳 누적 기성 공급가액 (${filterComp})`;
+          }
+          const totalEl = document.getElementById('billing-total-amount');
+          if (totalEl) {
+            totalEl.innerHTML = `${totalAmt.toLocaleString()} <span style="font-size:14px;font-weight:700;color:#64748b;">원</span>`;
+          }
+          const pautTitleEl = document.getElementById('billing-paut-title');
+          const pautAmtEl = document.getElementById('billing-paut-amount');
+          if (pautTitleEl) pautTitleEl.textContent = `PAUT 기성 (${pautQty.toFixed(4)}M)`;
+          if (pautAmtEl) pautAmtEl.textContent = `${pautAmt.toLocaleString()}원`;
+
+          const rtTitleEl = document.getElementById('billing-rt-title');
+          const rtAmtEl = document.getElementById('billing-rt-amount');
+          if (rtTitleEl) rtTitleEl.textContent = `RT 기성 (${Math.round(rtQty)}매)`;
+          if (rtAmtEl) rtAmtEl.textContent = `${rtAmt.toLocaleString()}원`;
+
+          const mtTitleEl = document.getElementById('billing-mt-title');
+          const mtAmtEl = document.getElementById('billing-mt-amount');
+          if (mtTitleEl) mtTitleEl.textContent = `MT 기성 (${mtQty.toFixed(4)}M)`;
+          if (mtAmtEl) mtAmtEl.textContent = `${mtAmt.toLocaleString()}원`;
+
+          const ptTitleEl = document.getElementById('billing-pt-title');
+          const ptAmtEl = document.getElementById('billing-pt-amount');
+          if (ptTitleEl) ptTitleEl.textContent = `PT 기성 (${ptQty.toFixed(4)}M)`;
+          if (ptAmtEl) ptAmtEl.textContent = `${ptAmt.toLocaleString()}원`;
+        }
+
         function renderBillingTbody(filterComp) {
           const tbody = document.getElementById('billing-detail-tbody');
           if (!tbody) return;
           const filtered = filterComp === '전체' ? allBillingRecords : allBillingRecords.filter(r => r.company === filterComp);
-          document.getElementById('billing-filter-count').textContent = filtered.length + '건 표시';
+          
+          updateBillingSummary(filtered, filterComp);
+
+          const filterCountEl = document.getElementById('billing-filter-count');
+          if (filterCountEl) filterCountEl.textContent = filtered.length + '건 표시';
+
+          const toggleBtn = document.getElementById('btn-toggle-billing-detail');
+          const detailWrap = document.getElementById('workspace-billing-detail-wrap');
+          if (toggleBtn && detailWrap) {
+            const isHidden = detailWrap.style.display === 'none';
+            toggleBtn.textContent = isHidden ? `▼ 일별 기성 정산 상세 목록 (${filtered.length}건) 펼치기` : `▲ 일별 기성 정산 상세 목록 (${filtered.length}건) 접기`;
+          }
+
           tbody.innerHTML = filtered.map(r => {
             const locSafe = (r.loc || '-').replace(/'/g, "\\'");
             return `
