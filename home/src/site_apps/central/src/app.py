@@ -9455,9 +9455,17 @@ class MaterialManager:
         if is_ndt:
             ori_j = getattr(self, 'ndt_ori_joint_var', tk.StringVar(value="")).get().strip()
             rep_j = getattr(self, 'ndt_rep_joint_var', tk.StringVar(value="")).get().strip()
-            if ori_j or not rep_j:
+            try:
+                has_ori = float(ori_j.replace(',', '') or 0) > 0
+            except (ValueError, TypeError):
+                has_ori = bool(ori_j and ori_j != '0')
+            try:
+                has_rep = float(rep_j.replace(',', '') or 0) > 0
+            except (ValueError, TypeError):
+                has_rep = bool(rep_j and rep_j != '0')
+            if has_ori or not has_rep:
                 record_types.append('ORI')
-            if rep_j:
+            if has_rep:
                 record_types.append('REP')
         else:
             record_types.append('DEFAULT')
