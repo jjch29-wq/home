@@ -560,24 +560,17 @@
         const allBillingRecords = data.billing_records || [];
         window._currentBillingRecords = allBillingRecords;
 
-        // 시공업체, 구간, 일자 목록 추출
+        // 시공업체, 작업일자 목록 추출
         const companies = ['전체'];
-        const sections = ['전체'];
         const dates = ['전체'];
 
         allBillingRecords.forEach(r => {
           if (r.company && !companies.includes(r.company)) companies.push(r.company);
           if (r.date && !dates.includes(r.date)) dates.push(r.date);
-          const loc = r.loc || '';
-          const m = loc.match(/(Sec\.?\s*[0-9]+(?:-[0-9]+)?)/i);
-          if (m) {
-            const sec = m[1].replace(/\s+/g, ' ');
-            if (!sections.includes(sec)) sections.push(sec);
-          }
         });
 
+        companies.sort((a, b) => (a === '전체' ? -1 : b === '전체' ? 1 : a.localeCompare(b)));
         dates.sort((a, b) => (a === '전체' ? -1 : b === '전체' ? 1 : b.localeCompare(a)));
-        sections.sort((a, b) => (a === '전체' ? -1 : b === '전체' ? 1 : a.localeCompare(b, undefined, {numeric: true})));
 
         billingArea.innerHTML = `
         <div class="progress-billing-card">
@@ -627,7 +620,7 @@
               <div>
                 <label style="font-size:10px;font-weight:700;color:#94a3b8;display:block;margin-bottom:2px;">구간 (Section)</label>
                 <select id="select-billing-section-filter" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid #334155;background:#1e293b;color:#f8fafc;border-radius:6px;font-size:11px;font-weight:700;outline:none;">
-                  ${sections.map(s => `<option value="${s}">${s}</option>`).join('')}
+                  <option value="전체">전체</option>
                 </select>
               </div>
             </div>
@@ -640,7 +633,9 @@
               </div>
               <div>
                 <label style="font-size:10px;font-weight:700;color:#94a3b8;display:block;margin-bottom:2px;">라인 검색</label>
-                <input type="text" id="input-billing-line-filter" placeholder="라인번호/키워드..." style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid #334155;background:#1e293b;color:#f8fafc;border-radius:6px;font-size:11px;outline:none;" />
+                <select id="select-billing-line-filter" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid #334155;background:#1e293b;color:#f8fafc;border-radius:6px;font-size:11px;font-weight:700;outline:none;">
+                  <option value="전체">전체</option>
+                </select>
               </div>
             </div>
           </div>
@@ -743,23 +738,90 @@
           }).join('');
         }
 
+        function getRecordSection(r) {
+          if (r.section) return String(r.section).trim();
+          const loc = r.loc || '';
+          const m = loc.match(/(Sec\.?\s*[0-9]+(?:-[0-9]+)?)/i);
+          if (m) return m[1].replace(/\s+/g, ' ');
+          const parts = loc.split('/').map(p => p.trim());
+          if (parts.length >= 2 && /^Sec/i.test(parts[1])) return parts[1];
+          return '';
+        }
+
+        function getRecordLine(r) {
+          if (r.line) return String(r.line).trim();
+          const loc = r.loc || '';
+          const parts = loc.split('/').map(p => p.trim());
+          if (parts.length >= 3) {
+            return parts.slice(2).join(' / ').replace(/\s*\([^)]*\)\s*$/, '').trim();
+          }
+          return loc.trim();
+        }
+
+        function updateBillingSectionOptions(preserveVal) {
+          const secSelect = document.getElementById('select-billing-section-filter');
+          if (!secSelect) return;
+          const currentCompany = document.getElementById('select-billing-company-filter')?.value || '전체';
+          const prevVal = preserveVal ? secSelect.value : '전체';
+
+          const matchingSecs = ['전체'];
+          allBillingRecords.forEach(r => {
+            if (currentCompany !== '전체' && r.company !== currentCompany) return;
+            const sec = getRecordSection(r);
+            if (sec && !matchingSecs.includes(sec)) matchingSecs.push(sec);
+          });
+          matchingSecs.sort((a, b) => (a === '전체' ? -1 : b === '전체' ? 1 : a.localeCompare(b, undefined, {numeric: true})));
+
+          secSelect.innerHTML = matchingSecs.map(s => `<option value="${s}">${s}</option>`).join('');
+          secSelect.value = matchingSecs.includes(prevVal) ? prevVal : '전체';
+        }
+
+        function updateBillingLineOptions(preserveVal) {
+          const lineSelect = document.getElementById('select-billing-line-filter');
+          if (!lineSelect) return;
+          const currentCompany = document.getElementById('select-billing-company-filter')?.value || '전체';
+          const currentSec = document.getElementById('select-billing-section-filter')?.value || '전체';
+          const prevVal = preserveVal ? lineSelect.value : '전체';
+
+          const matchingLines = ['전체'];
+          allBillingRecords.forEach(r => {
+            if (currentCompany !== '전체' && r.company !== currentCompany) return;
+            if (currentSec !== '전체') {
+              const sec = getRecordSection(r);
+              if (sec !== currentSec && !(r.loc || '').includes(currentSec)) return;
+            }
+            const line = getRecordLine(r);
+            if (line && !matchingLines.includes(line)) matchingLines.push(line);
+          });
+          matchingLines.sort((a, b) => (a === '전체' ? -1 : b === '전체' ? 1 : a.localeCompare(b, undefined, {numeric: true})));
+
+          lineSelect.innerHTML = matchingLines.map(l => `<option value="${l}">${l}</option>`).join('');
+          lineSelect.value = matchingLines.includes(prevVal) ? prevVal : '전체';
+        }
+
         function applyBillingFilters() {
           const comp = document.getElementById('select-billing-company-filter')?.value || '전체';
           const sec = document.getElementById('select-billing-section-filter')?.value || '전체';
           const dt = document.getElementById('select-billing-date-filter')?.value || '전체';
-          const lineQuery = (document.getElementById('input-billing-line-filter')?.value || '').trim().toLowerCase();
+          const line = document.getElementById('select-billing-line-filter')?.value || '전체';
 
           const filtered = allBillingRecords.filter(r => {
             if (comp !== '전체' && r.company !== comp) return false;
             if (dt !== '전체' && r.date !== dt) return false;
             if (sec !== '전체') {
-              const locText = String(r.loc || '').toLowerCase().replace(/\s+/g, '');
-              const secKey = sec.toLowerCase().replace(/\s+/g, '');
-              if (!locText.includes(secKey)) return false;
+              const rSec = getRecordSection(r);
+              if (rSec !== sec) {
+                const locText = String(r.loc || '').toLowerCase().replace(/\s+/g, '');
+                const secKey = sec.toLowerCase().replace(/\s+/g, '');
+                if (!locText.includes(secKey)) return false;
+              }
             }
-            if (lineQuery) {
-              const locText = String(r.loc || '').toLowerCase();
-              if (!locText.includes(lineQuery)) return false;
+            if (line !== '전체') {
+              const rLine = getRecordLine(r);
+              if (rLine !== line) {
+                const locText = String(r.loc || '').toLowerCase();
+                if (!locText.includes(line.toLowerCase())) return false;
+              }
             }
             return true;
           });
@@ -767,8 +829,8 @@
           const conds = [];
           if (comp !== '전체') conds.push(comp);
           if (sec !== '전체') conds.push(sec);
+          if (line !== '전체') conds.push(line);
           if (dt !== '전체') conds.push(dt);
-          if (lineQuery) conds.push(`"${lineQuery}"`);
           const filterTitle = conds.length > 0 ? conds.join(' · ') : '전체';
 
           updateBillingSummary(filtered, filterTitle);
@@ -817,6 +879,8 @@
           modal.style.display = 'flex';
         };
 
+        updateBillingSectionOptions(false);
+        updateBillingLineOptions(false);
         applyBillingFilters();
 
         const toggleBtn = document.getElementById('btn-toggle-billing-detail');
@@ -830,27 +894,42 @@
           });
         }
 
-        ['select-billing-company-filter', 'select-billing-section-filter', 'select-billing-date-filter'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.addEventListener('change', applyBillingFilters);
-        });
+        const compSelect = document.getElementById('select-billing-company-filter');
+        if (compSelect) {
+          compSelect.addEventListener('change', () => {
+            updateBillingSectionOptions(false);
+            updateBillingLineOptions(false);
+            applyBillingFilters();
+          });
+        }
 
-        const lineInput = document.getElementById('input-billing-line-filter');
-        if (lineInput) {
-          lineInput.addEventListener('input', applyBillingFilters);
+        const secSelect = document.getElementById('select-billing-section-filter');
+        if (secSelect) {
+          secSelect.addEventListener('change', () => {
+            updateBillingLineOptions(false);
+            applyBillingFilters();
+          });
+        }
+
+        const dtSelect = document.getElementById('select-billing-date-filter');
+        if (dtSelect) {
+          dtSelect.addEventListener('change', applyBillingFilters);
+        }
+
+        const lineSelect = document.getElementById('select-billing-line-filter');
+        if (lineSelect) {
+          lineSelect.addEventListener('change', applyBillingFilters);
         }
 
         const resetBtn = document.getElementById('btn-reset-billing-filter');
         if (resetBtn) {
           resetBtn.addEventListener('click', () => {
             const cEl = document.getElementById('select-billing-company-filter');
-            const sEl = document.getElementById('select-billing-section-filter');
             const dEl = document.getElementById('select-billing-date-filter');
-            const lEl = document.getElementById('input-billing-line-filter');
             if (cEl) cEl.value = '전체';
-            if (sEl) sEl.value = '전체';
             if (dEl) dEl.value = '전체';
-            if (lEl) lEl.value = '';
+            updateBillingSectionOptions(false);
+            updateBillingLineOptions(false);
             applyBillingFilters();
           });
         }

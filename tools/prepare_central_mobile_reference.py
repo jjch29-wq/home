@@ -88,7 +88,7 @@ def prepare(inventory=None):
         'PT_전체(주간)': 26, 'PT_전체(야간)': 1,
     }
 
-    billing_fields = ('date', 'company', 'loc', 'ndt_type', 'work_time', 'material_type', 'qty', 'unit', 'unit_price', 'subtotal')
+    billing_fields = ('date', 'company', 'loc', 'ndt_type', 'work_time', 'material_type', 'qty', 'unit', 'unit_price', 'subtotal', 'section', 'line')
     billing_records = [
         {k: r.get(k) for k in billing_fields}
         for r in prices.get('BILLING_RECORDS', [])

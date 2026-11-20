@@ -64,6 +64,11 @@ class TestCentralMobileProgress(unittest.TestCase):
         self.assertIn("workspace-progress-billing", code)
         self.assertIn("일별 기성 정산 상세 목록", code)
         self.assertIn("누적 기성 공급가액", code)
+        self.assertIn("select-billing-company-filter", code)
+        self.assertIn("select-billing-section-filter", code)
+        self.assertIn("select-billing-line-filter", code)
+        self.assertIn("updateBillingSectionOptions", code)
+        self.assertIn("updateBillingLineOptions", code)
 
 
 if __name__ == "__main__":

@@ -3062,36 +3062,83 @@ function applyMethodDefaults(method){
         const allBillingRecords = data.billing_records || [];
         window._currentBillingRecords = allBillingRecords;
 
-        // 시공업체 목록 추출
+        // 시공업체, 작업일자 목록 추출
         const companies = ['전체'];
-        allBillingRecords.forEach(r => { if (r.company && !companies.includes(r.company)) companies.push(r.company); });
+        const dates = ['전체'];
+
+        allBillingRecords.forEach(r => {
+          if (r.company && !companies.includes(r.company)) companies.push(r.company);
+          if (r.date && !dates.includes(r.date)) dates.push(r.date);
+        });
+
+        companies.sort((a, b) => (a === '전체' ? -1 : b === '전체' ? 1 : a.localeCompare(b)));
+        dates.sort((a, b) => (a === '전체' ? -1 : b === '전체' ? 1 : b.localeCompare(a)));
 
         billingArea.innerHTML = `
         <div class="progress-billing-card">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
             <div>
-              <span style="font-size:12px;font-weight:800;color:#475569;">💳 누적 기성 공급가액 (NDT)</span>
-              <div class="progress-billing-total">${Number(b.total_amount || 0).toLocaleString()} <span style="font-size:14px;font-weight:700;color:#64748b;">원</span></div>
+              <span id="billing-card-title" style="font-size:12px;font-weight:800;color:#94a3b8;">💳 누적 기성 공급가액 (전체)</span>
+              <div id="billing-total-amount" class="progress-billing-total" style="margin-top:2px;">${Number(b.total_amount || 0).toLocaleString()} <span style="font-size:14px;font-weight:700;color:#64748b;">원</span></div>
             </div>
-            <span style="font-size:11px;font-weight:800;background:#dbeafe;color:#1e40af;padding:3px 8px;border-radius:8px;">PC 일보 연동</span>
+            <span style="font-size:11px;font-weight:800;background:#dbeafe;color:#1e40af;padding:3px 8px;border-radius:8px;white-space:nowrap;">PC 일보 연동</span>
           </div>
 
           <div class="billing-sub-grid">
             <div class="billing-sub-item">
-              <div class="title">PAUT 기성 (${Number(b.paut_qty || 0).toFixed(4)}M)</div>
-              <div class="amount">${Number(b.paut_amount || 0).toLocaleString()}원</div>
+              <div id="billing-paut-title" class="title">PAUT 기성 (${Number(b.paut_qty || 0).toFixed(4)}M)</div>
+              <div id="billing-paut-amount" class="amount">${Number(b.paut_amount || 0).toLocaleString()}원</div>
             </div>
             <div class="billing-sub-item">
-              <div class="title">RT 기성 (${Number(b.rt_qty || 0)}매)</div>
-              <div class="amount">${Number(b.rt_amount || 0).toLocaleString()}원</div>
+              <div id="billing-rt-title" class="title">RT 기성 (${Number(b.rt_qty || 0)}매)</div>
+              <div id="billing-rt-amount" class="amount">${Number(b.rt_amount || 0).toLocaleString()}원</div>
             </div>
             <div class="billing-sub-item">
-              <div class="title">MT 기성 (${Number(b.mt_qty || 0).toFixed(4)}M)</div>
-              <div class="amount">${Number(b.mt_amount || 0).toLocaleString()}원</div>
+              <div id="billing-mt-title" class="title">MT 기성 (${Number(b.mt_qty || 0).toFixed(4)}M)</div>
+              <div id="billing-mt-amount" class="amount">${Number(b.mt_amount || 0).toLocaleString()}원</div>
             </div>
             <div class="billing-sub-item">
-              <div class="title">PT 기성 (${Number(b.pt_qty || 0).toFixed(4)}M)</div>
-              <div class="amount">${Number(b.pt_amount || 0).toLocaleString()}원</div>
+              <div id="billing-pt-title" class="title">PT 기성 (${Number(b.pt_qty || 0).toFixed(4)}M)</div>
+              <div id="billing-pt-amount" class="amount">${Number(b.pt_amount || 0).toLocaleString()}원</div>
+            </div>
+          </div>
+
+          <!-- 2x2 기성 상세 조건 필터 바 (방안 A) -->
+          <div style="background:#0f172a;border:1px solid #334155;border-radius:12px;padding:10px;margin-top:10px;margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span style="font-size:11px;font-weight:800;color:#38bdf8;">🔍 기성 상세 조건 필터</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span id="billing-filter-count" style="font-size:11px;font-weight:700;color:#94a3b8;">${allBillingRecords.length}건 표시</span>
+                <button type="button" id="btn-reset-billing-filter" style="padding:2px 8px;font-size:11px;font-weight:700;background:#1e293b;border:1px solid #475569;color:#f8fafc;border-radius:6px;cursor:pointer;">초기화 ↺</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+              <div>
+                <label style="font-size:10px;font-weight:700;color:#94a3b8;display:block;margin-bottom:2px;">시공업체</label>
+                <select id="select-billing-company-filter" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid #334155;background:#1e293b;color:#f8fafc;border-radius:6px;font-size:11px;font-weight:700;outline:none;">
+                  ${companies.map(c => `<option value="${c}">${c}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label style="font-size:10px;font-weight:700;color:#94a3b8;display:block;margin-bottom:2px;">구간 (Section)</label>
+                <select id="select-billing-section-filter" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid #334155;background:#1e293b;color:#f8fafc;border-radius:6px;font-size:11px;font-weight:700;outline:none;">
+                  <option value="전체">전체</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              <div>
+                <label style="font-size:10px;font-weight:700;color:#94a3b8;display:block;margin-bottom:2px;">작업 일자</label>
+                <select id="select-billing-date-filter" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid #334155;background:#1e293b;color:#f8fafc;border-radius:6px;font-size:11px;font-weight:700;outline:none;">
+                  ${dates.map(d => `<option value="${d}">${d}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label style="font-size:10px;font-weight:700;color:#94a3b8;display:block;margin-bottom:2px;">라인 검색</label>
+                <select id="select-billing-line-filter" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid #334155;background:#1e293b;color:#f8fafc;border-radius:6px;font-size:11px;font-weight:700;outline:none;">
+                  <option value="전체">전체</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -3100,16 +3147,6 @@ function applyMethodDefaults(method){
           </button>
 
           <div id="workspace-billing-detail-wrap" style="display:none;margin-top:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <label style="font-size:11px;font-weight:700;color:#475569;">
-                시공업체 필터:
-                <select id="select-billing-company-filter" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:11px;font-weight:700;margin-left:4px;">
-                  ${companies.map(c => `<option value="${c}">${c}</option>`).join('')}
-                </select>
-              </label>
-              <span id="billing-filter-count" style="font-size:11px;color:#64748b;">${allBillingRecords.length}건 표시</span>
-            </div>
-
             <div class="progress-table-wrap" style="max-height:360px;overflow-y:auto;">
               <table class="progress-table" id="billing-detail-table">
                 <thead>
@@ -3134,11 +3171,56 @@ function applyMethodDefaults(method){
         </div>
       `;
 
-        function renderBillingTbody(filterComp) {
+        function updateBillingSummary(records, filterTitle) {
+          let totalAmt = 0;
+          let pautQty = 0, pautAmt = 0;
+          let rtQty = 0, rtAmt = 0;
+          let mtQty = 0, mtAmt = 0;
+          let ptQty = 0, ptAmt = 0;
+
+          records.forEach(r => {
+            const fee = Number(r.subtotal || 0);
+            const q = Number(r.qty || 0);
+            totalAmt += fee;
+            const m = String(r.ndt_type || '').toUpperCase();
+            if (m === 'PAUT') { pautQty += q; pautAmt += fee; }
+            else if (m === 'RT') { rtQty += q; rtAmt += fee; }
+            else if (m === 'MT') { mtQty += q; mtAmt += fee; }
+            else if (m === 'PT') { ptQty += q; ptAmt += fee; }
+          });
+
+          const titleEl = document.getElementById('billing-card-title');
+          if (titleEl) {
+            titleEl.textContent = filterTitle === '전체' ? '💳 누적 기성 공급가액 (전체)' : `💳 누적 기성 공급가액 (${filterTitle})`;
+          }
+          const totalEl = document.getElementById('billing-total-amount');
+          if (totalEl) {
+            totalEl.innerHTML = `${totalAmt.toLocaleString()} <span style="font-size:14px;font-weight:700;color:#64748b;">원</span>`;
+          }
+          const pautTitleEl = document.getElementById('billing-paut-title');
+          const pautAmtEl = document.getElementById('billing-paut-amount');
+          if (pautTitleEl) pautTitleEl.textContent = `PAUT 기성 (${pautQty.toFixed(4)}M)`;
+          if (pautAmtEl) pautAmtEl.textContent = `${pautAmt.toLocaleString()}원`;
+
+          const rtTitleEl = document.getElementById('billing-rt-title');
+          const rtAmtEl = document.getElementById('billing-rt-amount');
+          if (rtTitleEl) rtTitleEl.textContent = `RT 기성 (${Math.round(rtQty)}매)`;
+          if (rtAmtEl) rtAmtEl.textContent = `${rtAmt.toLocaleString()}원`;
+
+          const mtTitleEl = document.getElementById('billing-mt-title');
+          const mtAmtEl = document.getElementById('billing-mt-amount');
+          if (mtTitleEl) mtTitleEl.textContent = `MT 기성 (${mtQty.toFixed(4)}M)`;
+          if (mtAmtEl) mtAmtEl.textContent = `${mtAmt.toLocaleString()}원`;
+
+          const ptTitleEl = document.getElementById('billing-pt-title');
+          const ptAmtEl = document.getElementById('billing-pt-amount');
+          if (ptTitleEl) ptTitleEl.textContent = `PT 기성 (${ptQty.toFixed(4)}M)`;
+          if (ptAmtEl) ptAmtEl.textContent = `${ptAmt.toLocaleString()}원`;
+        }
+
+        function renderBillingRows(filtered) {
           const tbody = document.getElementById('billing-detail-tbody');
           if (!tbody) return;
-          const filtered = filterComp === '전체' ? allBillingRecords : allBillingRecords.filter(r => r.company === filterComp);
-          document.getElementById('billing-filter-count').textContent = filtered.length + '건 표시';
           tbody.innerHTML = filtered.map(r => {
             const locSafe = (r.loc || '-').replace(/'/g, "\\'");
             return `
@@ -3156,6 +3238,115 @@ function applyMethodDefaults(method){
           </tr>
         `;
           }).join('');
+        }
+
+        function getRecordSection(r) {
+          if (r.section) return String(r.section).trim();
+          const loc = r.loc || '';
+          const m = loc.match(/(Sec\.?\s*[0-9]+(?:-[0-9]+)?)/i);
+          if (m) return m[1].replace(/\s+/g, ' ');
+          const parts = loc.split('/').map(p => p.trim());
+          if (parts.length >= 2 && /^Sec/i.test(parts[1])) return parts[1];
+          return '';
+        }
+
+        function getRecordLine(r) {
+          if (r.line) return String(r.line).trim();
+          const loc = r.loc || '';
+          const parts = loc.split('/').map(p => p.trim());
+          if (parts.length >= 3) {
+            return parts.slice(2).join(' / ').replace(/\s*\([^)]*\)\s*$/, '').trim();
+          }
+          return loc.trim();
+        }
+
+        function updateBillingSectionOptions(preserveVal) {
+          const secSelect = document.getElementById('select-billing-section-filter');
+          if (!secSelect) return;
+          const currentCompany = document.getElementById('select-billing-company-filter')?.value || '전체';
+          const prevVal = preserveVal ? secSelect.value : '전체';
+
+          const matchingSecs = ['전체'];
+          allBillingRecords.forEach(r => {
+            if (currentCompany !== '전체' && r.company !== currentCompany) return;
+            const sec = getRecordSection(r);
+            if (sec && !matchingSecs.includes(sec)) matchingSecs.push(sec);
+          });
+          matchingSecs.sort((a, b) => (a === '전체' ? -1 : b === '전체' ? 1 : a.localeCompare(b, undefined, {numeric: true})));
+
+          secSelect.innerHTML = matchingSecs.map(s => `<option value="${s}">${s}</option>`).join('');
+          secSelect.value = matchingSecs.includes(prevVal) ? prevVal : '전체';
+        }
+
+        function updateBillingLineOptions(preserveVal) {
+          const lineSelect = document.getElementById('select-billing-line-filter');
+          if (!lineSelect) return;
+          const currentCompany = document.getElementById('select-billing-company-filter')?.value || '전체';
+          const currentSec = document.getElementById('select-billing-section-filter')?.value || '전체';
+          const prevVal = preserveVal ? lineSelect.value : '전체';
+
+          const matchingLines = ['전체'];
+          allBillingRecords.forEach(r => {
+            if (currentCompany !== '전체' && r.company !== currentCompany) return;
+            if (currentSec !== '전체') {
+              const sec = getRecordSection(r);
+              if (sec !== currentSec && !(r.loc || '').includes(currentSec)) return;
+            }
+            const line = getRecordLine(r);
+            if (line && !matchingLines.includes(line)) matchingLines.push(line);
+          });
+          matchingLines.sort((a, b) => (a === '전체' ? -1 : b === '전체' ? 1 : a.localeCompare(b, undefined, {numeric: true})));
+
+          lineSelect.innerHTML = matchingLines.map(l => `<option value="${l}">${l}</option>`).join('');
+          lineSelect.value = matchingLines.includes(prevVal) ? prevVal : '전체';
+        }
+
+        function applyBillingFilters() {
+          const comp = document.getElementById('select-billing-company-filter')?.value || '전체';
+          const sec = document.getElementById('select-billing-section-filter')?.value || '전체';
+          const dt = document.getElementById('select-billing-date-filter')?.value || '전체';
+          const line = document.getElementById('select-billing-line-filter')?.value || '전체';
+
+          const filtered = allBillingRecords.filter(r => {
+            if (comp !== '전체' && r.company !== comp) return false;
+            if (dt !== '전체' && r.date !== dt) return false;
+            if (sec !== '전체') {
+              const rSec = getRecordSection(r);
+              if (rSec !== sec) {
+                const locText = String(r.loc || '').toLowerCase().replace(/\s+/g, '');
+                const secKey = sec.toLowerCase().replace(/\s+/g, '');
+                if (!locText.includes(secKey)) return false;
+              }
+            }
+            if (line !== '전체') {
+              const rLine = getRecordLine(r);
+              if (rLine !== line) {
+                const locText = String(r.loc || '').toLowerCase();
+                if (!locText.includes(line.toLowerCase())) return false;
+              }
+            }
+            return true;
+          });
+
+          const conds = [];
+          if (comp !== '전체') conds.push(comp);
+          if (sec !== '전체') conds.push(sec);
+          if (line !== '전체') conds.push(line);
+          if (dt !== '전체') conds.push(dt);
+          const filterTitle = conds.length > 0 ? conds.join(' · ') : '전체';
+
+          updateBillingSummary(filtered, filterTitle);
+          renderBillingRows(filtered);
+
+          const countEl = document.getElementById('billing-filter-count');
+          if (countEl) countEl.textContent = `${filtered.length}건 표시`;
+
+          const toggleBtn = document.getElementById('btn-toggle-billing-detail');
+          const detailWrap = document.getElementById('workspace-billing-detail-wrap');
+          if (toggleBtn && detailWrap) {
+            const isHidden = detailWrap.style.display === 'none';
+            toggleBtn.textContent = isHidden ? `▼ 일별 기성 정산 상세 목록 (${filtered.length}건) 펼치기` : `▲ 일별 기성 정산 상세 목록 (${filtered.length}건) 접기`;
+          }
         }
 
         window.showBillingLocModal = function(date, comp, loc) {
@@ -3190,7 +3381,9 @@ function applyMethodDefaults(method){
           modal.style.display = 'flex';
         };
 
-        renderBillingTbody('전체');
+        updateBillingSectionOptions(false);
+        updateBillingLineOptions(false);
+        applyBillingFilters();
 
         const toggleBtn = document.getElementById('btn-toggle-billing-detail');
         const detailWrap = document.getElementById('workspace-billing-detail-wrap');
@@ -3198,14 +3391,48 @@ function applyMethodDefaults(method){
           toggleBtn.addEventListener('click', () => {
             const isHidden = detailWrap.style.display === 'none';
             detailWrap.style.display = isHidden ? 'block' : 'none';
-            toggleBtn.textContent = isHidden ? `▲ 일별 기성 정산 상세 목록 (${b.records_count}건) 접기` : `▼ 일별 기성 정산 상세 목록 (${b.records_count}건) 펼치기`;
+            const countText = document.getElementById('billing-filter-count')?.textContent || '';
+            toggleBtn.textContent = isHidden ? `▲ 일별 기성 정산 상세 목록 (${countText}) 접기` : `▼ 일별 기성 정산 상세 목록 (${countText}) 펼치기`;
           });
         }
 
         const compSelect = document.getElementById('select-billing-company-filter');
         if (compSelect) {
-          compSelect.addEventListener('change', (e) => {
-            renderBillingTbody(e.target.value);
+          compSelect.addEventListener('change', () => {
+            updateBillingSectionOptions(false);
+            updateBillingLineOptions(false);
+            applyBillingFilters();
+          });
+        }
+
+        const secSelect = document.getElementById('select-billing-section-filter');
+        if (secSelect) {
+          secSelect.addEventListener('change', () => {
+            updateBillingLineOptions(false);
+            applyBillingFilters();
+          });
+        }
+
+        const dtSelect = document.getElementById('select-billing-date-filter');
+        if (dtSelect) {
+          dtSelect.addEventListener('change', applyBillingFilters);
+        }
+
+        const lineSelect = document.getElementById('select-billing-line-filter');
+        if (lineSelect) {
+          lineSelect.addEventListener('change', applyBillingFilters);
+        }
+
+        const resetBtn = document.getElementById('btn-reset-billing-filter');
+        if (resetBtn) {
+          resetBtn.addEventListener('click', () => {
+            const cEl = document.getElementById('select-billing-company-filter');
+            const dEl = document.getElementById('select-billing-date-filter');
+            if (cEl) cEl.value = '전체';
+            if (dEl) dEl.value = '전체';
+            updateBillingSectionOptions(false);
+            updateBillingLineOptions(false);
+            applyBillingFilters();
           });
         }
       }
