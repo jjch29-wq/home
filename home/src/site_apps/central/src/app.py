@@ -573,7 +573,7 @@ class MaterialManager:
         self.vehicles = [] # Initialize vehicle list
         self.vehicle_inspections = {} # [NEW] Track active inspection widgets
         self.vehicle_boxes = [] # [NEW] Track active inspection widgets for automated save
-        self.companies = [] # Initialize companies list
+        self.companies = ['GS네오텍', '다림건설(주)', '한국지역난방공사'] # Initialize companies list
         self.worktimes = [] # Initialize worktimes list
         self.ot_times = [] # Initialize ot_times list
         self.test_items = [] # [NEW] Initialize test_items
@@ -9397,9 +9397,10 @@ class MaterialManager:
                 
         # 4. 업체(Company) 데이터 수집
         company_data_list = []
+        client_code = self.cb_daily_client.get().strip() if hasattr(self, 'cb_daily_client') else '한국지역난방공사'
         if hasattr(self, 'ndt_company_entries'):
             for company_entries in self.ndt_company_entries:
-                company_code = company_entries['_company'].get().strip()
+                company_code = company_entries['_company'].get().strip() or client_code
                 ndt_data = {name: to_f(company_entries.get(name)) for name in self.ndt_materials_all}
                 
                 # [REFINEMENT] Create record if there is NDT data OR it is the first entry (guaranteed row)
@@ -9411,7 +9412,7 @@ class MaterialManager:
                     })
         
         if not company_data_list: # [FALLBACK] Ensure at least one row exists
-             company_data_list.append({'회사코드': "", 'ndt_data': {}, 'is_primary': True})
+             company_data_list.append({'회사코드': client_code or "한국지역난방공사", 'ndt_data': {}, 'is_primary': True})
 
         # 5. 공통 레코드 데이터 구성 (기본값)
         from site_apps.central.src.aux_equipment import value as auxiliary_equipment_value
@@ -10410,6 +10411,9 @@ class MaterialManager:
                 try: self.ent_daily_date.set_date(pd.to_datetime(record['Date']))
                 except: pass
             self._last_daily_date = self.ent_daily_date.get_date()
+            if hasattr(self, 'cb_daily_client'):
+                client_val = self.clean_nan(record.get('회사코드', '')) or '한국지역난방공사'
+                self.cb_daily_client.set(client_val)
             if '업체명' in record:
                 comp_val = self.clean_nan(record['업체명']).split(' [')[0]
                 self.cb_daily_company.set(comp_val)
