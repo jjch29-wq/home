@@ -44,6 +44,22 @@ class DailyWorkReportManager:
                 'col_map': {'vehicle_info': 'B', 'mileage': 'H', 'fuel': 'C', 'clean': 'E', 'oil': 'G', 'tire': 'I', 'light': 'K', 'safety': 'M'}
             }
         }
+        res_mapping = os.path.join(os.path.dirname(template_path), 'report_mapping.json')
+        if not os.path.exists(res_mapping):
+            res_mapping = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'report_mapping.json')
+        if os.path.exists(res_mapping):
+            try:
+                import json
+                with open(res_mapping, 'r', encoding='utf-8') as f:
+                    loaded = json.load(f)
+                    if isinstance(loaded, dict) and loaded:
+                        for k, v in loaded.items():
+                            if k in self.default_mapping and isinstance(v, dict):
+                                self.default_mapping[k].update(v)
+                            else:
+                                self.default_mapping[k] = v
+            except Exception:
+                pass
 
     def generate_report(self, data, output_path, custom_mapping=None):
         from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -137,6 +153,9 @@ class DailyWorkReportManager:
         gen_map = mapping.get('general', {})
         car_text = format_vehicle_numbers(data.get('car_no', ''))
         car_row = sheet[gen_map.get('car_no') or 'N9'].row
+        equip_coord = gen_map.get('equipment') or 'E9'
+        equip_row = sheet[equip_coord].row
+        equip_text = str(data.get('equipment', '') or '').strip()
         for key in ['company', 'project_name', 'standard', 'equipment', 'report_no', 'inspection_item', 'inspector', 'car_no', 'inspector_n8']:
             val_key = 'inspector' if key == 'inspector_n8' else key
             val = data.get(val_key, '')
@@ -153,6 +172,20 @@ class DailyWorkReportManager:
                             car_cell = sheet.cell(merged.min_row, merged.min_col)
                             break
                 car_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            if key == 'equipment' and gen_map.get(key):
+                equip_cell = sheet[gen_map[key]]
+                if isinstance(equip_cell, MergedCell):
+                    for merged in sheet.merged_cells.ranges:
+                        if equip_cell.coordinate in merged:
+                            equip_cell = sheet.cell(merged.min_row, merged.min_col)
+                            break
+                equip_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                if len(equip_text) > 100:
+                    equip_cell.font = Font(name='맑은 고딕', size=8, bold=False)
+                elif len(equip_text) > 50:
+                    equip_cell.font = Font(name='맑은 고딕', size=8.5, bold=False)
+                else:
+                    equip_cell.font = Font(name='맑은 고딕', size=9, bold=False)
 
         # 2. Methods (Dynamic Offset)
         methods_data = data.get('methods', {})
@@ -645,8 +678,40 @@ class DailyWorkReportManager:
         sheet.page_margins.left = 10 / 25.4; sheet.page_margins.right = 10 / 25.4
         for r in range(1, 12):
             sheet.row_dimensions[r].height = 15
-        car_height = max(15, len(car_text.splitlines()) * 15 + 4) if car_text else 15
-        sheet.row_dimensions[car_row].height = car_height
+
+        def _estimate_wrapped_lines(text, chars_per_line=30):
+            if not text:
+                return 1
+            total = 0
+            for para in str(text).splitlines():
+                if not para.strip():
+                    total += 1
+                    continue
+                cur = 0
+                lines = 1
+                for ch in para:
+                    w = 2 if ord(ch) > 127 else 1
+                    if cur + w > chars_per_line:
+                        lines += 1
+                        cur = w
+                    else:
+                        cur += w
+                total += max(1, lines)
+            return max(1, total)
+
+        equip_chars_per_line = 33 if len(equip_text) > 100 else 30 if len(equip_text) > 50 else 28
+        equip_lines = _estimate_wrapped_lines(equip_text, equip_chars_per_line)
+        equip_line_h = 11.5 if len(equip_text) > 100 else 12.5 if len(equip_text) > 50 else 13.5
+        equip_height = max(15, equip_lines * equip_line_h + 4) if equip_text else 15
+
+        car_lines = max(1, len(car_text.splitlines()))
+        car_height = max(15, car_lines * 15 + 4) if car_text else 15
+
+        if car_row == equip_row:
+            sheet.row_dimensions[car_row].height = max(15, car_height, equip_height)
+        else:
+            sheet.row_dimensions[car_row].height = car_height
+            sheet.row_dimensions[equip_row].height = equip_height
         for t_row in [12, 26, 31, 37, 42]:
             try: sheet.row_dimensions[t_row + method_offset].height = 20
             except: pass
@@ -769,7 +834,7 @@ class DailyWorkReportManager:
                            for row in visible_rows)
         body_height = 277 / 25.4 * 72
         if total_height > body_height:
-            protected_rows = set(range(note_range_start, note_range_end + 1)) | {car_row}
+            protected_rows = set(range(note_range_start, note_range_end + 1)) | {car_row, equip_row}
             protected_height = sum(row.height or 15 for row in visible_rows if row.index in protected_rows)
             other_rows = [row for row in visible_rows if row.index not in protected_rows]
             other_height = sum(row.height or sheet.sheet_format.defaultRowHeight or 15 for row in other_rows)

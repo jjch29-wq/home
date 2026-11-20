@@ -193,34 +193,41 @@ def setup_daily_usage_tab_impl(self):
     for c in range(4):
         form_content.columnconfigure(c, weight=0)
 
-    # Row 0: 업체명, 현장명
-    ttk.Label(common_frame, text="업체명:").grid(row=0, column=0, padx=(5, 0), pady=1, sticky='e')
+    # Row 0: 발주처, 시공사, 현장명, 날짜
+    ttk.Label(common_frame, text="발주처:").grid(row=0, column=0, padx=(5, 0), pady=1, sticky='e')
+    client_container = ttk.Frame(common_frame)
+    client_container.grid(row=0, column=1, padx=(2, 8), pady=1, sticky='w')
+    self.cb_daily_client = ttk.Combobox(client_container, width=18, values=['한국지역난방공사', '한국지역난방공사 중앙지사'])
+    self.cb_daily_client.set('한국지역난방공사')
+    self.cb_daily_client.pack(side='left')
+
+    ttk.Label(common_frame, text="시공사:").grid(row=0, column=2, padx=(5, 0), pady=1, sticky='e')
     co_container = ttk.Frame(common_frame)
-    co_container.grid(row=0, column=1, padx=(2, 10), pady=1, sticky='w')
-    self.cb_daily_company = ttk.Combobox(co_container, width=25, values=self.companies)
+    co_container.grid(row=0, column=3, padx=(2, 8), pady=1, sticky='w')
+    self.cb_daily_company = ttk.Combobox(co_container, width=18, values=self.companies)
     self.cb_daily_company.pack(side='left')
     btn_company_mgr = tk.Button(co_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                command=lambda: self.open_list_management_dialog('companies', target_cb=self.cb_daily_company))
     btn_company_mgr.pack(side='left', padx=(2, 0))
 
-    ttk.Label(common_frame, text="현장명:").grid(row=0, column=2, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(common_frame, text="현장명:").grid(row=0, column=4, padx=(5, 0), pady=1, sticky='e')
     site_container = ttk.Frame(common_frame)
-    site_container.grid(row=0, column=3, padx=(2, 5), pady=1, sticky='w')
-    self.cb_daily_site = ttk.Combobox(site_container, width=25, values=self.sites)
+    site_container.grid(row=0, column=5, padx=(2, 8), pady=1, sticky='w')
+    self.cb_daily_site = ttk.Combobox(site_container, width=16, values=self.sites)
     self.cb_daily_site.pack(side='left')
     btn_site_mgr = tk.Button(site_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                             command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_daily_site))
     btn_site_mgr.pack(side='left', padx=(2, 0))
 
-    # Row 1: 날짜, 장비명
-    ttk.Label(common_frame, text="날짜:").grid(row=0, column=4, padx=(5, 0), pady=1, sticky='e')
+    # 날짜
+    ttk.Label(common_frame, text="날짜:").grid(row=0, column=6, padx=(5, 0), pady=1, sticky='e')
     from tkcalendar import DateEntry
-    self.ent_daily_date = DateEntry(common_frame, width=15, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly')
-    self.ent_daily_date.grid(row=0, column=5, padx=(2, 10), pady=1, sticky='w')
+    self.ent_daily_date = DateEntry(common_frame, width=13, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly')
+    self.ent_daily_date.grid(row=0, column=7, padx=(2, 8), pady=1, sticky='w')
     from site_apps.central.src.views.calendar_work_summary import CalendarWorkSummary
     self.daily_calendar_summary = CalendarWorkSummary(self.ent_daily_date, self)
     ttk.Label(common_frame, text='● 초록: 저장된 작업 있음', foreground='#2E7D32').grid(
-        row=0, column=6, padx=(0, 5), pady=1, sticky='w')
+        row=0, column=8, padx=(0, 5), pady=1, sticky='w')
 
     ttk.Label(form_content, text="주 장비:").grid(row=1, column=2, padx=(5, 0), pady=1, sticky='e')
     equip_container = ttk.Frame(form_content)

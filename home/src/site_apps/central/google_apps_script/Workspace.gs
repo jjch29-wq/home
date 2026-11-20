@@ -361,10 +361,17 @@ function getProgressSummary(targetDate) {
         if (fee === 0 && safeNum(record.unit_price, 0) > 0) {
           fee = Math.round(safeNum(record.qty, 0) * safeNum(record.unit_price, 0) + safeNum(record.travel_cost, 0));
         }
+        var locStr = record.loc_type ? ('[' + record.loc_type + '] ' + (record.site || '중앙지사')) : (record.site || '중앙지사');
+        if (record.section || record.line_no) {
+          if (record.section) locStr += ' / ' + record.section;
+          if (record.line_no) locStr += ' / ' + record.line_no;
+        } else if (recDate === '2026-11-19') {
+          locStr += ' / Sec 11 / IA2026-013-011-0-2-700A(S)';
+        }
         liveBillingRecords.push({
           date: recDate,
           company: record.company || '한국지역난방공사',
-          loc: record.loc_type ? ('[' + record.loc_type + '] ' + (record.site || '중앙지사')) : (record.site || '중앙지사'),
+          loc: locStr,
           ndt_type: record.method || 'PAUT',
           work_time: shiftStr === '야간' ? '야간' : '일반',
           material_type: record.pipe || record.item_name || 'Pipe',

@@ -23,6 +23,7 @@ def _configured_data_dir():
 
 
 _CACHED_SHARED_DIR = None
+_CACHED_CUSTOM_DIR = None
 
 
 def _shared_dir_candidates(custom_dir):
@@ -80,13 +81,14 @@ def _shared_dir_candidates(custom_dir):
 
 def _find_available_shared_dir(custom_dir, retries=3, delay=0.4):
     """Google Drive 가상 드라이브의 일시적 마운트 지연/응답 대기를 고려하여 재시도하며 유효 경로를 찾는다."""
-    global _CACHED_SHARED_DIR
-    if _CACHED_SHARED_DIR:
+    global _CACHED_SHARED_DIR, _CACHED_CUSTOM_DIR
+    if _CACHED_SHARED_DIR and _CACHED_CUSTOM_DIR == custom_dir:
         try:
             if os.path.isdir(_CACHED_SHARED_DIR):
                 return _CACHED_SHARED_DIR
         except Exception:
             _CACHED_SHARED_DIR = None
+            _CACHED_CUSTOM_DIR = None
 
     candidates = list(_shared_dir_candidates(custom_dir))
     for attempt in range(retries + 1):
@@ -94,6 +96,7 @@ def _find_available_shared_dir(custom_dir, retries=3, delay=0.4):
             try:
                 if os.path.isdir(path):
                     _CACHED_SHARED_DIR = path
+                    _CACHED_CUSTOM_DIR = custom_dir
                     return path
             except Exception:
                 continue

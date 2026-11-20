@@ -57,6 +57,33 @@ class DailyReportShiftTests(unittest.TestCase):
                 finally:
                     book.close()
 
+    def test_long_equipment_names_expand_row_height_and_preserve_readable_font(self):
+        template = ROOT / 'home/src/site_apps/central/resources/Template_DailyWorkReport.xlsx'
+        long_equipment = (
+            'PAUT MX2(OMNI2-103085), JIREH Scanner, 5L16-A10 PAUT PROBE(A10) (S1873), '
+            'SA10-N55S-IHC PAUT PROBE-WEDGE(SA10), SA2-N55S-IHC PAUT PROBE-WEDGE(SA2), '
+            '5L64-A2 PAUT PROBE(A2) (S1599), 5L64-A2 PAUT PROBE(A2) (S1694)'
+        )
+        with tempfile.TemporaryDirectory(dir=ROOT / 'tmp') as directory:
+            data = {'date': datetime.date(2026, 11, 19), 'equipment': long_equipment}
+            output = Path(directory) / 'equipment.xlsx'
+            with contextlib.redirect_stdout(io.StringIO()):
+                DailyWorkReportManager(str(template)).generate_report(data, output)
+            book = openpyxl.load_workbook(output)
+            try:
+                sheet = book.active
+                self.assertEqual(sheet['E9'].value, long_equipment)
+                self.assertTrue(sheet['E9'].alignment.wrap_text)
+                self.assertLessEqual(sheet['E9'].font.size, 8.5)
+                # Ensure row 9 height is substantially expanded to fit all equipment lines
+                self.assertGreaterEqual(sheet.row_dimensions[9].height, 50)
+                # Ensure whole sheet still fits within 1-page printable boundary
+                visible_rows = [sheet.row_dimensions[r] for r in range(1, 53) if not sheet.row_dimensions[r].hidden]
+                total_height = sum(r.height or 15 for r in visible_rows)
+                self.assertLessEqual(total_height, 277 / 25.4 * 72 + 1)
+            finally:
+                book.close()
+
     def test_day_night_totals_preserve_saved_quantities_prices_and_amounts(self):
         result = collect_method_totals(records())
         self.assertEqual(list(result), ['PAUT(주간)', 'PAUT(야간)'])
