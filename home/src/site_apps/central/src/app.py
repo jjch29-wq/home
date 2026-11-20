@@ -6039,6 +6039,12 @@ class MaterialManager:
             return
         old_daily = self.daily_usage_df.copy(deep=True)
         old_transactions = self.transactions_df.copy(deep=True)
+        cloud_deletes = []
+        for idx in indices:
+            row = old_daily.loc[idx]
+            etime = str(row.get('EntryTime', '')).split('.')[0].strip()
+            if etime and etime.lower() not in ('', 'nan', 'nat', 'none'):
+                cloud_deletes.append(etime)
         try:
             # Auto-deduction transactions are already excluded by stock calculation.
             # Date/site matches cannot identify which daily job created a legacy transaction.
@@ -6050,6 +6056,27 @@ class MaterialManager:
             self.transactions_df = old_transactions
             messagebox.showerror('삭제 저장 실패', f'{error}\n원본 기록을 복원했습니다.', parent=self.root)
             return
+
+        # [CLOUD SYNC] Propagate deletion to Google Apps Script and update local state immediately
+        if cloud_deletes:
+            try:
+                import threading
+                from site_apps.central.src.sync_google_sheet import push_batch_to_web_app, DEFAULT_INVENTORY_PATH, _load_sync_state, _save_sync_state
+                try:
+                    state = _load_sync_state(DEFAULT_INVENTORY_PATH)
+                    cur_times = set(state.get("cloud_entry_times", [])) - set(cloud_deletes)
+                    _save_sync_state(DEFAULT_INVENTORY_PATH, cur_times)
+                except Exception as ex:
+                    print(f"DEBUG: Failed to update local sync state on delete: {ex}")
+
+                def _async_cloud_delete(deletes_list):
+                    try:
+                        push_batch_to_web_app(deletes=deletes_list)
+                    except Exception as err:
+                        print(f"DEBUG: Async cloud delete failed: {err}")
+                threading.Thread(target=_async_cloud_delete, args=(cloud_deletes,), daemon=True).start()
+            except Exception as e:
+                print(f"DEBUG: Cloud delete dispatch error: {e}")
         self.update_daily_usage_view()
         self.update_recent_entries_view()
         self.update_stock_view()
@@ -11872,6 +11899,12 @@ class MaterialManager:
             return
         old_daily = self.daily_usage_df.copy(deep=True)
         old_transactions = self.transactions_df.copy(deep=True)
+        cloud_deletes = []
+        for idx in indices:
+            row = old_daily.loc[idx]
+            etime = str(row.get('EntryTime', '')).split('.')[0].strip()
+            if etime and etime.lower() not in ('', 'nan', 'nat', 'none'):
+                cloud_deletes.append(etime)
         try:
             # Auto-deduction transactions are already excluded by stock calculation.
             # Date/site matches cannot identify which daily job created a legacy transaction.
@@ -11883,6 +11916,27 @@ class MaterialManager:
             self.transactions_df = old_transactions
             messagebox.showerror('삭제 저장 실패', f'{error}\n원본 기록을 복원했습니다.', parent=self.root)
             return
+
+        # [CLOUD SYNC] Propagate deletion to Google Apps Script and update local state immediately
+        if cloud_deletes:
+            try:
+                import threading
+                from site_apps.central.src.sync_google_sheet import push_batch_to_web_app, DEFAULT_INVENTORY_PATH, _load_sync_state, _save_sync_state
+                try:
+                    state = _load_sync_state(DEFAULT_INVENTORY_PATH)
+                    cur_times = set(state.get("cloud_entry_times", [])) - set(cloud_deletes)
+                    _save_sync_state(DEFAULT_INVENTORY_PATH, cur_times)
+                except Exception as ex:
+                    print(f"DEBUG: Failed to update local sync state on delete: {ex}")
+
+                def _async_cloud_delete(deletes_list):
+                    try:
+                        push_batch_to_web_app(deletes=deletes_list)
+                    except Exception as err:
+                        print(f"DEBUG: Async cloud delete failed: {err}")
+                threading.Thread(target=_async_cloud_delete, args=(cloud_deletes,), daemon=True).start()
+            except Exception as e:
+                print(f"DEBUG: Cloud delete dispatch error: {e}")
         self.update_daily_usage_view()
         self.update_recent_entries_view()
         self.update_stock_view()
