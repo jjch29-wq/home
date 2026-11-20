@@ -316,6 +316,15 @@ function getProgressSummary(targetDate) {
     });
   }
 
+  // PC 기성 정산 스냅샷의 마감 기준일(최대 일자, 예: 2026-11-06) 확인
+  var baseBilling = (typeof CENTRAL_REFERENCE !== 'undefined' && CENTRAL_REFERENCE.billing_records) || [];
+  var maxBaseBillingDate = '';
+  baseBilling.forEach(function(rec) {
+    if (rec.date && rec.date > maxBaseBillingDate) {
+      maxBaseBillingDate = rec.date;
+    }
+  });
+
   // 2. Google Spreadsheet 실시간 DailyUsage 시트 반영
   var sheet = getDailyUsageSheet();
   var lastRow = sheet.getLastRow();
@@ -346,8 +355,8 @@ function getProgressSummary(targetDate) {
         }
       }
 
-      // 기성 연동용 실시간 레코드 수집 (검사비 또는 물량이 있는 경우)
-      if (safeNum(record.qty, 0) > 0 || safeNum(record.total_fee, 0) > 0) {
+      // 기성 연동용 실시간 레코드 수집: PC 스냅샷 마감일(2026-11-06) 이후의 신규 일보만 수집 (중복 청구 방지)
+      if (recDate > maxBaseBillingDate && (safeNum(record.qty, 0) > 0 || safeNum(record.total_fee, 0) > 0)) {
         var fee = safeNum(record.total_fee, 0);
         if (fee === 0 && safeNum(record.unit_price, 0) > 0) {
           fee = Math.round(safeNum(record.qty, 0) * safeNum(record.unit_price, 0) + safeNum(record.travel_cost, 0));
@@ -468,8 +477,7 @@ function getProgressSummary(targetDate) {
   var mtDay = resultRows.find(function(r) { return r.comp_key === 'MT_전체(주간)'; }) || {};
   var ptDay = resultRows.find(function(r) { return r.comp_key === 'PT_전체(주간)'; }) || {};
 
-  // 5. 기성 정산 요약 및 세부 레코드 (PC 기성 정산(NDT) + 구글시트 실시간 일보 자동 병합)
-  var baseBilling = (typeof CENTRAL_REFERENCE !== 'undefined' && CENTRAL_REFERENCE.billing_records) || [];
+  // 5. 기성 정산 요약 및 세부 레코드 (PC 기성 정산(NDT) + 2026-11-06 이후 신규 구글시트 실시간 일보 자동 병합)
   var billingList = [];
   var billingSummary = {
     total_amount: 0,
@@ -484,24 +492,17 @@ function getProgressSummary(targetDate) {
     records_count: 0
   };
 
-  // 기존 PC 기성 스냅샷 등록 및 중복 방지 키 맵
-  var existingBillingKeys = {};
+  // 기존 PC 기성 스냅샷 등록
   baseBilling.forEach(function(rec) {
     if (!rec.date || rec.date <= targetDate) {
       billingList.push(rec);
-      var key = String(rec.date).trim() + '_' + String(rec.company).trim() + '_' + String(rec.ndt_type).trim() + '_' + Number(rec.qty || 0).toFixed(4);
-      existingBillingKeys[key] = true;
     }
   });
 
-  // 구글 시트 실시간 일보 중 PC 기성 스냅샷에 없는 신규 일보 자동 병합
+  // PC 스냅샷 마감일(2026-11-06) 이후의 신규 구글 시트 실시간 일보만 병합 (중복 방지)
   liveBillingRecords.forEach(function(rec) {
     if (rec.date && rec.date <= targetDate) {
-      var key = String(rec.date).trim() + '_' + String(rec.company).trim() + '_' + String(rec.ndt_type).trim() + '_' + Number(rec.qty || 0).toFixed(4);
-      if (!existingBillingKeys[key]) {
-        billingList.push(rec);
-        existingBillingKeys[key] = true;
-      }
+      billingList.push(rec);
     }
   });
 
