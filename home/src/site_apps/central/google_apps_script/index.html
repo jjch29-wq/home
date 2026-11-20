@@ -102,18 +102,31 @@
           </select>
         </div>
         <div>
-          <label class="block text-xs font-bold text-blue-700 mb-1">시공사 (기성)</label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-bold text-blue-700">시공사 (기성)</label>
+            <button type="button" id="btn-toggle-custom-company"
+              onclick="promptDirectCompany()"
+              class="text-[11px] text-blue-600 font-semibold hover:underline">
+              ✏️ 직접 입력
+            </button>
+          </div>
           <select id="select-company"
             class="w-full bg-blue-50/50 border border-blue-200 rounded-xl px-3 py-2 text-sm font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onchange="handleContractorChange(this)">
+            onchange="handleContractorChange(this, true)">
             <option value="GS네오텍" selected>GS네오텍</option>
             <option value="다림건설(주)">다림건설(주)</option>
             <option value="한국지역난방공사">한국지역난방공사</option>
             <option value="한국지역난방공사 중앙지사">한국지역난방공사 중앙지사</option>
-            <option value="__direct__">직접 입력...</option>
+            <option value="__direct__">✏️ 직접 입력...</option>
           </select>
-          <input type="text" id="input-company-direct" placeholder="시공사명 입력 후 엔터 (자동 등록)"
-            class="hidden mt-1 w-full bg-white border border-blue-300 rounded-lg px-2 py-1 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <div id="wrap-company-direct" class="hidden mt-1.5 flex gap-1.5">
+            <input type="text" id="input-company-direct" placeholder="시공사명 직접 입력"
+              class="flex-1 bg-white border border-blue-300 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <button type="button" id="btn-commit-company" onclick="commitDirectCompany()"
+              class="px-2.5 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg shadow hover:bg-blue-700 active:scale-95 transition">
+              등록
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1223,7 +1236,10 @@
 
     const directCompanyInput = document.getElementById("input-company-direct");
     if (directCompanyInput) {
-      directCompanyInput.addEventListener("blur", commitDirectCompany);
+      directCompanyInput.addEventListener("blur", () => {
+        const val = directCompanyInput.value.trim();
+        if (val) commitDirectCompany();
+      });
       directCompanyInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -1332,7 +1348,7 @@
           const currentVal = compSelect.value;
           const comps = appConfig.companies;
           let opts = comps.map(c => `<option value="${c}">${c}</option>`).join("");
-          opts += '<option value="__direct__">직접 입력...</option>';
+          opts += '<option value="__direct__">✏️ 직접 입력...</option>';
           compSelect.innerHTML = opts;
           if (currentVal && Array.from(compSelect.options).some(o => o.value === currentVal)) {
             compSelect.value = currentVal;
@@ -1365,19 +1381,26 @@
       renderWorkers();
     }
 
-    function commitDirectCompany() {
-      const directInput = document.getElementById("input-company-direct");
+    function promptDirectCompany() {
       const compSelect = document.getElementById("select-company");
-      if (!directInput || !compSelect) return;
-      const val = directInput.value.trim();
-      if (!val) {
-        if (compSelect.value === "__direct__") {
-          const firstNonDirect = Array.from(compSelect.options).find(o => o.value !== "__direct__");
-          if (firstNonDirect) compSelect.value = firstNonDirect.value;
-          directInput.classList.add("hidden");
-        }
-        return;
+      const current = (compSelect && compSelect.value !== "__direct__") ? compSelect.value : "";
+      const custom = prompt("시공사(기성) 업체명을 입력하세요 (예: GS네오텍):", current);
+      if (custom && custom.trim()) {
+        registerNewCompany(custom.trim());
+      } else {
+        const wrap = document.getElementById("wrap-company-direct");
+        const inp = document.getElementById("input-company-direct");
+        if (wrap) wrap.classList.remove("hidden");
+        if (inp) setTimeout(() => inp.focus(), 150);
       }
+    }
+    window.promptDirectCompany = promptDirectCompany;
+
+    function registerNewCompany(val) {
+      val = (val || "").trim();
+      if (!val || val === "__direct__") return;
+      const compSelect = document.getElementById("select-company");
+      if (!compSelect) return;
 
       let existingOpt = Array.from(compSelect.options).find(o => o.value.toLowerCase() === val.toLowerCase());
       if (existingOpt) {
@@ -1396,22 +1419,37 @@
         appConfig.companies.push(compSelect.value);
       }
 
-      directInput.value = "";
-      directInput.classList.add("hidden");
+      const wrap = document.getElementById("wrap-company-direct");
+      const inp = document.getElementById("input-company-direct");
+      if (inp) inp.value = "";
+      if (wrap) wrap.classList.add("hidden");
+
       showToast(`시공사 '${compSelect.value}' 등록 완료`);
       if (window.workspacePersist) workspacePersist();
     }
+    window.registerNewCompany = registerNewCompany;
+
+    function commitDirectCompany() {
+      const inp = document.getElementById("input-company-direct");
+      const val = inp ? inp.value.trim() : "";
+      if (val) {
+        registerNewCompany(val);
+      }
+    }
     window.commitDirectCompany = commitDirectCompany;
 
-    function handleContractorChange(sel) {
-      const directInput = document.getElementById("input-company-direct");
-      if (!directInput) return;
+    function handleContractorChange(sel, interactive = true) {
+      const wrap = document.getElementById("wrap-company-direct");
+      const inp = document.getElementById("input-company-direct");
       if (sel.value === "__direct__") {
-        directInput.classList.remove("hidden");
-        directInput.value = "";
-        directInput.focus();
+        if (interactive) {
+          promptDirectCompany();
+        } else {
+          if (wrap) wrap.classList.remove("hidden");
+          if (inp) inp.focus();
+        }
       } else {
-        directInput.classList.add("hidden");
+        if (wrap) wrap.classList.add("hidden");
       }
     }
     window.handleContractorChange = handleContractorChange;
@@ -1808,7 +1846,7 @@
           commitDirectCompany();
           selectedCompany = document.getElementById("select-company").value;
         } else {
-          selectedCompany = "미지정";
+          selectedCompany = (appConfig && appConfig.companies && appConfig.companies[0]) || "GS네오텍";
         }
       }
       const clientSelect = document.getElementById("select-client");
