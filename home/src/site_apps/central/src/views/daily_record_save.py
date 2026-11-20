@@ -45,7 +45,26 @@ def save_prepared(app, plan):
     lists = {name:list(getattr(app, name)) for name in ('sites', 'users', 'vehicles', 'daily_units', 'equipments')}
     try:
         if replace is not None:
-            app.daily_usage_df = app.daily_usage_df.drop(replace)
+            # Preserve original cloud EntryTime and ClientRequestID so cloud background sync does not duplicate it
+            orig_entry_time = snapshot.get('EntryTime') if source is not None else None
+            orig_client_id = snapshot.get('ClientRequestID') if source is not None else None
+            if orig_entry_time is not None and not pd.isna(orig_entry_time) and str(orig_entry_time).strip():
+                for rec in plan.get('records_to_save', []):
+                    rec['EntryTime'] = orig_entry_time
+                    if orig_client_id:
+                        rec['ClientRequestID'] = orig_client_id
+
+            # Drop the replaced row and any sibling rows sharing the exact same EntryTime group
+            replace_targets = [replace]
+            if orig_entry_time is not None and not pd.isna(orig_entry_time) and str(orig_entry_time).strip() and 'EntryTime' in app.daily_usage_df:
+                matched_same_entry = app.daily_usage_df[
+                    (app.daily_usage_df.get('Date') == snapshot.get('Date')) &
+                    (app.daily_usage_df['EntryTime'] == orig_entry_time)
+                ].index.tolist()
+                if replace in matched_same_entry:
+                    replace_targets = matched_same_entry
+
+            app.daily_usage_df = app.daily_usage_df.drop(replace_targets)
         count = app._commit_usage_plan(plan, auto_save=False)
         if not count or not app.save_data(require_primary=True):
             raise RuntimeError('원본 파일에 저장하지 못했습니다. 입력 내용은 유지됩니다.')

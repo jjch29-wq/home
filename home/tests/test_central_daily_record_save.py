@@ -60,4 +60,29 @@ class DailyRecordSaveTests(unittest.TestCase):
         ask.assert_called_once()
         self.app.save_data.assert_not_called()
 
+    def test_preserves_original_entry_time_and_client_id_on_overwrite(self):
+        self.app.daily_usage_df['EntryTime'] = ['2026-10-23 09:00:00', '2026-10-23 10:00:00']
+        self.app.daily_usage_df['ClientRequestID'] = ['REQ-001', 'REQ-002']
+        remember_source(self.app, 0)
+        new_plan = {'records_to_save': [{'Date': '2026-10-23', 'Site': 'A', 'Usage': 15, 'EntryTime': '2026-10-23 12:00:00'}]}
+        with patch('site_apps.central.src.views.daily_record_save.messagebox.askyesnocancel', return_value=True):
+            self.assertEqual(save_prepared(self.app, new_plan), 1)
+        self.assertEqual(self.app.daily_usage_df.iloc[-1]['EntryTime'], '2026-10-23 09:00:00')
+        self.assertEqual(self.app.daily_usage_df.iloc[-1]['ClientRequestID'], 'REQ-001')
+
+    def test_drops_all_sibling_records_sharing_same_entry_time(self):
+        # Suppose a prior save split into 2 rows sharing the same EntryTime
+        self.app.daily_usage_df = pd.DataFrame([
+            {'Date': '2026-10-23', 'Site': 'A', 'Usage': 10, 'EntryTime': '2026-10-23 09:00:00'},
+            {'Date': '2026-10-23', 'Site': 'A', 'Usage': 5,  'EntryTime': '2026-10-23 09:00:00'},
+            {'Date': '2026-10-23', 'Site': 'A', 'Usage': 20, 'EntryTime': '2026-10-23 10:00:00'},
+        ])
+        remember_source(self.app, 0)
+        new_plan = {'records_to_save': [{'Date': '2026-10-23', 'Site': 'A', 'Usage': 15}]}
+        with patch('site_apps.central.src.views.daily_record_save.messagebox.askyesnocancel', return_value=True):
+            self.assertEqual(save_prepared(self.app, new_plan), 1)
+        # Both row 0 and row 1 should have been dropped, leaving row 2 and the new row
+        self.assertEqual(list(self.app.daily_usage_df['Usage']), [20, 15])
+
+
 if __name__ == '__main__': unittest.main()
