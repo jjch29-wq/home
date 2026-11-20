@@ -259,8 +259,25 @@
           <span class="text-[10px] text-blue-700 font-semibold bg-blue-100 px-1.5 py-0.5 rounded">지역난방 표준 환산</span>
         </div>
 
+        <!-- 근무 형태 (주간 / 야간) 선택 -->
         <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
+          <label class="block text-[11px] font-bold text-slate-700 mb-1">근무 형태 (계약단가 적용)</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="btn-shift-day" class="shift-select-btn py-2 px-3 rounded-xl border text-xs font-black transition flex items-center justify-center gap-1.5 bg-blue-600 text-white border-blue-600 shadow-sm" data-shift="주간">
+              <span>☀️ 주간 (기본)</span>
+            </button>
+            <button type="button" id="btn-shift-night" class="shift-select-btn py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 bg-white text-slate-600 border-slate-200 hover:bg-slate-50" data-shift="야간">
+              <span>🌙 야간 (할증)</span>
+            </button>
+          </div>
+          <input type="hidden" id="input-work-shift" value="주간">
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-medium text-slate-500">배관 관경(Size)</label>
+            <span id="pipe-len-hint" class="text-[11px] text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">1개소당 0.8401 M</span>
+          </div>
           <select id="select-pipe"
             class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="1100A">1100A</option>
@@ -1400,7 +1417,6 @@
         rtJointsBox.classList.remove("hidden");
         nonRtJointsBox.classList.add("hidden");
         unitSelect.value = "매";
-        document.getElementById("input-unit-price").value = appConfig.base_prices.RT;
       } else if (method === "PAUT") {
         rtkCard.classList.add("hidden");
         chemCard.classList.add("hidden");
@@ -1408,12 +1424,10 @@
         rtJointsBox.classList.add("hidden");
         nonRtJointsBox.classList.remove("hidden");
         unitSelect.value = "M";
-        document.getElementById("input-unit-price").value = appConfig.base_prices.PAUT;
       } else if (method === "UT") {
         rtkCard.classList.add("hidden"); chemCard.classList.add("hidden");
         pautCard.classList.remove("hidden"); rtJointsBox.classList.add("hidden");
         nonRtJointsBox.classList.remove("hidden"); unitSelect.value = "M";
-        document.getElementById("input-unit-price").value = appConfig.base_prices.UT || 0;
       } else {
         rtkCard.classList.add("hidden");
         chemCard.classList.remove("hidden");
@@ -1421,47 +1435,170 @@
         rtJointsBox.classList.add("hidden");
         nonRtJointsBox.classList.remove("hidden");
         unitSelect.value = (method === "MT") ? "P,M,I/D" : "M";
-        document.getElementById("input-unit-price").value = appConfig.base_prices[selectedMethod] || 0;
       }
 
       applyMethodDefaults(method);
-      if (!isManualQty) {
-        updatePipeCalc();
-      } else {
-        recalculateTotalFee();
-      }
+      isManualQty = false;
+      updatePipeCalc();
     }
 
     document.querySelectorAll(".method-btn").forEach(btn => {
       btn.addEventListener("click", () => switchMethod(btn.dataset.method));
     });
 
+    // -------------------------------------------------------------------------
+    // 중앙지사 공인 단가계약 단가표 (2026 단가 기준, 제경비 110%, 기술료 20% 공식 적용)
+    // -------------------------------------------------------------------------
+    const CENTRAL_CONTRACT_PRICES = {
+      PAUT: {
+        주간: {
+          gte300: 201863, // 300A 이상
+          a250:   229489, // 250A
+          a200:   257675, // 200A
+          a150:   286600, // 150A~125A
+          lte100: 270981  // 100A 이하
+        },
+        야간: {
+          gte300: 284015,
+          a250:   325451,
+          a200:   367731,
+          a150:   410788,
+          lte100: 387359
+        }
+      },
+      RT: {
+        주간: {
+          large: 140023, // 100A 이상 (3 1/3 x 12")
+          small: 138793  // 80A 이하 (3 1/3 x 6")
+        },
+        야간: {
+          large: 205412,
+          small: 204182
+        }
+      },
+      MT: {
+        주간: 75433,
+        야간: 112954
+      },
+      PT: {
+        주간: 78910,
+        야간: 117782
+      }
+    };
+
+    function getContractUnitPrice(method, pipeSize, shift) {
+      shift = (shift === '야간') ? '야간' : '주간';
+      const sizeNum = parseInt(String(pipeSize || '').replace(/[^0-9]/g, '')) || 250;
+
+      if (method === 'PAUT') {
+        const rates = CENTRAL_CONTRACT_PRICES.PAUT[shift];
+        if (sizeNum >= 300) return rates.gte300;
+        if (sizeNum === 250) return rates.a250;
+        if (sizeNum === 200) return rates.a200;
+        if (sizeNum >= 125) return rates.a150;
+        return rates.lte100;
+      } else if (method === 'RT') {
+        const rates = CENTRAL_CONTRACT_PRICES.RT[shift];
+        if (sizeNum >= 100) return rates.large;
+        return rates.small;
+      } else if (method === 'MT') {
+        return CENTRAL_CONTRACT_PRICES.MT[shift];
+      } else if (method === 'PT') {
+        return CENTRAL_CONTRACT_PRICES.PT[shift];
+      }
+      return 0;
+    }
+
+    function setWorkShift(shift) {
+      const isNight = (shift === '야간');
+      const val = isNight ? '야간' : '주간';
+      const hiddenInput = document.getElementById("input-work-shift");
+      if (hiddenInput) hiddenInput.value = val;
+
+      const btnDay = document.getElementById("btn-shift-day");
+      const btnNight = document.getElementById("btn-shift-night");
+
+      if (btnDay && btnNight) {
+        if (!isNight) {
+          btnDay.className = "shift-select-btn py-2 px-3 rounded-xl border text-xs font-black transition flex items-center justify-center gap-1.5 bg-blue-600 text-white border-blue-600 shadow-sm";
+          btnNight.className = "shift-select-btn py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 bg-white text-slate-600 border-slate-200 hover:bg-slate-50";
+        } else {
+          btnDay.className = "shift-select-btn py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 bg-white text-slate-600 border-slate-200 hover:bg-slate-50";
+          btnNight.className = "shift-select-btn py-2 px-3 rounded-xl border text-xs font-black transition flex items-center justify-center gap-1.5 bg-indigo-700 text-white border-indigo-700 shadow-sm";
+        }
+      }
+
+      // 작업자 목록의 기본 shift도 동기화
+      if (Array.isArray(workerRows)) {
+        workerRows.forEach(w => {
+          w.shift = val;
+          if (isNight && (!w.time || w.time === "09:00~18:00")) {
+            w.time = "22:00~익일06:00";
+          } else if (!isNight && (!w.time || w.time === "22:00~익일06:00")) {
+            w.time = "09:00~18:00";
+          }
+        });
+        renderWorkers();
+      }
+
+      updatePipeCalc();
+    }
+
     // Calculation logic
     function updatePipeCalc() {
-      if (isManualQty) {
-        recalculateTotalFee();
-        return;
-      }
-
       const pipe = document.getElementById("select-pipe").value;
+      const shift = (document.getElementById("input-work-shift") ? document.getElementById("input-work-shift").value : "주간") || "주간";
       const baseLen = (appConfig && appConfig.size_lengths && appConfig.size_lengths[pipe]) ? appConfig.size_lengths[pipe] : 0.8401;
 
-      let qty = 0;
-      if (selectedMethod === "RT") {
-        const oriJoints = parseFloat(document.getElementById("input-ori-joints").value) || 0;
-        qty = oriJoints * 3.0; // 3 films per joint
-      } else {
-        const joints = parseFloat(document.getElementById("input-joints").value) || 0;
-        qty = parseFloat((baseLen * joints).toFixed(4));
+      // 관경 길이 안내 힌트 갱신
+      const hint = document.getElementById("pipe-len-hint");
+      if (hint) {
+        if (selectedMethod === "RT") {
+          hint.textContent = "1개소당 3 매";
+        } else {
+          hint.textContent = `1개소당 ${baseLen} M`;
+        }
       }
 
-      document.getElementById("input-qty").value = qty;
+      // 수량 계산 (수동 입력 모드가 아닐 때만 자동 계산)
+      if (!isManualQty) {
+        let qty = 0;
+        if (selectedMethod === "RT") {
+          const oriJoints = parseFloat(document.getElementById("input-ori-joints").value) || 0;
+          qty = parseFloat((oriJoints * 3.0).toFixed(1));
+        } else {
+          const joints = parseFloat(document.getElementById("input-joints").value) || 0;
+          qty = parseFloat((baseLen * joints).toFixed(4));
+        }
+        document.getElementById("input-qty").value = qty;
+      }
+
+      // 계약 단가 자동 계산 및 반영
+      const unitPrice = getContractUnitPrice(selectedMethod, pipe, shift);
+      if (unitPrice > 0) {
+        document.getElementById("input-unit-price").value = unitPrice;
+      }
+
       recalculateTotalFee();
     }
 
-    document.getElementById("select-pipe").addEventListener("change", updatePipeCalc);
-    document.getElementById("input-joints").addEventListener("input", updatePipeCalc);
-    document.getElementById("input-ori-joints").addEventListener("input", updatePipeCalc);
+    document.getElementById("select-pipe").addEventListener("change", () => {
+      isManualQty = false;
+      updatePipeCalc();
+    });
+    document.getElementById("input-joints").addEventListener("input", () => {
+      isManualQty = false;
+      updatePipeCalc();
+    });
+    document.getElementById("input-ori-joints").addEventListener("input", () => {
+      isManualQty = false;
+      updatePipeCalc();
+    });
+
+    const btnShiftDay = document.getElementById("btn-shift-day");
+    if (btnShiftDay) btnShiftDay.addEventListener("click", () => setWorkShift("주간"));
+    const btnShiftNight = document.getElementById("btn-shift-night");
+    if (btnShiftNight) btnShiftNight.addEventListener("click", () => setWorkShift("야간"));
 
     document.getElementById("input-qty").addEventListener("input", () => {
       isManualQty = true;
@@ -1528,6 +1665,7 @@
         total_fee: parseFloat(document.getElementById("input-total-fee").value) || 0,
         equip_main: collectMainEquipment(),
         equip_aux: aux,
+        work_shape: (document.getElementById("input-work-shift") ? document.getElementById("input-work-shift").value : "주간") || "주간",
         vehicle_no: document.getElementById("select-vehicle").value,
         mileage: document.getElementById("input-mileage").value.trim(),
         vehicle_note: document.getElementById("input-vehicle-note").value.trim(),
@@ -1676,6 +1814,8 @@
         if (r.hot_tap_pipe) document.getElementById("hottap-pipe").value = r.hot_tap_pipe;
 
         if (r.method) switchMethod(r.method);
+        if (r.work_shape) setWorkShift(r.work_shape);
+        else if (r.workers && r.workers[0] && r.workers[0].shift) setWorkShift(r.workers[0].shift);
 
         // Item Name
         const itemSelect = document.getElementById("select-item-name");
