@@ -44,9 +44,43 @@ def prepare(inventory=None):
             methods=sorted(methods),role=role,active=row.get('Active',1)!=0))
     fields=('companies','users','vehicles','equipments','aux_equipments','sites','daily_units','test_items','applied_codes','worktimes')
     managed={k:config[k] for k in fields if k in config}
-    managed['companies']=config.get('companies',[])
-    managed['methods']=['PAUT','RT','UT','MT','PT']
     prices=json.loads((central/'src/config.json').read_text(encoding='utf-8'))
+
+    # Harvest all companies from config, billing records, work history, and daily usage
+    companies_set = set(config.get('companies', []))
+    for r in prices.get('BILLING_RECORDS', []):
+        if r.get('company'): companies_set.add(r['company'].strip())
+    history_file = central/'src/daily_work_history.json'
+    if history_file.exists():
+        try:
+            raw_hist = json.loads(history_file.read_text(encoding='utf-8'))
+            for d, entry in raw_hist.items():
+                if isinstance(entry, dict):
+                    for r in entry.get('ndt_results', []):
+                        if r.get('업체'): companies_set.add(r['업체'].strip())
+        except Exception:
+            pass
+    if hasattr(app, 'daily_usage_df') and not app.daily_usage_df.empty:
+        for c_col in ['업체명', 'Company', '업체']:
+            if c_col in app.daily_usage_df.columns:
+                for c in app.daily_usage_df[c_col].dropna().astype(str).str.strip().unique():
+                    if c and c != 'nan': companies_set.add(c)
+    managed['companies'] = sorted(c for c in companies_set if c)
+
+    default_worktimes = [
+        "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00", "09:00~22:00",
+        "09:00~23:00", "09:00~24:00", "09:00~익일01:00", "09:00~익일02:00", "09:00~익일03:00",
+        "09:00~익일04:00", "09:00~익일05:00", "09:00~익일06:00", "09:00~익일07:00", "09:00~익일08:00", "09:00~익일09:00",
+        "10:00~17:00", "10:00~19:00", "12:00~익일08:00", "13:00~18:00", "13:00~22:00", "13:00~익일02:00",
+        "18:00~익일01:00", "18:00~익일02:00", "18:00~익일03:00", "18:00~익일04:00", "18:00~익일05:00", "18:00~익일06:00", "18:00~익일07:00", "18:00~익일08:00",
+        "20:00~익일02:00", "20:00~익일04:00", "20:00~익일05:00", "20:00~익일06:00",
+        "21:00~익일03:00", "21:00~익일05:00", "21:00~익일06:00", "21:00~익일07:00",
+        "22:00~익일01:00", "22:00~익일02:00", "22:00~익일03:00", "22:00~익일04:00", "22:00~익일05:00", "22:00~익일06:00", "22:00~익일07:00", "22:00~익일08:00", "22:00~익일09:00"
+    ]
+    wt_set = set(config.get('worktimes', [])) | set(default_worktimes)
+    managed['worktimes'] = sorted(wt_set, key=lambda t: (1 if '익일' in t else 0, t.replace('익일', '')))
+
+    managed['methods']=['PAUT','RT','UT','MT','PT']
     managed['base_prices']={}
     for method, material, shift in [('PAUT','PAUT_250A','야간'),('RT','RT_3 1/3 x 12"','야간'),('MT','MT_MT','일반'),('PT','PT_PT','일반')]:
         managed['base_prices'][method]=calculate_billing(quantity=1,adjusted_quantity=1,material_key=material,

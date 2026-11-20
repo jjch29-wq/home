@@ -375,7 +375,7 @@
   function workspaceRestore(draft) {
     if (!draft) return;
     if (draft.method) switchMethod(draft.method);
-    Object.entries(draft.fields || {}).forEach(([id, value]) => { const e = document.getElementById(id); if (!e) return; if (e.type === 'checkbox') e.checked = Boolean(value); else if (e.tagName === 'SELECT' && e.multiple) setMethodValues(e, Array.isArray(value) ? value : [value]); else if (e.tagName === 'SELECT') workspaceSelectValue(e, value); else e.value = value; });
+    Object.entries(draft.fields || {}).forEach(([id, value]) => { const e = document.getElementById(id); if (!e) return; if (e.type === 'checkbox') e.checked = Boolean(value); else if (e.tagName === 'SELECT' && e.multiple) setMethodValues(e, Array.isArray(value) ? value : [value]); else if (e.tagName === 'SELECT') { workspaceSelectValue(e, value); if (id === 'select-company' && typeof handleContractorChange === 'function') handleContractorChange(e); } else e.value = value; });
     if (draft.workers) { workerRows = JSON.parse(JSON.stringify(draft.workers)); renderWorkers(); }
     workspaceEditingId = draft.editingQueue || null;
     if (draft.editing) { currentEditingRecord = draft.editing; document.getElementById('edit-banner').classList.remove('hidden'); }

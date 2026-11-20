@@ -565,7 +565,11 @@ class MaterialManager:
         self.sites = [] # Initialize site list
         self.daily_units = ['EA', 'CAN', 'SET', 'KG', 'M', '매', 'I/D', 'P,M,I/D', 'M,I/D', 'Point', 'Meter', 'Inch', 'Dia']
         self.users = [
-            "부장 주진철", "대리 우명광", "주임 김진환", "계장 장승대", "주임 김성렬", "부장 박광복", "과장 주영광", "계장 박상태"
+            "계장 박상태", "계장 박재욱", "계장 손주연", "계장 이경재", "계장 이은수", "계장 이준우", "계장 장승대", "계장 한지원",
+            "과장 유상훈", "과장 주영광", "대리 김성현", "대리 박만영", "대리 우명광", "대리 윤석현",
+            "부장 곽상돈", "부장 김규년", "부장 노현태", "부장 박광복", "부장 이병국", "부장 이봉주", "부장 주동기", "부장 주진철", "부장 형윤철",
+            "이사 곽재운", "이사 박홍규", "주임 김성렬", "주임 김진환", "주임 김태현", "주임 황조현",
+            "차장 권인경", "차장 김춘호", "차장 박원준"
         ] # Initialize worker/name list
         self.warehouses = [] # Initialize warehouse list
         self.equipments = [] # Initialize equipment list
@@ -573,7 +577,7 @@ class MaterialManager:
         self.vehicles = [] # Initialize vehicle list
         self.vehicle_inspections = {} # [NEW] Track active inspection widgets
         self.vehicle_boxes = [] # [NEW] Track active inspection widgets for automated save
-        self.companies = ['GS네오텍', '다림건설(주)', '한국지역난방공사'] # Initialize companies list
+        self.companies = ['GS네오텍', '다림건설(주)', '한국지역난방공사', '한국지역난방공사 중앙지사'] # Initialize companies list
         self.worktimes = [] # Initialize worktimes list
         self.ot_times = [] # Initialize ot_times list
         self.test_items = [] # [NEW] Initialize test_items
@@ -3797,9 +3801,14 @@ class MaterialManager:
     def _migrate_worktimes(self, input_list):
         """Helper to standardize work times with 익일 marker and sort logically"""
         default_worktimes = [
-            "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00", 
-            "09:00~22:00", "09:00~23:00", "09:00~24:00", "09:00~익일01:00",
-            "09:00~익일02:00", "09:00~익일03:00", "18:00~익일02:00", "18:00~익일03:00"
+            "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00", "09:00~22:00",
+            "09:00~23:00", "09:00~24:00", "09:00~익일01:00", "09:00~익일02:00", "09:00~익일03:00",
+            "09:00~익일04:00", "09:00~익일05:00", "09:00~익일06:00", "09:00~익일07:00", "09:00~익일08:00", "09:00~익일09:00",
+            "10:00~17:00", "10:00~19:00", "12:00~익일08:00", "13:00~18:00", "13:00~22:00", "13:00~익일02:00",
+            "18:00~익일01:00", "18:00~익일02:00", "18:00~익일03:00", "18:00~익일04:00", "18:00~익일05:00", "18:00~익일06:00", "18:00~익일07:00", "18:00~익일08:00",
+            "20:00~익일02:00", "20:00~익일04:00", "20:00~익일05:00", "20:00~익일06:00",
+            "21:00~익일03:00", "21:00~익일05:00", "21:00~익일06:00", "21:00~익일07:00",
+            "22:00~익일01:00", "22:00~익일02:00", "22:00~익일03:00", "22:00~익일04:00", "22:00~익일05:00", "22:00~익일06:00", "22:00~익일07:00", "22:00~익일08:00", "22:00~익일09:00"
         ]
         
         processed_times = set()
