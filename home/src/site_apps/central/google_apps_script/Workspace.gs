@@ -321,6 +321,7 @@ function getProgressSummary(targetDate) {
   var lastRow = sheet.getLastRow();
   var weatherVal = '';
   var remarksList = [];
+  var liveBillingRecords = [];
 
   if (lastRow > 1) {
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -332,12 +333,10 @@ function getProgressSummary(targetDate) {
       var recDate = record.date;
       if (!recDate) continue;
 
-      // 기준일 이전 데이터는 이미 prevCumulative에 포함되어 있으므로 건너뜀
-      if (latestPastDate && recDate <= latestPastDate) {
-        continue;
-      }
-
       var shiftStr = '주간';
+      if (record.work_shape === '야간' || record.work_type === '야간') {
+        shiftStr = '야간';
+      }
       if (record.worker_list && record.worker_list.length > 0) {
         for (var w = 0; w < record.worker_list.length; w++) {
           if (record.worker_list[w].shift === '야간' || String(record.worker_list[w].time).indexOf('야간') >= 0) {
@@ -345,6 +344,31 @@ function getProgressSummary(targetDate) {
             break;
           }
         }
+      }
+
+      // 기성 연동용 실시간 레코드 수집 (검사비 또는 물량이 있는 경우)
+      if (safeNum(record.qty, 0) > 0 || safeNum(record.total_fee, 0) > 0) {
+        var fee = safeNum(record.total_fee, 0);
+        if (fee === 0 && safeNum(record.unit_price, 0) > 0) {
+          fee = Math.round(safeNum(record.qty, 0) * safeNum(record.unit_price, 0) + safeNum(record.travel_cost, 0));
+        }
+        liveBillingRecords.push({
+          date: recDate,
+          company: record.company || '한국지역난방공사',
+          loc: record.loc_type ? ('[' + record.loc_type + '] ' + (record.site || '중앙지사')) : (record.site || '중앙지사'),
+          ndt_type: record.method || 'PAUT',
+          work_time: shiftStr === '야간' ? '야간' : '일반',
+          material_type: record.pipe || record.item_name || 'Pipe',
+          qty: safeNum(record.qty, 0),
+          unit: record.unit || 'M',
+          unit_price: safeNum(record.unit_price, 0),
+          subtotal: fee
+        });
+      }
+
+      // 기준일 이전 데이터는 이미 prevCumulative에 포함되어 있으므로 건너뜀
+      if (latestPastDate && recDate <= latestPastDate) {
+        continue;
       }
 
       var compKey = classifyMethodSpec(record.method, record.pipe, shiftStr);
@@ -444,7 +468,7 @@ function getProgressSummary(targetDate) {
   var mtDay = resultRows.find(function(r) { return r.comp_key === 'MT_전체(주간)'; }) || {};
   var ptDay = resultRows.find(function(r) { return r.comp_key === 'PT_전체(주간)'; }) || {};
 
-  // 5. 기성 정산 요약 및 세부 레코드 (PC 기성 정산(NDT) '1. 일별 작업 기록 및 목록' 연동)
+  // 5. 기성 정산 요약 및 세부 레코드 (PC 기성 정산(NDT) + 구글시트 실시간 일보 자동 병합)
   var baseBilling = (typeof CENTRAL_REFERENCE !== 'undefined' && CENTRAL_REFERENCE.billing_records) || [];
   var billingList = [];
   var billingSummary = {
@@ -460,10 +484,32 @@ function getProgressSummary(targetDate) {
     records_count: 0
   };
 
+  // 기존 PC 기성 스냅샷 등록 및 중복 방지 키 맵
+  var existingBillingKeys = {};
   baseBilling.forEach(function(rec) {
     if (!rec.date || rec.date <= targetDate) {
       billingList.push(rec);
+      var key = String(rec.date).trim() + '_' + String(rec.company).trim() + '_' + String(rec.ndt_type).trim() + '_' + Number(rec.qty || 0).toFixed(4);
+      existingBillingKeys[key] = true;
     }
+  });
+
+  // 구글 시트 실시간 일보 중 PC 기성 스냅샷에 없는 신규 일보 자동 병합
+  liveBillingRecords.forEach(function(rec) {
+    if (rec.date && rec.date <= targetDate) {
+      var key = String(rec.date).trim() + '_' + String(rec.company).trim() + '_' + String(rec.ndt_type).trim() + '_' + Number(rec.qty || 0).toFixed(4);
+      if (!existingBillingKeys[key]) {
+        billingList.push(rec);
+        existingBillingKeys[key] = true;
+      }
+    }
+  });
+
+  // 일자(date) 오름차순 정렬
+  billingList.sort(function(a, b) {
+    var da = String(a.date || '');
+    var db = String(b.date || '');
+    return da < db ? -1 : (da > db ? 1 : 0);
   });
 
   billingList.forEach(function(r) {

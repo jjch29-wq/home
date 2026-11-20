@@ -764,15 +764,19 @@
   </main>
 
   <!-- Record Summary Modal -->
-  <div id="modal-record-summary" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
-    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl text-slate-100 overflow-hidden transform scale-95 transition-transform duration-200" id="modal-record-summary-content">
+  <div id="modal-record-summary"
+    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+    <div
+      class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl text-slate-100 overflow-hidden transform scale-95 transition-transform duration-200"
+      id="modal-record-summary-content">
       <!-- Modal Header -->
       <div class="px-4 py-3 bg-slate-800/90 border-b border-slate-700/80 flex items-center justify-between">
         <div class="flex items-center gap-2">
           <span class="text-base">📋</span>
           <h3 class="font-bold text-sm text-white">작업일보 상세 요약</h3>
         </div>
-        <button type="button" onclick="closeRecordSummaryModal()" class="w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 flex items-center justify-center transition text-base font-bold">
+        <button type="button" onclick="closeRecordSummaryModal()"
+          class="w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 flex items-center justify-center transition text-base font-bold">
           ✕
         </button>
       </div>
@@ -784,10 +788,12 @@
 
       <!-- Modal Footer -->
       <div class="px-4 py-3 bg-slate-800/90 border-t border-slate-700/80 flex items-center justify-between gap-2">
-        <button type="button" id="btn-modal-copy" class="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow">
+        <button type="button" id="btn-modal-copy"
+          class="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow">
           <span>📋</span> <span>이 일보 복사하여 입력</span>
         </button>
-        <button type="button" onclick="closeRecordSummaryModal()" class="py-2 px-4 bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 font-bold rounded-xl transition">
+        <button type="button" onclick="closeRecordSummaryModal()"
+          class="py-2 px-4 bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 font-bold rounded-xl transition">
           닫기
         </button>
       </div>
