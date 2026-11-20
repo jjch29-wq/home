@@ -217,6 +217,38 @@ class QtyCalcRequest(BaseModel):
     method: str
     pipe: str
     joints: float
+    shift: str = "주간"
+
+
+def get_central_contract_unit_price(method: str, pipe: str, shift: str = "주간") -> int:
+    """중앙지사 2026 단가계약 기준 단가 계산 (제경비 110%, 기술료 20% 포함)"""
+    is_night = "야간" in str(shift)
+    num_part = re.sub(r'[^0-9]', '', pipe)
+    dia = int(num_part) if num_part else 250
+    m = method.strip().upper()
+    if m == "PAUT":
+        if is_night:
+            if dia >= 300: return 284015
+            elif dia == 250: return 325451
+            elif dia == 200: return 367731
+            elif dia >= 125: return 410788
+            else: return 387359
+        else:
+            if dia >= 300: return 201863
+            elif dia == 250: return 229489
+            elif dia == 200: return 257675
+            elif dia >= 125: return 286600
+            else: return 270981
+    elif m == "RT":
+        if is_night:
+            return 205412 if dia >= 100 else 204182
+        else:
+            return 140023 if dia >= 100 else 138793
+    elif m == "MT":
+        return 112954 if is_night else 75433
+    elif m == "PT":
+        return 117782 if is_night else 78910
+    return 0
 
 class WorkerItem(BaseModel):
     user: str
@@ -336,7 +368,7 @@ def api_calculate_qty(req: QtyCalcRequest):
         return {"qty": 0.0, "unit": unit, "unit_price": 0}
 
     total_qty = round(length_per_j * req.joints, 4) if req.method != "RT" else round(req.joints * 3.0, 1)
-    unit_price = 325451 if req.method == "PAUT" else (205412 if req.method == "RT" else 110000)
+    unit_price = get_central_contract_unit_price(req.method, pipe, req.shift)
     unit = "매" if req.method == "RT" else ("P,M,I/D" if req.method == "MT" else "M")
 
     return {
