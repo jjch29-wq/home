@@ -6233,6 +6233,29 @@ class MaterialManager:
         self.cb_daily_filter_company = ttk.Combobox(filter_row, width=12)
         self.cb_daily_filter_company.pack(side='left', padx=2)
         self.cb_daily_filter_company.set('전체')
+
+        def _on_filter_company_changed(event=None):
+            comp = self.cb_daily_filter_company.get().strip()
+            if not comp or comp == '전체':
+                sites = ['전체'] + sorted(self.sites)
+            elif hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
+                co_col = '업체명' if '업체명' in self.daily_usage_df.columns else ('Company' if 'Company' in self.daily_usage_df.columns else None)
+                site_col = '현장' if '현장' in self.daily_usage_df.columns else ('Site' if 'Site' in self.daily_usage_df.columns else None)
+                if co_col and site_col:
+                    matched = sorted(set(self.daily_usage_df[self.daily_usage_df[co_col] == comp][site_col].dropna().astype(str).str.strip().unique()))
+                    matched = [s for s in matched if s and s != 'nan']
+                    sites = ['전체'] + (matched or sorted(self.sites))
+                else:
+                    sites = ['전체'] + sorted(self.sites)
+            else:
+                sites = ['전체'] + sorted(self.sites)
+            self.cb_daily_filter_site['values'] = sites
+            site_get = getattr(self.cb_daily_filter_site, 'get', None)
+            if site_get and site_get() not in sites:
+                self.cb_daily_filter_site.set('전체')
+            self.update_daily_usage_view()
+
+        self.cb_daily_filter_company.bind("<<ComboboxSelected>>", _on_filter_company_changed)
         tk.Button(filter_row, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                   command=lambda: self.open_list_management_dialog('companies', target_cb=self.cb_daily_filter_company)).pack(side='left', padx=(0, 5))
         

@@ -219,6 +219,24 @@ def setup_daily_usage_tab_impl(self):
                             command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_daily_site))
     btn_site_mgr.pack(side='left', padx=(2, 0))
 
+    def _on_daily_company_selected(event=None):
+        comp = self.cb_daily_company.get().strip()
+        if not comp or comp == '전체':
+            self.cb_daily_site['values'] = self.sites
+        elif hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
+            co_col = '업체명' if '업체명' in self.daily_usage_df.columns else ('Company' if 'Company' in self.daily_usage_df.columns else None)
+            site_col = '현장' if '현장' in self.daily_usage_df.columns else ('Site' if 'Site' in self.daily_usage_df.columns else None)
+            if co_col and site_col:
+                matched_sites = sorted(set(self.daily_usage_df[self.daily_usage_df[co_col] == comp][site_col].dropna().astype(str).str.strip().unique()))
+                matched_sites = [s for s in matched_sites if s and s != 'nan']
+                self.cb_daily_site['values'] = matched_sites or self.sites
+            else:
+                self.cb_daily_site['values'] = self.sites
+        else:
+            self.cb_daily_site['values'] = self.sites
+
+    self.cb_daily_company.bind('<<ComboboxSelected>>', _on_daily_company_selected, add='+')
+
     # 날짜
     ttk.Label(common_frame, text="날짜:").grid(row=0, column=6, padx=(5, 0), pady=1, sticky='e')
     from tkcalendar import DateEntry

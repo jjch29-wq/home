@@ -17,6 +17,11 @@ import json
 import shutil
 import uuid
 from site_apps.central.src.rt_quantities import rt_counts, sync_rt_widgets, widget_rt_values, resolve_rt_row, retest_parent, default_rt_copy, corrected_rt_history
+from site_apps.central.src.services.section_line_helper import (
+    extract_company_section_line_mapping,
+    get_sections_for_company,
+    get_lines_for_company_and_section,
+)
 
 # Import the exporter
 try:
@@ -504,6 +509,7 @@ class DailyWorkLogTab(ttk.Frame):
                 if r.get('업체'): companies.add(r['업체'].strip())
                 if r.get('용접사'): welders.add(self._normalize_welder_id(r['용접사']))
         
+        self.company_section_mapping = extract_company_section_line_mapping(history)
         self.history_sections = [''] + sorted(list(sections))
         self.history_lines = [''] + sorted(list(lines))
         self.history_companies = [''] + sorted(list(companies))
@@ -801,8 +807,34 @@ class DailyWorkLogTab(ttk.Frame):
             else:
                 cat_cb['values'] = ALL_WORK_CATEGORIES
 
-        row_entries['업체'].bind('<<ComboboxSelected>>', lambda _e, r=row_entries: update_work_category_options(r), add='+')
-        row_entries['업체'].bind('<FocusOut>', lambda _e, r=row_entries: update_work_category_options(r), add='+')
+        def on_company_selected(r=row_entries):
+            update_work_category_options(r)
+            comp = r['업체'].get().strip()
+            mapping = getattr(self, 'company_section_mapping', None)
+            if mapping:
+                sec_cb = r.get('구간')
+                if isinstance(sec_cb, ttk.Combobox):
+                    sections = [''] + get_sections_for_company(mapping, comp)
+                    sec_cb['values'] = sections
+                    curr_sec = sec_cb.get().strip()
+                    if curr_sec and curr_sec not in sections:
+                        sec_cb.set('')
+            on_section_selected(r=r)
+
+        def on_section_selected(r=row_entries):
+            comp = r['업체'].get().strip()
+            sec = r['구간'].get().strip()
+            mapping = getattr(self, 'company_section_mapping', None)
+            if mapping:
+                line_cb = r.get('라인번호')
+                if isinstance(line_cb, ttk.Combobox):
+                    lines = [''] + get_lines_for_company_and_section(mapping, comp, sec)
+                    line_cb['values'] = lines
+
+        row_entries['업체'].bind('<<ComboboxSelected>>', lambda _e, r=row_entries: on_company_selected(r), add='+')
+        row_entries['업체'].bind('<FocusOut>', lambda _e, r=row_entries: on_company_selected(r), add='+')
+        row_entries['구간'].bind('<<ComboboxSelected>>', lambda _e, r=row_entries: on_section_selected(r), add='+')
+        row_entries['구간'].bind('<FocusOut>', lambda _e, r=row_entries: on_section_selected(r), add='+')
 
         def on_hot_change(event=None, r=row_entries):
             if r['작업구분'].get() == '핫태핑':
@@ -1166,10 +1198,12 @@ class DailyWorkLogTab(ttk.Frame):
                 pass
 
         history = self.load_history()
+        history_mapping = extract_company_section_line_mapping(history)
         all_records = []
         company_set = set()
         line_set = set()
         method_set = set()
+        section_set = set()
 
         for date_key in sorted(history.keys(), reverse=True):
             day_data = history[date_key]
@@ -1179,9 +1213,11 @@ class DailyWorkLogTab(ttk.Frame):
                 co = str(r.get('업체', '')).strip()
                 ln = str(r.get('라인번호', '')).strip()
                 mth = str(r.get('검사방법', '')).strip().upper()
+                sec = str(r.get('구간', '')).strip()
                 if co: company_set.add(co)
                 if ln: line_set.add(ln)
                 if mth: method_set.add(mth)
+                if sec: section_set.add(sec)
                 all_records.append({
                     'date': str(date_key),
                     'row_idx': row_idx,
@@ -1269,13 +1305,18 @@ class DailyWorkLogTab(ttk.Frame):
 
         ttk.Label(row1, text="업체:").pack(side="left")
         company_var = tk.StringVar(value="(전체)")
-        company_combo = ttk.Combobox(row1, textvariable=company_var, values=['(전체)'] + sorted(company_set), width=14, state='readonly')
-        company_combo.pack(side="left", padx=(4, 16))
+        company_combo = ttk.Combobox(row1, textvariable=company_var, values=['(전체)'] + sorted(company_set), width=13, state='readonly')
+        company_combo.pack(side="left", padx=(4, 10))
+
+        ttk.Label(row1, text="구간:").pack(side="left")
+        section_var = tk.StringVar(value="(전체)")
+        section_combo = ttk.Combobox(row1, textvariable=section_var, values=['(전체)'] + sorted(section_set), width=11, state='readonly')
+        section_combo.pack(side="left", padx=(4, 10))
 
         ttk.Label(row1, text="방법:").pack(side="left")
         method_var = tk.StringVar(value="(전체)")
         method_combo = ttk.Combobox(row1, textvariable=method_var, values=['(전체)'] + sorted(method_set), width=8, state='readonly')
-        method_combo.pack(side="left", padx=(4, 16))
+        method_combo.pack(side="left", padx=(4, 12))
 
         # 라인번호 및 키워드 검색
         row2 = ttk.Frame(filter_box)
@@ -1471,6 +1512,8 @@ class DailyWorkLogTab(ttk.Frame):
         def reset_filters():
             all_dates_var.set(True)
             company_var.set("(전체)")
+            section_var.set("(전체)")
+            section_combo['values'] = ['(전체)'] + sorted(section_set)
             method_var.set("(전체)")
             selected_lines.clear()
             current_line_pool.clear()
@@ -1481,20 +1524,29 @@ class DailyWorkLogTab(ttk.Frame):
 
         ttk.Button(row2, text="초기화", command=reset_filters).pack(side="left", padx=2)
 
-        # 업체 선택 변경 시 해당 업체의 라인번호 풀 동적 연동 및 기존 선택 정제
-        def on_company_change(*_args):
+        def _update_search_lines():
             sel_co = company_var.get().strip()
+            sel_sec = section_var.get().strip()
             current_line_pool.clear()
-            if not sel_co or sel_co == '(전체)':
-                current_line_pool.extend(sorted(line_set))
-            else:
-                co_lines = sorted({r['line_no'] for r in all_records if r['company'] == sel_co and r['line_no']})
-                current_line_pool.extend(co_lines)
+            lines = get_lines_for_company_and_section(history_mapping, sel_co, sel_sec)
+            current_line_pool.extend(lines)
             selected_lines.intersection_update(current_line_pool)
             update_line_display()
             refresh_rows()
 
+        def on_company_change(*_args):
+            sel_co = company_var.get().strip()
+            sec_opts = ['(전체)'] + get_sections_for_company(history_mapping, sel_co)
+            section_combo['values'] = sec_opts
+            if section_var.get() not in sec_opts:
+                section_var.set('(전체)')
+            _update_search_lines()
+
+        def on_section_change(*_args):
+            _update_search_lines()
+
         company_combo.bind('<<ComboboxSelected>>', on_company_change)
+        section_combo.bind('<<ComboboxSelected>>', on_section_change)
         method_combo.bind('<<ComboboxSelected>>', lambda _e: refresh_rows())
         search_entry.bind('<Return>', lambda _e: refresh_rows())
 
@@ -1564,6 +1616,7 @@ class DailyWorkLogTab(ttk.Frame):
             tree.delete(*tree.get_children())
             
             sel_co = company_var.get().strip()
+            sel_sec = section_var.get().strip()
             sel_mth = method_var.get().strip()
             sel_line = line_var.get().strip()
             query = search_var.get().strip().lower()
@@ -1581,6 +1634,8 @@ class DailyWorkLogTab(ttk.Frame):
                     if not (start_str <= r['date'] <= end_str):
                         continue
                 if sel_co and sel_co != '(전체)' and r['company'] != sel_co:
+                    continue
+                if sel_sec and sel_sec != '(전체)' and r['section'] != sel_sec:
                     continue
                 if sel_mth and sel_mth != '(전체)' and r['method'] != sel_mth:
                     continue

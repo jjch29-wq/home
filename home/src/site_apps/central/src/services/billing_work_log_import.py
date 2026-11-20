@@ -9,7 +9,8 @@ from site_apps.central.src.services.ndt_calculator import calculate_billing
 
 def build_work_log_billing_records(history, start, end, *, material_costs, labor_costs,
                                    contracts=None, location='열배관', overhead_rate=1.1,
-                                   technical_fee_rate=.2, company_filter='전체'):
+                                   technical_fee_rate=.2, company_filter='전체',
+                                   section_filter='전체', line_filter='전체'):
     start_date = date.fromisoformat(start) if start else date.min
     end_date = date.fromisoformat(end) if end else date.max
     if start_date > end_date:
@@ -26,7 +27,13 @@ def build_work_log_billing_records(history, start, end, *, material_costs, labor
                 continue
             company = str(detail.get('업체', '') or '').strip() or '미지정'
             work_category = str(detail.get('공사구분', '') or '').strip()
+            section = str(detail.get('구간', '') or '').strip()
+            line = str(detail.get('라인번호', '') or '').strip()
             if company_filter and company_filter != '전체' and company != company_filter:
+                continue
+            if section_filter and section_filter != '전체' and section != section_filter:
+                continue
+            if line_filter and line_filter != '전체' and line_filter not in line:
                 continue
             try:
                 raw = rt_counts(detail)[0] if method == 'RT' else detail.get(method, 0)

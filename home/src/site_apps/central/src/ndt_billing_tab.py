@@ -10,6 +10,11 @@ from tkcalendar import DateEntry
 from site_apps.central.src.services.ndt_calculator import calculate_billing
 from site_apps.central.src.services.billing_totals import grouped_billing_totals, grouped_supply_amount
 from site_apps.central.src.section_line_billing_dialog import SectionLineBillingDialog
+from site_apps.central.src.services.section_line_helper import (
+    extract_company_section_line_mapping,
+    get_sections_for_company,
+    get_lines_for_company_and_section
+)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
@@ -126,23 +131,92 @@ class NDTCalculatorTab(ttk.Frame):
     def load_billing_records(self):
         global CONFIG
         self.records = deepcopy(CONFIG.get("BILLING_RECORDS", []))
-        
-        if hasattr(self, 'tree'):
-            for item in self.tree.get_children():
-                self.tree.delete(item)
-                
-            for res in self.records:
-                unit_price = res.get("unit_price", 0)
-                if unit_price == 0 and res.get("qty", 0) > 0:
-                    unit_price = int(res.get("subtotal", 0) / res.get("qty"))
-                    
-                self.tree.insert("", tk.END, values=(
-                    res.get("date", ""), res.get("company", ""), res.get("loc", ""), res.get("ndt_type", ""), res.get("work_time", ""), 
-                    res.get("material_type", ""), f"{res.get('qty', 0):.4f}", res.get("unit", ""),
-                    f"{unit_price:,}", f"{res.get('subtotal', 0):,}"
-                ))
-            if hasattr(self, 'update_qty_summary'):
-                self.update_qty_summary()
+        self.filter_billing_tree()
+
+    def filter_billing_tree(self, event=None):
+        if not hasattr(self, 'tree'):
+            return
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        sel_site = getattr(self, 'cb_billing_site', None)
+        sel_site_val = sel_site.get().strip() if sel_site else '전체'
+        sel_sec = getattr(self, 'cb_billing_section', None)
+        sel_sec_val = sel_sec.get().strip() if sel_sec else '전체'
+        sel_line = getattr(self, 'cb_billing_line', None)
+        sel_line_val = sel_line.get().strip() if sel_line else '전체'
+
+        total_paut = 0.0
+        total_rt = 0.0
+        total_mt = 0.0
+        total_pt = 0.0
+        filtered_records = []
+
+        for idx, res in enumerate(self.records):
+            comp = str(res.get("company", "") or res.get("actual_company", "")).strip()
+            sec = str(res.get("section", "")).strip()
+            line = str(res.get("line", "")).strip()
+            loc = str(res.get("loc", "")).strip()
+
+            if sel_site_val and sel_site_val not in ('전체', '(전체)', '전체 업체'):
+                if comp != sel_site_val and sel_site_val not in loc:
+                    continue
+
+            if sel_sec_val and sel_sec_val not in ('전체', '(전체)', '전체 구간'):
+                if sec:
+                    if sec != sel_sec_val:
+                        continue
+                else:
+                    if f"/ {sel_sec_val} /" not in loc and sel_sec_val not in loc:
+                        continue
+
+            if sel_line_val and sel_line_val not in ('전체', '(전체)', '전체 라인'):
+                if line:
+                    if sel_line_val.lower() not in line.lower():
+                        continue
+                else:
+                    if sel_line_val.lower() not in loc.lower():
+                        continue
+
+            filtered_records.append(res)
+            unit_price = res.get("unit_price", 0)
+            if unit_price == 0 and res.get("qty", 0) > 0:
+                unit_price = int(res.get("subtotal", 0) / res.get("qty"))
+
+            qty = float(res.get("qty", 0.0))
+            ndt_type = str(res.get("ndt_type", "")).upper()
+            if "PAUT" in ndt_type or "UT" in ndt_type:
+                total_paut += qty
+            elif "RT" in ndt_type:
+                total_rt += qty
+            elif "MT" in ndt_type:
+                total_mt += qty
+            elif "PT" in ndt_type:
+                total_pt += qty
+
+            self.tree.insert("", tk.END, values=(
+                res.get("date", ""), comp or res.get("company", ""), loc, res.get("ndt_type", ""), res.get("work_time", ""), 
+                res.get("material_type", ""), f"{qty:.4f}", res.get("unit", ""),
+                f"{unit_price:,}", f"{res.get('subtotal', 0):,}"
+            ), tags=(str(idx),))
+
+        if hasattr(self, 'subtotal_var'):
+            total_amt = grouped_supply_amount(filtered_records, self.contract_vars) if hasattr(self, 'contract_vars') else sum(r.get('subtotal', 0) for r in filtered_records)
+            summary_parts = []
+            if total_paut > 0:
+                summary_parts.append(f"PAUT: {total_paut:,.4f} M")
+            if total_rt > 0:
+                summary_parts.append(f"RT: {int(total_rt):,} 매")
+            if total_mt > 0:
+                summary_parts.append(f"MT: {total_mt:,.4f} M")
+            if total_pt > 0:
+                summary_parts.append(f"PT: {total_pt:,.4f} M")
+            summary_text = "  |  ".join(summary_parts) if summary_parts else "물량 없음"
+            filter_badge = f" [필터: {len(filtered_records)}/{len(self.records)}건]" if len(filtered_records) != len(self.records) else ""
+            self.subtotal_var.set(f"[소계] {summary_text}  |  총 공급가액: {total_amt:,} 원{filter_badge}")
+
+        if hasattr(self, 'update_qty_summary') and (not sel_site_val or sel_site_val == '전체') and (not sel_sec_val or sel_sec_val == '전체') and (not sel_line_val or sel_line_val == '전체'):
+            self.update_qty_summary()
 
     def _capture_billing_state(self):
         return {
@@ -682,29 +756,67 @@ class NDTCalculatorTab(ttk.Frame):
             self.ent_billing_end = ttk.Entry(lbl_frame, textvariable=self.billing_end_date, width=12)
             self.ent_billing_end.pack(side=tk.LEFT)
             
-        ttk.Label(lbl_frame, text="  |  🏢 시공업체: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(6, 2))
-        
-        # [NEW] Dropdown for site filter
-        self.cb_billing_site = ttk.Combobox(lbl_frame, width=16, state='readonly')
-        self.cb_billing_site.pack(side=tk.LEFT, padx=(0, 6))
-        
-        def _populate_sites(event=None):
+        ttk.Label(lbl_frame, text="  |  🏢 시공업체: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(4, 2))
+        self.cb_billing_site = ttk.Combobox(lbl_frame, width=13, state='readonly')
+        self.cb_billing_site.pack(side=tk.LEFT, padx=(0, 4))
+
+        ttk.Label(lbl_frame, text="📍 구간: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(2, 2))
+        self.cb_billing_section = ttk.Combobox(lbl_frame, width=11, state='readonly')
+        self.cb_billing_section.pack(side=tk.LEFT, padx=(0, 4))
+
+        ttk.Label(lbl_frame, text="🔍 라인: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(2, 2))
+        self.cb_billing_line = ttk.Combobox(lbl_frame, width=14)
+        self.cb_billing_line.pack(side=tk.LEFT, padx=(0, 4))
+
+        self._history_mapping = {
+            'company_to_sections': {}, 'company_section_to_lines': {}, 'section_to_lines': {},
+            'all_companies': [], 'all_sections': [], 'all_lines': []
+        }
+
+        def _update_billing_lines(event=None):
+            co = self.cb_billing_site.get().strip()
+            sec = self.cb_billing_section.get().strip()
+            lines = ['전체'] + get_lines_for_company_and_section(self._history_mapping, co, sec)
+            self.cb_billing_line['values'] = lines
+            if self.cb_billing_line.get() not in lines:
+                self.cb_billing_line.set('전체')
+            self.filter_billing_tree()
+
+        def _on_billing_site_selected(event=None):
+            co = self.cb_billing_site.get().strip()
+            sections = ['전체'] + get_sections_for_company(self._history_mapping, co)
+            self.cb_billing_section['values'] = sections
+            if self.cb_billing_section.get() not in sections:
+                self.cb_billing_section.set('전체')
+            _update_billing_lines()
+
+        def _on_billing_section_selected(event=None):
+            _update_billing_lines()
+
+        def _populate_filter_options(event=None):
             try:
                 with open(get_history_path(), 'r', encoding='utf-8') as source:
                     history = json.load(source)
-                sites = ['전체'] + sorted({str(row.get('업체', '') or '').strip() or '미지정'
-                                          for day in history.values()
-                                          for row in day.get('ndt_results', [])
-                                          if str(row.get('검사방법', '')).strip()})
+                self._history_mapping = extract_company_section_line_mapping(history)
+                sites = ['전체'] + self._history_mapping['all_companies']
             except (OSError, ValueError):
                 sites = ['전체']
             self.cb_billing_site['values'] = sites
             if self.cb_billing_site.get() not in sites:
                 self.cb_billing_site.set('전체')
-        
-        # Populate initially and bind to click to ensure it's up-to-date
-        _populate_sites()
-        self.cb_billing_site.bind('<Button-1>', _populate_sites)
+            sections = ['전체'] + get_sections_for_company(self._history_mapping, self.cb_billing_site.get().strip())
+            self.cb_billing_section['values'] = sections
+            if self.cb_billing_section.get() not in sections:
+                self.cb_billing_section.set('전체')
+            _update_billing_lines()
+
+        _populate_filter_options()
+        self.cb_billing_site.bind('<Button-1>', _populate_filter_options)
+        self.cb_billing_site.bind('<<ComboboxSelected>>', _on_billing_site_selected)
+        self.cb_billing_section.bind('<<ComboboxSelected>>', _on_billing_section_selected)
+        self.cb_billing_line.bind('<<ComboboxSelected>>', lambda e: self.filter_billing_tree())
+        self.cb_billing_line.bind('<Return>', lambda e: self.filter_billing_tree())
+        self.cb_billing_line.bind('<KeyRelease>', lambda e: self.filter_billing_tree())
             
         ttk.Button(lbl_frame, text="🔍 조회(일보 연동)", command=self.import_from_work_log, style="Primary.TButton").pack(side=tk.LEFT, padx=(3, 0))
             
@@ -1030,7 +1142,11 @@ class NDTCalculatorTab(ttk.Frame):
             return
             
         item = selected_items[0]
-        idx = self.tree.index(item)
+        tags = self.tree.item(item, 'tags')
+        try:
+            idx = int(tags[0]) if tags else self.tree.index(item)
+        except (ValueError, IndexError):
+            idx = self.tree.index(item)
         
         if idx < 0 or idx >= len(self.records):
             return
@@ -1068,12 +1184,17 @@ class NDTCalculatorTab(ttk.Frame):
             start = self.billing_start_date.get().strip()
             end = self.billing_end_date.get().strip()
             location = self.loc_type_var.get()
+            company_filter = self.cb_billing_site.get().strip() or '전체'
+            section_filter = getattr(self, 'cb_billing_section', None).get().strip() if hasattr(self, 'cb_billing_section') else '전체'
+            line_filter = getattr(self, 'cb_billing_line', None).get().strip() if hasattr(self, 'cb_billing_line') else '전체'
             prepared = build_work_log_billing_records(
                 history, start, end, material_costs=MATERIAL_COST, labor_costs=LABOR_COST,
                 contracts=self.contract_vars, location=location,
                 overhead_rate=float(self.overhead_rate_var.get()) / 100,
                 technical_fee_rate=float(self.tech_fee_rate_var.get()) / 100,
-                company_filter=self.cb_billing_site.get().strip() or '전체',
+                company_filter=company_filter,
+                section_filter=section_filter,
+                line_filter=line_filter,
             )
             if not prepared:
                 messagebox.showinfo('작업/감독일보 연동', '조회 기간에 저장된 검사결과가 없습니다.')
@@ -1177,16 +1298,7 @@ class NDTCalculatorTab(ttk.Frame):
         res = self.calculate()
         if res:
             self.records.append(res)
-            
-            unit_price = res.get("unit_price", 0)
-            if unit_price == 0 and res.get("qty", 0) > 0:
-                unit_price = int(res.get("subtotal", 0) / res.get("qty"))
-                
-            self.tree.insert("", tk.END, values=(
-                res["date"], res.get("company", ""), res["loc"], res["ndt_type"], res["work_time"], 
-                res["material_type"], f"{res['qty']:.4f}", res["unit"],
-                f"{unit_price:,}", f"{res['subtotal']:,}"
-            ))
+            self.filter_billing_tree()
             self.update_qty_summary()
             if auto_save:
                 self.save_billing_records()
@@ -1212,13 +1324,18 @@ class NDTCalculatorTab(ttk.Frame):
         if not messagebox.askyesno("선택 삭제", f"선택한 {len(selected_items)}개의 기록을 영구히 삭제하시겠습니까?"):
             return
             
-        indices = sorted([self.tree.index(item) for item in selected_items], reverse=True)
-        for i in indices:
-            self.records.pop(i)
-            
+        indices = []
         for item in selected_items:
-            self.tree.delete(item)
+            tags = self.tree.item(item, 'tags')
+            try:
+                indices.append(int(tags[0]) if tags else self.tree.index(item))
+            except (ValueError, IndexError):
+                indices.append(self.tree.index(item))
+        for i in sorted(set(indices), reverse=True):
+            if 0 <= i < len(self.records):
+                self.records.pop(i)
             
+        self.filter_billing_tree()
         self.update_qty_summary()
         self.save_billing_records()
             
@@ -1622,8 +1739,14 @@ class NDTCalculatorTab(ttk.Frame):
             if selected_items:
                 if not messagebox.askyesno("부분 출력", f"선택된 {len(selected_items)}개의 기록만 기성 청구 내역서로 출력하시겠습니까?"):
                     return
-                indices = [self.tree.index(item) for item in selected_items]
-                target_records = [self.records[i] for i in indices]
+                indices = []
+                for item in selected_items:
+                    tags = self.tree.item(item, 'tags')
+                    try:
+                        indices.append(int(tags[0]) if tags else self.tree.index(item))
+                    except (ValueError, IndexError):
+                        indices.append(self.tree.index(item))
+                target_records = [self.records[i] for i in indices if 0 <= i < len(self.records)]
             else:
                 if not messagebox.askyesno("전체 출력", "선택된 항목이 없습니다. 전체 기록을 기성 청구 내역서로 출력하시겠습니까?"):
                     return
