@@ -316,11 +316,21 @@ function getProgressSummary(targetDate) {
     });
   }
 
+  // PC 기성 정산 스냅샷의 마감 기준일(최대 일자, 예: 2026-11-06) 확인
+  var baseBilling = (typeof CENTRAL_REFERENCE !== 'undefined' && CENTRAL_REFERENCE.billing_records) || [];
+  var maxBaseBillingDate = '';
+  baseBilling.forEach(function(rec) {
+    if (rec.date && rec.date > maxBaseBillingDate) {
+      maxBaseBillingDate = rec.date;
+    }
+  });
+
   // 2. Google Spreadsheet 실시간 DailyUsage 시트 반영
   var sheet = getDailyUsageSheet();
   var lastRow = sheet.getLastRow();
   var weatherVal = '';
   var remarksList = [];
+  var liveBillingRecords = [];
 
   if (lastRow > 1) {
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -332,12 +342,10 @@ function getProgressSummary(targetDate) {
       var recDate = record.date;
       if (!recDate) continue;
 
-      // 기준일 이전 데이터는 이미 prevCumulative에 포함되어 있으므로 건너뜀
-      if (latestPastDate && recDate <= latestPastDate) {
-        continue;
-      }
-
       var shiftStr = '주간';
+      if (record.work_shape === '야간' || record.work_type === '야간') {
+        shiftStr = '야간';
+      }
       if (record.worker_list && record.worker_list.length > 0) {
         for (var w = 0; w < record.worker_list.length; w++) {
           if (record.worker_list[w].shift === '야간' || String(record.worker_list[w].time).indexOf('야간') >= 0) {
@@ -345,6 +353,31 @@ function getProgressSummary(targetDate) {
             break;
           }
         }
+      }
+
+      // 기성 연동용 실시간 레코드 수집: PC 스냅샷 마감일(2026-11-06) 이후의 신규 일보만 수집 (중복 청구 방지)
+      if (recDate > maxBaseBillingDate && (safeNum(record.qty, 0) > 0 || safeNum(record.total_fee, 0) > 0)) {
+        var fee = safeNum(record.total_fee, 0);
+        if (fee === 0 && safeNum(record.unit_price, 0) > 0) {
+          fee = Math.round(safeNum(record.qty, 0) * safeNum(record.unit_price, 0) + safeNum(record.travel_cost, 0));
+        }
+        liveBillingRecords.push({
+          date: recDate,
+          company: record.company || '한국지역난방공사',
+          loc: record.loc_type ? ('[' + record.loc_type + '] ' + (record.site || '중앙지사')) : (record.site || '중앙지사'),
+          ndt_type: record.method || 'PAUT',
+          work_time: shiftStr === '야간' ? '야간' : '일반',
+          material_type: record.pipe || record.item_name || 'Pipe',
+          qty: safeNum(record.qty, 0),
+          unit: record.unit || 'M',
+          unit_price: safeNum(record.unit_price, 0),
+          subtotal: fee
+        });
+      }
+
+      // 기준일 이전 데이터는 이미 prevCumulative에 포함되어 있으므로 건너뜀
+      if (latestPastDate && recDate <= latestPastDate) {
+        continue;
       }
 
       var compKey = classifyMethodSpec(record.method, record.pipe, shiftStr);
@@ -444,8 +477,7 @@ function getProgressSummary(targetDate) {
   var mtDay = resultRows.find(function(r) { return r.comp_key === 'MT_전체(주간)'; }) || {};
   var ptDay = resultRows.find(function(r) { return r.comp_key === 'PT_전체(주간)'; }) || {};
 
-  // 5. 기성 정산 요약 및 세부 레코드 (PC 기성 정산(NDT) '1. 일별 작업 기록 및 목록' 연동)
-  var baseBilling = (typeof CENTRAL_REFERENCE !== 'undefined' && CENTRAL_REFERENCE.billing_records) || [];
+  // 5. 기성 정산 요약 및 세부 레코드 (PC 기성 정산(NDT) + 2026-11-06 이후 신규 구글시트 실시간 일보 자동 병합)
   var billingList = [];
   var billingSummary = {
     total_amount: 0,
@@ -460,10 +492,25 @@ function getProgressSummary(targetDate) {
     records_count: 0
   };
 
+  // 기존 PC 기성 스냅샷 등록
   baseBilling.forEach(function(rec) {
     if (!rec.date || rec.date <= targetDate) {
       billingList.push(rec);
     }
+  });
+
+  // PC 스냅샷 마감일(2026-11-06) 이후의 신규 구글 시트 실시간 일보만 병합 (중복 방지)
+  liveBillingRecords.forEach(function(rec) {
+    if (rec.date && rec.date <= targetDate) {
+      billingList.push(rec);
+    }
+  });
+
+  // 일자(date) 오름차순 정렬
+  billingList.sort(function(a, b) {
+    var da = String(a.date || '');
+    var db = String(b.date || '');
+    return da < db ? -1 : (da > db ? 1 : 0);
   });
 
   billingList.forEach(function(r) {

@@ -763,6 +763,43 @@
 
   </main>
 
+  <!-- Record Summary Modal -->
+  <div id="modal-record-summary"
+    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+    <div
+      class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl text-slate-100 overflow-hidden transform scale-95 transition-transform duration-200"
+      id="modal-record-summary-content">
+      <!-- Modal Header -->
+      <div class="px-4 py-3 bg-slate-800/90 border-b border-slate-700/80 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-base">📋</span>
+          <h3 class="font-bold text-sm text-white">작업일보 상세 요약</h3>
+        </div>
+        <button type="button" onclick="closeRecordSummaryModal()"
+          class="w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 flex items-center justify-center transition text-base font-bold">
+          ✕
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="p-4 overflow-y-auto space-y-3 text-xs" id="modal-summary-body">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-4 py-3 bg-slate-800/90 border-t border-slate-700/80 flex items-center justify-between gap-2">
+        <button type="button" id="btn-modal-copy"
+          class="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow">
+          <span>📋</span> <span>이 일보 복사하여 입력</span>
+        </button>
+        <button type="button" onclick="closeRecordSummaryModal()"
+          class="py-2 px-4 bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 font-bold rounded-xl transition">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Notification Toast -->
   <div id="toast"
     class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2">
@@ -1755,7 +1792,7 @@
         }
 
         container.innerHTML = headerHtml + list.map((item, idx) => `
-          <div class="p-3.5 bg-slate-900 text-slate-100 rounded-2xl mb-3 shadow-md border border-slate-700/80">
+          <div class="p-3.5 bg-slate-900 text-slate-100 rounded-2xl mb-3 shadow-md border border-slate-700/80 cursor-pointer active:scale-[0.99] transition hover:border-blue-500/50" onclick="openRecordSummaryByIndex(${idx})">
             <div class="flex items-start justify-between gap-2">
               <div>
                 <span class="inline-block px-2 py-0.5 rounded-md ${item.method === 'PAUT' ? 'bg-blue-500/20 text-blue-400' : (item.method === 'RT' ? 'bg-purple-500/20 text-purple-400' : 'bg-amber-500/20 text-amber-400')} font-extrabold text-[11px] mb-1">[${item.company}] ${item.method} · ${item.item_name || 'Pipe'}${item.pipe ? ` (${item.pipe})` : ''}</span>
@@ -1773,15 +1810,19 @@
             ${item.workers ? `<div class="text-[10px] text-slate-300 bg-slate-800/90 p-1.5 rounded-lg border border-slate-700/60 mt-1.5">👷 참여: ${item.workers}</div>` : ''}
             ${item.extra ? `<div class="text-[10px] text-amber-400 font-bold mt-1">🧪 ${item.extra}</div>` : ''}
 
+            <div class="text-[10px] text-blue-400/80 flex items-center justify-end gap-1 mt-1 font-semibold">
+              <span>📋 터치하여 일보 상세 요약 보기</span>
+            </div>
+
             <!-- 3 Action Buttons (Copy, Edit, Delete) -->
-            <div class="pt-2.5 mt-2.5 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
-              <button type="button" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold rounded-xl border border-slate-700 flex items-center justify-center gap-1 transition" onclick="copyRecordByIndex(${idx})">
+            <div class="pt-2 mt-2 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
+              <button type="button" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold rounded-xl border border-slate-700 flex items-center justify-center gap-1 transition" onclick="event.stopPropagation(); copyRecordByIndex(${idx})">
                 <span>📋</span> <span>복사</span>
               </button>
-              <button type="button" class="flex-1 py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 text-amber-300 font-bold rounded-xl border border-amber-500/40 flex items-center justify-center gap-1 transition" onclick="startEditRecordByIndex(${idx})">
+              <button type="button" class="flex-1 py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 text-amber-300 font-bold rounded-xl border border-amber-500/40 flex items-center justify-center gap-1 transition" onclick="event.stopPropagation(); startEditRecordByIndex(${idx})">
                 <span>✏️</span> <span>수정</span>
               </button>
-              <button type="button" class="flex-1 py-1.5 px-2 bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 text-rose-300 font-bold rounded-xl border border-rose-500/40 flex items-center justify-center gap-1 transition" onclick="deleteRecordByIndex(${idx})">
+              <button type="button" class="flex-1 py-1.5 px-2 bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 text-rose-300 font-bold rounded-xl border border-rose-500/40 flex items-center justify-center gap-1 transition" onclick="event.stopPropagation(); deleteRecordByIndex(${idx})">
                 <span>🗑️</span> <span>삭제</span>
               </button>
             </div>
@@ -1792,6 +1833,167 @@
         container.innerHTML = `<div class="text-xs text-rose-500 py-2 text-center">조회 실패: ${err.message}</div>`;
       }
     }
+
+    // Record Summary Modal Controller
+    window.openRecordSummaryByIndex = function (idx) {
+      if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
+      const item = window.recentRecordsList[idx];
+      const modal = document.getElementById("modal-record-summary");
+      const body = document.getElementById("modal-summary-body");
+      if (!modal || !body) return;
+
+      // 작업자 상세 목록 HTML
+      let workersHtml = '';
+      if (item.worker_list && item.worker_list.length > 0) {
+        workersHtml = `
+          <div class="overflow-x-auto rounded-xl border border-slate-700/80 mt-1">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead class="bg-slate-800 text-slate-400">
+                <tr>
+                  <th class="py-1 px-2 border-b border-slate-700 font-bold">작업자</th>
+                  <th class="py-1 px-2 border-b border-slate-700">구분</th>
+                  <th class="py-1 px-2 border-b border-slate-700">근무시간</th>
+                  <th class="py-1 px-2 border-b border-slate-700 text-right">OT</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800 text-slate-200">
+                ${item.worker_list.map(w => `
+                  <tr>
+                    <td class="py-1 px-2 font-bold">${w.user}</td>
+                    <td class="py-1 px-2">${w.shift || '-'}</td>
+                    <td class="py-1 px-2 text-slate-400">${w.time || '-'}</td>
+                    <td class="py-1 px-2 text-right text-amber-400 font-semibold">${w.ot ? (isNaN(Number(w.ot)) ? w.ot : Number(w.ot).toLocaleString() + '원') : '0원'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } else if (item.workers) {
+        workersHtml = `<div class="p-2 rounded-xl bg-slate-800/80 text-slate-200 font-medium text-[11px] mt-1">${item.workers}</div>`;
+      } else {
+        workersHtml = `<div class="text-slate-500 text-[11px] mt-1">등록된 작업자 없음</div>`;
+      }
+
+      body.innerHTML = `
+        <!-- 배지 및 일보 요약 헤더 -->
+        <div class="p-3 rounded-xl bg-slate-800/90 border border-slate-700">
+          <div class="flex items-center justify-between gap-2 mb-1.5">
+            <span class="inline-block px-2.5 py-1 rounded-lg ${item.method === 'PAUT' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' : (item.method === 'RT' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40')} font-black text-xs">
+              [${item.company || '한국지역난방공사'}] ${item.method}
+            </span>
+            <span class="text-xs font-bold text-slate-400">📅 ${item.date}</span>
+          </div>
+          <div class="text-sm font-black text-white">
+            ${item.loc_type || item.site} · ${item.item_name || 'Pipe'}${item.pipe ? ` (${item.pipe})` : ''}
+          </div>
+          ${item.report_no ? `<div class="text-[11px] text-blue-400 mt-1 font-medium">📄 성적서번호: <strong>${item.report_no}</strong></div>` : ''}
+        </div>
+
+        <!-- 기본 작업 정보 -->
+        <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+          <div class="text-[11px] font-extrabold text-blue-400 uppercase tracking-wider">📌 작업 개요</div>
+          <div class="grid grid-cols-2 gap-2 text-[11px]">
+            <div><span class="text-slate-400">작업형태:</span> <span class="font-bold text-slate-200">${item.work_shape || item.work_type || '주간'}</span></div>
+            <div><span class="text-slate-400">적용코드:</span> <span class="font-bold text-slate-200">${item.applied_code || '지역난방시방서'}</span></div>
+            <div><span class="text-slate-400">관경/규격:</span> <span class="font-bold text-slate-200">${item.pipe || '-'}</span></div>
+            <div><span class="text-slate-400">검사품명:</span> <span class="font-bold text-slate-200">${item.item_name || 'Pipe'}</span></div>
+            ${item.material ? `<div><span class="text-slate-400">자재명:</span> <span class="font-bold text-slate-200">${item.material}</span></div>` : ''}
+            ${item.hot_tap_stage ? `<div><span class="text-slate-400">핫태핑:</span> <span class="font-bold text-slate-200">${item.hot_tap_stage} (${item.hot_tap_joints || '1'}개소 / ${item.hot_tap_pipe || '-'})</span></div>` : ''}
+          </div>
+        </div>
+
+        <!-- 물량 및 금액 카드 -->
+        <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-2">
+          <div class="text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider">💰 물량 및 검사비 내역</div>
+          <div class="grid grid-cols-2 gap-2 text-[11px]">
+            <div><span class="text-slate-400">검사 물량:</span> <span class="font-black text-white text-xs">${item.qty} ${item.unit || 'M'}</span></div>
+            <div><span class="text-slate-400">단가:</span> <span class="font-bold text-slate-200">${Number(item.unit_price || 0).toLocaleString()}원</span></div>
+            <div><span class="text-slate-400">조인트수:</span> <span class="font-bold text-slate-200">원:${item.ori_joints || item.joints || 0} / 보수:${item.rep_joints || 0} / 불:${item.rej_qty || 0}</span></div>
+            <div><span class="text-slate-400">출장비:</span> <span class="font-bold text-slate-200">${Number(item.travel_cost || 0).toLocaleString()}원</span></div>
+          </div>
+          <div class="pt-2 border-t border-slate-700/60 flex items-center justify-between">
+            <span class="font-bold text-slate-300">총 검사비(공급가액):</span>
+            <span class="text-sm font-black text-emerald-400">${Number(item.total_fee || 0).toLocaleString()}원</span>
+          </div>
+        </div>
+
+        <!-- 투입 인원 및 근무시간 -->
+        <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1">
+          <div class="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider">👷 참여 인원 및 근무 상세</div>
+          ${workersHtml}
+        </div>
+
+        <!-- 장비 및 차량 정보 -->
+        <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+          <div class="text-[11px] font-extrabold text-cyan-400 uppercase tracking-wider">🚙 장비 및 차량 운행</div>
+          <div class="space-y-1 text-[11px]">
+            <div><span class="text-slate-400">주 장비:</span> <span class="text-slate-200 font-medium">${item.equip_main || '-'}</span></div>
+            <div><span class="text-slate-400">보조 장비:</span> <span class="text-slate-200 font-medium">${item.equip_aux || '-'}</span></div>
+            <div><span class="text-slate-400">차량번호:</span> <span class="text-slate-200 font-medium">${item.vehicle_no || '-'}</span></div>
+            <div><span class="text-slate-400">주행거리:</span> <span class="text-slate-200 font-medium">${item.mileage ? item.mileage + ' km' : '-'}</span></div>
+            ${item.vehicle_note ? `<div><span class="text-slate-400">차량비고:</span> <span class="text-slate-200 font-medium">${item.vehicle_note}</span></div>` : ''}
+          </div>
+        </div>
+
+        <!-- NDT 약품 및 RTK 내역 -->
+        ${item.extra ? `
+        <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1">
+          <div class="text-[11px] font-extrabold text-purple-400 uppercase tracking-wider">🧪 NDT 약품 / 결함 내역</div>
+          <div class="text-slate-200 font-bold text-[11px]">${item.extra}</div>
+        </div>
+        ` : ''}
+
+        <!-- 메모 및 비고 -->
+        ${item.note ? `
+        <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1">
+          <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">📝 현장 메모 / 비고</div>
+          <div class="text-slate-200 text-[11px] whitespace-pre-wrap">${item.note}</div>
+        </div>
+        ` : ''}
+      `;
+
+      // 푸터 복사 버튼 바인딩
+      const copyBtn = document.getElementById("btn-modal-copy");
+      if (copyBtn) {
+        copyBtn.onclick = function () {
+          closeRecordSummaryModal();
+          copyRecordByIndex(idx);
+        };
+      }
+
+      // 모달 열기 애니메이션
+      modal.classList.remove("hidden");
+      requestAnimationFrame(() => {
+        modal.classList.remove("opacity-0");
+        const content = document.getElementById("modal-record-summary-content");
+        if (content) {
+          content.classList.remove("scale-95");
+          content.classList.add("scale-100");
+        }
+      });
+    };
+
+    window.closeRecordSummaryModal = function () {
+      const modal = document.getElementById("modal-record-summary");
+      if (!modal) return;
+      const content = document.getElementById("modal-record-summary-content");
+      if (content) {
+        content.classList.remove("scale-100");
+        content.classList.add("scale-95");
+      }
+      modal.classList.add("opacity-0");
+      setTimeout(() => {
+        modal.classList.add("hidden");
+      }, 200);
+    };
+
+    // 모달 배경 클릭 시 닫기
+    document.getElementById("modal-record-summary")?.addEventListener("click", function (e) {
+      if (e.target === this) {
+        closeRecordSummaryModal();
+      }
+    });
 
     document.getElementById("btn-refresh-history").addEventListener("click", loadRecentRecords);
     document.getElementById("input-date").addEventListener("change", loadRecentRecords);

@@ -496,10 +496,9 @@ function getRecentRecords(targetDate) {
   }
 
   var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var startRow = Math.max(2, lastRow - 30);
+  var startRow = Math.max(2, lastRow - 60);
   var numRows = lastRow - startRow + 1;
   var data = sheet.getRange(startRow, 1, numRows, headerRow.length).getValues();
-
 
   var matchedRecords = [];
   var allRecent = [];
@@ -512,14 +511,26 @@ function getRecentRecords(targetDate) {
     }
   }
 
+  // 작업일자(Date) 내림차순, 입력시간(EntryTime) 내림차순으로 정확한 최신순 정렬
+  function recordCompareDesc(a, b) {
+    var da = String(a.date || '').trim();
+    var db = String(b.date || '').trim();
+    if (da !== db) return da < db ? 1 : -1;
+    var ta = String(a.entry_time || '').trim();
+    var tb = String(b.entry_time || '').trim();
+    return ta < tb ? 1 : (ta > tb ? -1 : 0);
+  }
+
+  allRecent.sort(recordCompareDesc);
+  matchedRecords.sort(recordCompareDesc);
+
   var isFallback = false;
   var finalRecords = matchedRecords;
   if (matchedRecords.length === 0 && targetDate && allRecent.length > 0) {
-    finalRecords = allRecent.slice(-10);
+    finalRecords = allRecent.slice(0, 10);
     isFallback = true;
   }
 
-  finalRecords.reverse();
   return {
     records: finalRecords.slice(0, 15),
     is_fallback: isFallback

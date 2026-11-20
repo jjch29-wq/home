@@ -391,14 +391,15 @@ def get_recent_records(date: Optional[str] = None):
 
         df["Date_str"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
 
+        # 1차 필터링: 최근 행 우선 검색
         is_fallback = False
         if date:
             filtered = df[df["Date_str"] == date]
             if filtered.empty:
-                filtered = df.tail(15)
+                filtered = df.tail(60)
                 is_fallback = True
         else:
-            filtered = df.tail(15)
+            filtered = df.tail(60)
 
         records = []
         for idx, row in filtered.iterrows():
@@ -496,8 +497,12 @@ def get_recent_records(date: Optional[str] = None):
                 "worker_list": workers_list
             })
 
-        records.reverse()
-        return {"records": records, "is_fallback": is_fallback}
+        # 작업일자(Date) 내림차순, 입력시간(EntryTime) 내림차순 정렬
+        records.sort(
+            key=lambda r: (str(r.get("date") or ""), str(r.get("entry_time") or "")),
+            reverse=True
+        )
+        return {"records": records[:15], "is_fallback": is_fallback}
     except Exception as e:
         return {"records": [], "is_fallback": False, "error": str(e)}
 
