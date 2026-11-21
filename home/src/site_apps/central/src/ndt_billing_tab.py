@@ -145,6 +145,8 @@ class NDTCalculatorTab(ttk.Frame):
         sel_sec_val = sel_sec.get().strip() if sel_sec else '전체'
         sel_line = getattr(self, 'cb_billing_line', None)
         sel_line_val = sel_line.get().strip() if sel_line else '전체'
+        sel_type = getattr(self, 'cb_billing_type', None)
+        sel_type_val = sel_type.get().strip().upper() if sel_type else '전체'
 
         total_paut = 0.0
         total_rt = 0.0
@@ -157,6 +159,7 @@ class NDTCalculatorTab(ttk.Frame):
             sec = str(res.get("section", "")).strip()
             line = str(res.get("line", "")).strip()
             loc = str(res.get("loc", "")).strip()
+            ndt_type = str(res.get("ndt_type", "")).upper()
 
             if sel_site_val and sel_site_val not in ('전체', '(전체)', '전체 업체'):
                 if comp != sel_site_val and sel_site_val not in loc:
@@ -178,27 +181,35 @@ class NDTCalculatorTab(ttk.Frame):
                     if sel_line_val.lower() not in loc.lower():
                         continue
 
+            if sel_type_val and sel_type_val not in ('전체', '(전체)', '전체 종류'):
+                if sel_type_val not in ndt_type:
+                    continue
+
             filtered_records.append(res)
             unit_price = res.get("unit_price", 0)
             if unit_price == 0 and res.get("qty", 0) > 0:
                 unit_price = int(res.get("subtotal", 0) / res.get("qty"))
 
             qty = float(res.get("qty", 0.0))
-            ndt_type = str(res.get("ndt_type", "")).upper()
+            tag_name = "tag_other"
             if "PAUT" in ndt_type or "UT" in ndt_type:
+                tag_name = "tag_paut"
                 total_paut += qty
             elif "RT" in ndt_type:
+                tag_name = "tag_rt"
                 total_rt += qty
             elif "MT" in ndt_type:
+                tag_name = "tag_mt"
                 total_mt += qty
             elif "PT" in ndt_type:
+                tag_name = "tag_pt"
                 total_pt += qty
 
             self.tree.insert("", tk.END, values=(
                 res.get("date", ""), comp or res.get("company", ""), loc, res.get("ndt_type", ""), res.get("work_time", ""), 
                 res.get("material_type", ""), f"{qty:.4f}", res.get("unit", ""),
                 f"{unit_price:,}", f"{res.get('subtotal', 0):,}"
-            ), tags=(str(idx),))
+            ), tags=(str(idx), tag_name))
 
         if hasattr(self, 'subtotal_var'):
             total_amt = grouped_supply_amount(filtered_records, self.contract_vars) if hasattr(self, 'contract_vars') else sum(r.get('subtotal', 0) for r in filtered_records)
@@ -215,7 +226,7 @@ class NDTCalculatorTab(ttk.Frame):
             filter_badge = f" [필터: {len(filtered_records)}/{len(self.records)}건]" if len(filtered_records) != len(self.records) else ""
             self.subtotal_var.set(f"[소계] {summary_text}  |  총 공급가액: {total_amt:,} 원{filter_badge}")
 
-        if hasattr(self, 'update_qty_summary') and (not sel_site_val or sel_site_val == '전체') and (not sel_sec_val or sel_sec_val == '전체') and (not sel_line_val or sel_line_val == '전체'):
+        if hasattr(self, 'update_qty_summary') and (not sel_site_val or sel_site_val == '전체') and (not sel_sec_val or sel_sec_val == '전체') and (not sel_line_val or sel_line_val == '전체') and (not sel_type_val or sel_type_val == '전체'):
             self.update_qty_summary()
 
     def _capture_billing_state(self):
@@ -768,6 +779,12 @@ class NDTCalculatorTab(ttk.Frame):
         self.cb_billing_line = ttk.Combobox(lbl_frame, width=28)
         self.cb_billing_line.pack(side=tk.LEFT, padx=(0, 4))
 
+        ttk.Label(lbl_frame, text="🔬 종류: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(2, 2))
+        self.cb_billing_type = ttk.Combobox(lbl_frame, width=7, state='readonly', values=['전체', 'PAUT', 'RT', 'MT', 'PT'])
+        self.cb_billing_type.set('전체')
+        self.cb_billing_type.pack(side=tk.LEFT, padx=(0, 4))
+        self.cb_billing_type.bind('<<ComboboxSelected>>', lambda e: self.filter_billing_tree())
+
         self._history_mapping = {
             'company_to_sections': {}, 'company_section_to_lines': {}, 'section_to_lines': {},
             'all_companies': [], 'all_sections': [], 'all_lines': []
@@ -869,6 +886,12 @@ class NDTCalculatorTab(ttk.Frame):
         self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
         self.tree.bind('<Delete>', self.delete_selected_records)
         self.tree.bind('<BackSpace>', self.delete_selected_records)
+
+        self.tree.tag_configure("tag_paut", background="#f0fdf4")
+        self.tree.tag_configure("tag_rt", background="#faf5ff")
+        self.tree.tag_configure("tag_mt", background="#fffbeb")
+        self.tree.tag_configure("tag_pt", background="#f0f9ff")
+        self.tree.tag_configure("tag_other", background="#ffffff")
 
         def save_billing_tree_widths(event=None):
             try:
