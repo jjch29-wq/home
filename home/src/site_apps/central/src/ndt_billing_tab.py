@@ -131,7 +131,10 @@ class NDTCalculatorTab(ttk.Frame):
     def load_billing_records(self):
         global CONFIG
         self.records = deepcopy(CONFIG.get("BILLING_RECORDS", []))
-        self.filter_billing_tree()
+        if hasattr(self, '_refresh_billing_filter_combos'):
+            self._refresh_billing_filter_combos()
+        else:
+            self.filter_billing_tree()
 
     def filter_billing_tree(self, event=None):
         if not hasattr(self, 'tree'):
@@ -793,22 +796,108 @@ class NDTCalculatorTab(ttk.Frame):
         def _update_billing_lines(event=None):
             co = self.cb_billing_site.get().strip()
             sec = self.cb_billing_section.get().strip()
-            lines = ['전체'] + get_lines_for_company_and_section(self._history_mapping, co, sec)
+            ndt = self.cb_billing_type.get().strip().upper() if hasattr(self, 'cb_billing_type') else '전체'
+
+            candidate_lines = set(get_lines_for_company_and_section(self._history_mapping, co, sec, ndt))
+            this_type_lines = set()
+            other_type_lines = set()
+
+            for res in getattr(self, 'records', []):
+                r_comp = str(res.get("company", "") or res.get("actual_company", "")).strip()
+                r_sec = str(res.get("section", "")).strip()
+                r_line = str(res.get("line", "")).strip()
+                r_loc = str(res.get("loc", "")).strip()
+                r_ndt = str(res.get("ndt_type", "")).strip().upper()
+
+                target_l = r_line
+                if not target_l and r_loc:
+                    parts = [p.strip() for p in r_loc.split('/')]
+                    if len(parts) >= 3:
+                        target_l = parts[2].split(' ')[0]
+                if not target_l:
+                    continue
+
+                if co and co not in ('전체', '(전체)', '전체 업체') and (r_comp != co and co not in r_loc):
+                    continue
+                if sec and sec not in ('전체', '(전체)', '전체 구간'):
+                    if r_sec:
+                        if r_sec != sec:
+                            continue
+                    elif f"/ {sec} /" not in r_loc and sec not in r_loc:
+                        continue
+
+                if ndt and ndt not in ('전체', '(전체)', '전체 종류'):
+                    if ndt in r_ndt:
+                        this_type_lines.add(target_l)
+                    else:
+                        other_type_lines.add(target_l)
+                else:
+                    this_type_lines.add(target_l)
+
+            if ndt and ndt not in ('전체', '(전체)', '전체 종류'):
+                candidate_lines.update(this_type_lines)
+                candidate_lines.difference_update(other_type_lines - this_type_lines)
+            else:
+                candidate_lines.update(this_type_lines)
+
+            lines = ['전체'] + sorted([l for l in candidate_lines if l])
             self.cb_billing_line['values'] = lines
             if self.cb_billing_line.get() not in lines:
                 self.cb_billing_line.set('전체')
             self.filter_billing_tree()
 
-        def _on_billing_site_selected(event=None):
+        def _update_billing_sections(event=None):
             co = self.cb_billing_site.get().strip()
-            sections = ['전체'] + get_sections_for_company(self._history_mapping, co)
+            ndt = self.cb_billing_type.get().strip().upper() if hasattr(self, 'cb_billing_type') else '전체'
+            candidate_secs = set(get_sections_for_company(self._history_mapping, co, ndt))
+
+            this_type_secs = set()
+            other_type_secs = set()
+            for res in getattr(self, 'records', []):
+                r_comp = str(res.get("company", "") or res.get("actual_company", "")).strip()
+                r_sec = str(res.get("section", "")).strip()
+                r_loc = str(res.get("loc", "")).strip()
+                r_ndt = str(res.get("ndt_type", "")).strip().upper()
+
+                target_s = r_sec
+                if not target_s and r_loc:
+                    parts = [p.strip() for p in r_loc.split('/')]
+                    if len(parts) >= 2:
+                        target_s = parts[1].split(' ')[0]
+                if not target_s:
+                    continue
+
+                if co and co not in ('전체', '(전체)', '전체 업체') and (r_comp != co and co not in r_loc):
+                    continue
+
+                if ndt and ndt not in ('전체', '(전체)', '전체 종류'):
+                    if ndt in r_ndt:
+                        this_type_secs.add(target_s)
+                    else:
+                        other_type_secs.add(target_s)
+                else:
+                    this_type_secs.add(target_s)
+
+            if ndt and ndt not in ('전체', '(전체)', '전체 종류'):
+                candidate_secs.update(this_type_secs)
+                candidate_secs.difference_update(other_type_secs - this_type_secs)
+            else:
+                candidate_secs.update(this_type_secs)
+
+            sections = ['전체'] + sorted([s for s in candidate_secs if s])
             self.cb_billing_section['values'] = sections
             if self.cb_billing_section.get() not in sections:
                 self.cb_billing_section.set('전체')
             _update_billing_lines()
 
+        def _on_billing_site_selected(event=None):
+            _update_billing_sections()
+
         def _on_billing_section_selected(event=None):
             _update_billing_lines()
+
+        def _on_billing_type_selected(event=None):
+            _update_billing_sections()
 
         def _populate_filter_options(event=None):
             try:
@@ -821,16 +910,14 @@ class NDTCalculatorTab(ttk.Frame):
             self.cb_billing_site['values'] = sites
             if self.cb_billing_site.get() not in sites:
                 self.cb_billing_site.set('전체')
-            sections = ['전체'] + get_sections_for_company(self._history_mapping, self.cb_billing_site.get().strip())
-            self.cb_billing_section['values'] = sections
-            if self.cb_billing_section.get() not in sections:
-                self.cb_billing_section.set('전체')
-            _update_billing_lines()
+            _update_billing_sections()
 
+        self._refresh_billing_filter_combos = _populate_filter_options
         _populate_filter_options()
         self.cb_billing_site.bind('<Button-1>', _populate_filter_options)
         self.cb_billing_site.bind('<<ComboboxSelected>>', _on_billing_site_selected)
         self.cb_billing_section.bind('<<ComboboxSelected>>', _on_billing_section_selected)
+        self.cb_billing_type.bind('<<ComboboxSelected>>', _on_billing_type_selected)
         self.cb_billing_line.bind('<<ComboboxSelected>>', lambda e: self.filter_billing_tree())
         self.cb_billing_line.bind('<Return>', lambda e: self.filter_billing_tree())
         self.cb_billing_line.bind('<KeyRelease>', lambda e: self.filter_billing_tree())
