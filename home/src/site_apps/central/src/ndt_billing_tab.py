@@ -757,15 +757,15 @@ class NDTCalculatorTab(ttk.Frame):
             self.ent_billing_end.pack(side=tk.LEFT)
             
         ttk.Label(lbl_frame, text="  |  🏢 시공업체: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(4, 2))
-        self.cb_billing_site = ttk.Combobox(lbl_frame, width=13, state='readonly')
+        self.cb_billing_site = ttk.Combobox(lbl_frame, width=14, state='readonly')
         self.cb_billing_site.pack(side=tk.LEFT, padx=(0, 4))
 
         ttk.Label(lbl_frame, text="📍 구간: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(2, 2))
-        self.cb_billing_section = ttk.Combobox(lbl_frame, width=11, state='readonly')
+        self.cb_billing_section = ttk.Combobox(lbl_frame, width=12, state='readonly')
         self.cb_billing_section.pack(side=tk.LEFT, padx=(0, 4))
 
         ttk.Label(lbl_frame, text="🔍 라인: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(2, 2))
-        self.cb_billing_line = ttk.Combobox(lbl_frame, width=14)
+        self.cb_billing_line = ttk.Combobox(lbl_frame, width=28)
         self.cb_billing_line.pack(side=tk.LEFT, padx=(0, 4))
 
         self._history_mapping = {
