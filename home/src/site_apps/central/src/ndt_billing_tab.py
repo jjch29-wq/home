@@ -770,6 +770,11 @@ class NDTCalculatorTab(ttk.Frame):
             self.ent_billing_end = ttk.Entry(lbl_frame, textvariable=self.billing_end_date, width=12)
             self.ent_billing_end.pack(side=tk.LEFT)
             
+        ttk.Label(lbl_frame, text="  |  🔬 종류: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(4, 2))
+        self.cb_billing_type = ttk.Combobox(lbl_frame, width=7, state='readonly', values=['전체', 'PAUT', 'RT', 'MT', 'PT'])
+        self.cb_billing_type.set('전체')
+        self.cb_billing_type.pack(side=tk.LEFT, padx=(0, 4))
+
         ttk.Label(lbl_frame, text="  |  🏢 시공업체: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(4, 2))
         self.cb_billing_site = ttk.Combobox(lbl_frame, width=14, state='readonly')
         self.cb_billing_site.pack(side=tk.LEFT, padx=(0, 4))
@@ -781,12 +786,6 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Label(lbl_frame, text="🔍 라인: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(2, 2))
         self.cb_billing_line = ttk.Combobox(lbl_frame, width=28)
         self.cb_billing_line.pack(side=tk.LEFT, padx=(0, 4))
-
-        ttk.Label(lbl_frame, text="🔬 종류: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(2, 2))
-        self.cb_billing_type = ttk.Combobox(lbl_frame, width=7, state='readonly', values=['전체', 'PAUT', 'RT', 'MT', 'PT'])
-        self.cb_billing_type.set('전체')
-        self.cb_billing_type.pack(side=tk.LEFT, padx=(0, 4))
-        self.cb_billing_type.bind('<<ComboboxSelected>>', lambda e: self.filter_billing_tree())
 
         self._history_mapping = {
             'company_to_sections': {}, 'company_section_to_lines': {}, 'section_to_lines': {},
