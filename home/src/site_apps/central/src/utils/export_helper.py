@@ -121,12 +121,18 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_info['D15'] = 1.0
             ws_info['D17'] = "정산 진행중"
 
-    # 실제 2026년 중앙지사 사전실행예산 확정 투입 인원 (4인, 총 560공수)
+    # 실제 2026년 중앙지사 사전실행예산 확정 투입 인원 및 13개월 월별 투입 계획
     planned_workers = [
         ("주진철", "부장", "경인", "자사", "PAUT/MT/PT"),
         ("권인경", "차장", "경인", "자사", "PAUT/MT/PT"),
         ("우명광", "대리", "경인", "자사", "PAUT/MT/PT"),
         ("박상태", "계장", "경인", "자사", "MT/PT")
+    ]
+    planned_monthly_days = [
+        [3, 5, 15, 15, 20, 10, 5, 20, 10, 15, 16, 16, 10], # 주진철 부장: 160일
+        [3, 5, 15, 12, 10, 10, 5, 10, 10, 10, 10, 10, 10], # 권인경 차장: 120일
+        [0, 1, 15, 15, 16, 20, 10, 20, 20, 13, 10, 10, 10], # 우명광 대리: 160일
+        [0, 1, 10, 10, 15, 20, 15, 9, 8, 8, 8, 8, 8]        # 박상태 계장: 120일
     ]
 
     # 중앙지사 전체 투입 가능 인력 명단 (사후 실적 정산용)
@@ -154,7 +160,7 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
         '여사원': 49
     }
 
-    # 2. Sheet: 인원투입계획 (사전)
+    # 2. Sheet: 인원투입계획 (사전 - 13개월 월별 투입 계획)
     if '인원투입계획' in wb.sheetnames:
         ws_p_labor = wb['인원투입계획']
         for idx, w_info in enumerate(planned_workers):
@@ -164,7 +170,16 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_w}'] = w_info[2]
             ws_p_labor[f'E{r_w}'] = w_info[3]
             ws_p_labor[f'F{r_w}'] = w_info[4]
-            for c_col in range(13, 58):
+            ws_p_labor[f'G{r_w}'] = f'=SUM(M{r_w}:Y{r_w})'
+            ws_p_labor[f'J{r_w}'] = f'=G{r_w}'
+            ws_p_labor[f'K{r_w}'] = 0
+
+            # 13개월 월별 일수 채우기 (Col M~Y, 13~25)
+            if idx < len(planned_monthly_days):
+                for m_idx, m_days in enumerate(planned_monthly_days[idx]):
+                    ws_p_labor.cell(r_w, 13 + m_idx).value = m_days
+
+            for c_col in range(26, 58):
                 ws_p_labor.cell(r_w, c_col).value = None
 
         for r_clear in range(7 + len(planned_workers), 37):
@@ -173,6 +188,9 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_clear}'] = ""
             ws_p_labor[f'E{r_clear}'] = ""
             ws_p_labor[f'F{r_clear}'] = ""
+            ws_p_labor[f'G{r_clear}'] = f'=SUM(M{r_clear}:Y{r_clear})'
+            ws_p_labor[f'J{r_clear}'] = f'=G{r_clear}'
+            ws_p_labor[f'K{r_clear}'] = 0
             for c_col in range(13, 58):
                 ws_p_labor.cell(r_clear, c_col).value = None
 
@@ -203,10 +221,14 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
     # 3. Sheet: 경비예상지출항목 (사전)
     if '경비예상지출항목' in wb.sheetnames:
         ws_p_exp = wb['경비예상지출항목']
-        if labor_data:
-            ws_p_exp['D6'] = _to_f(labor_data.get('연장근무', {}).get('period', 0))
-            ws_p_exp['D7'] = _to_f(labor_data.get('야간근무', {}).get('period', 0))
-            ws_p_exp['D8'] = _to_f(labor_data.get('휴일근무', {}).get('period', 0))
+        # 기본 사전 확정 특별근무 시간 (연장 240h, 야간 240h, 휴일 248h = 총 4,020,000원)
+        ot_ext = _to_f(labor_data.get('연장근무', {}).get('period', 0)) if labor_data else 0
+        ot_ngt = _to_f(labor_data.get('야간근무', {}).get('period', 0)) if labor_data else 0
+        ot_hol = _to_f(labor_data.get('휴일근무', {}).get('period', 0)) if labor_data else 0
+
+        ws_p_exp['D6'] = ot_ext if ot_ext > 0 else 240
+        ws_p_exp['D7'] = ot_ngt if ot_ngt > 0 else 240
+        ws_p_exp['D8'] = ot_hol if ot_hol > 0 else 248
 
         for r_mat in range(14, 20):
             ws_p_exp[f'D{r_mat}'] = 0
