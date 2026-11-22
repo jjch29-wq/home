@@ -160,24 +160,13 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
         '여사원': 49
     }
 
-    # 2. Sheet: 인원투입계획 (사전 - 13개월 월별 및 8월 일자별 투입 계획)
+    # 2. Sheet: 인원투입계획 (사전 - 13개월 전월 일자별 그룹화 아코디언)
     if '인원투입계획' in wb.sheetnames:
         ws_p_labor = wb['인원투입계획']
-        ws_p_labor['M5'] = '8월 (+)'
         ws_p_labor.sheet_properties.outlinePr.summaryRight = False
         ws_p_labor.sheet_view.showOutlineSymbols = True
         ws_p_labor.column_dimensions['F'].width = 18.0
-        if 'M' in ws_p_labor.column_dimensions:
-            ws_p_labor.column_dimensions['M'].min = 13
-            ws_p_labor.column_dimensions['M'].max = 13
-            ws_p_labor.column_dimensions['M'].width = 8.0
-            ws_p_labor.column_dimensions['M'].collapsed = True
-        aug_daily_inputs = [
-            {0: 1, 1: 1, 2: 1}, # 주진철: 8-5(수), 8-6(목), 8-7(금) = 3일
-            {0: 1, 1: 1, 2: 1}, # 권인경: 8-5(수), 8-6(목), 8-7(금) = 3일
-            {},                 # 우명광: 0일
-            {}                  # 박상태: 0일
-        ]
+
         for idx, w_info in enumerate(planned_workers):
             r_w = 7 + idx
             ws_p_labor[f'B{r_w}'] = w_info[0]
@@ -185,39 +174,21 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_w}'] = w_info[2]
             ws_p_labor[f'E{r_w}'] = w_info[3]
             ws_p_labor[f'F{r_w}'] = w_info[4]
-            ws_p_labor[f'G{r_w}'] = f'=IF(B{r_w}="","",M{r_w}+SUM(Q{r_w}:AB{r_w}))'
             ws_p_labor[f'J{r_w}'] = f'=IF(B{r_w}="","",G{r_w})'
             ws_p_labor[f'K{r_w}'] = 0
 
-            # M열 (8월 요약): =IF(B{r_w}="","",SUM(N{r_w}:P{r_w}))
-            ws_p_labor[f'M{r_w}'] = f'=IF(B{r_w}="","",SUM(N{r_w}:P{r_w}))'
-
-            # N~P열 (8월 실제 투입 3개 일자: 8-5, 8-6, 8-7)
-            w_aug = aug_daily_inputs[idx] if idx < len(aug_daily_inputs) else {}
-            for d_idx in range(3):
-                c_col = 14 + d_idx
-                ws_p_labor.cell(r_w, c_col).value = w_aug.get(d_idx, None)
-
-            # Q~AB열 (9월 ~ 내년 8월, 12개 월: Col 17 ~ 28)
-            if idx < len(planned_monthly_days):
-                for m_idx, m_days in enumerate(planned_monthly_days[idx][1:]):
-                    ws_p_labor.cell(r_w, 17 + m_idx).value = m_days
-
-            for c_col in range(29, 65):
-                ws_p_labor.cell(r_w, c_col).value = None
-
+        summary_col_indices = [13, 41, 72, 104, 135, 167, 199, 228, 260, 291, 323, 354, 386]
         for r_clear in range(7 + len(planned_workers), 37):
             ws_p_labor[f'B{r_clear}'] = ""
             ws_p_labor[f'C{r_clear}'] = ""
             ws_p_labor[f'D{r_clear}'] = ""
             ws_p_labor[f'E{r_clear}'] = ""
             ws_p_labor[f'F{r_clear}'] = ""
-            ws_p_labor[f'G{r_clear}'] = f'=IF(B{r_clear}="","",M{r_clear}+SUM(Q{r_clear}:AB{r_clear}))'
             ws_p_labor[f'J{r_clear}'] = ""
             ws_p_labor[f'K{r_clear}'] = ""
-            ws_p_labor[f'M{r_clear}'] = f'=IF(B{r_clear}="","",SUM(N{r_clear}:P{r_clear}))'
-            for c_col in range(14, 65):
-                ws_p_labor.cell(r_clear, c_col).value = None
+            for c_col in range(14, 420):
+                if c_col not in summary_col_indices:
+                    ws_p_labor.cell(r_clear, c_col).value = None
 
         # 기본 사전 확정 투입 공수 (부장 160일, 차장 120일, 대리 160일, 계장 120일 = 총 560공수)
         default_planned_labor = {
