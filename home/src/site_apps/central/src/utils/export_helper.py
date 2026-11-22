@@ -163,11 +163,13 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
     # 2. Sheet: 인원투입계획 (사전 - 13개월 월별 및 8월 일자별 투입 계획)
     if '인원투입계획' in wb.sheetnames:
         ws_p_labor = wb['인원투입계획']
+        ws_p_labor['M5'] = '8월 (+)'
         ws_p_labor.sheet_properties.outlinePr.summaryRight = False
         ws_p_labor.sheet_view.showOutlineSymbols = True
         if 'M' in ws_p_labor.column_dimensions:
             ws_p_labor.column_dimensions['M'].min = 13
             ws_p_labor.column_dimensions['M'].max = 13
+            ws_p_labor.column_dimensions['M'].width = 8.0
             ws_p_labor.column_dimensions['M'].collapsed = True
         aug_daily_inputs = [
             {0: 1, 1: 1, 2: 1}, # 주진철: 8-5(수), 8-6(목), 8-7(금) = 3일
