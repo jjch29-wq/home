@@ -176,25 +176,25 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_w}'] = w_info[2]
             ws_p_labor[f'E{r_w}'] = w_info[3]
             ws_p_labor[f'F{r_w}'] = w_info[4]
-            ws_p_labor[f'G{r_w}'] = f'=M{r_w}+SUM(AO{r_w}:AZ{r_w})'
+            ws_p_labor[f'G{r_w}'] = f'=M{r_w}+SUM(Q{r_w}:AB{r_w})'
             ws_p_labor[f'J{r_w}'] = f'=G{r_w}'
             ws_p_labor[f'K{r_w}'] = 0
 
-            # M열 (8월 요약): =SUM(N{r_w}:AN{r_w})
-            ws_p_labor[f'M{r_w}'] = f'=SUM(N{r_w}:AN{r_w})'
+            # M열 (8월 요약): =SUM(N{r_w}:P{r_w})
+            ws_p_labor[f'M{r_w}'] = f'=SUM(N{r_w}:P{r_w})'
 
-            # N~AN열 (8월 27개 일자: 8-5 ~ 8-31)
+            # N~P열 (8월 실제 투입 3개 일자: 8-5, 8-6, 8-7)
             w_aug = aug_daily_inputs[idx] if idx < len(aug_daily_inputs) else {}
-            for d_idx in range(27):
+            for d_idx in range(3):
                 c_col = 14 + d_idx
                 ws_p_labor.cell(r_w, c_col).value = w_aug.get(d_idx, None)
 
-            # AO~AZ열 (9월 ~ 내년 8월, 12개 월: Col 41 ~ 52)
+            # Q~AB열 (9월 ~ 내년 8월, 12개 월: Col 17 ~ 28)
             if idx < len(planned_monthly_days):
                 for m_idx, m_days in enumerate(planned_monthly_days[idx][1:]):
-                    ws_p_labor.cell(r_w, 41 + m_idx).value = m_days
+                    ws_p_labor.cell(r_w, 17 + m_idx).value = m_days
 
-            for c_col in range(53, 65):
+            for c_col in range(29, 65):
                 ws_p_labor.cell(r_w, c_col).value = None
 
         for r_clear in range(7 + len(planned_workers), 37):
@@ -203,10 +203,10 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_clear}'] = ""
             ws_p_labor[f'E{r_clear}'] = ""
             ws_p_labor[f'F{r_clear}'] = ""
-            ws_p_labor[f'G{r_clear}'] = f'=M{r_clear}+SUM(AO{r_clear}:AZ{r_clear})'
+            ws_p_labor[f'G{r_clear}'] = f'=M{r_clear}+SUM(Q{r_clear}:AB{r_clear})'
             ws_p_labor[f'J{r_clear}'] = f'=G{r_clear}'
             ws_p_labor[f'K{r_clear}'] = 0
-            ws_p_labor[f'M{r_clear}'] = f'=SUM(N{r_clear}:AN{r_clear})'
+            ws_p_labor[f'M{r_clear}'] = f'=SUM(N{r_clear}:P{r_clear})'
             for c_col in range(14, 65):
                 ws_p_labor.cell(r_clear, c_col).value = None
 
