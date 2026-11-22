@@ -166,6 +166,7 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
         ws_p_labor['M5'] = '8월 (+)'
         ws_p_labor.sheet_properties.outlinePr.summaryRight = False
         ws_p_labor.sheet_view.showOutlineSymbols = True
+        ws_p_labor.column_dimensions['F'].width = 18.0
         if 'M' in ws_p_labor.column_dimensions:
             ws_p_labor.column_dimensions['M'].min = 13
             ws_p_labor.column_dimensions['M'].max = 13
@@ -184,12 +185,12 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_w}'] = w_info[2]
             ws_p_labor[f'E{r_w}'] = w_info[3]
             ws_p_labor[f'F{r_w}'] = w_info[4]
-            ws_p_labor[f'G{r_w}'] = f'=M{r_w}+SUM(Q{r_w}:AB{r_w})'
-            ws_p_labor[f'J{r_w}'] = f'=G{r_w}'
+            ws_p_labor[f'G{r_w}'] = f'=IF(B{r_w}="","",M{r_w}+SUM(Q{r_w}:AB{r_w}))'
+            ws_p_labor[f'J{r_w}'] = f'=IF(B{r_w}="","",G{r_w})'
             ws_p_labor[f'K{r_w}'] = 0
 
-            # M열 (8월 요약): =SUM(N{r_w}:P{r_w})
-            ws_p_labor[f'M{r_w}'] = f'=SUM(N{r_w}:P{r_w})'
+            # M열 (8월 요약): =IF(B{r_w}="","",SUM(N{r_w}:P{r_w}))
+            ws_p_labor[f'M{r_w}'] = f'=IF(B{r_w}="","",SUM(N{r_w}:P{r_w}))'
 
             # N~P열 (8월 실제 투입 3개 일자: 8-5, 8-6, 8-7)
             w_aug = aug_daily_inputs[idx] if idx < len(aug_daily_inputs) else {}
@@ -211,10 +212,10 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_clear}'] = ""
             ws_p_labor[f'E{r_clear}'] = ""
             ws_p_labor[f'F{r_clear}'] = ""
-            ws_p_labor[f'G{r_clear}'] = f'=M{r_clear}+SUM(Q{r_clear}:AB{r_clear})'
-            ws_p_labor[f'J{r_clear}'] = f'=G{r_clear}'
-            ws_p_labor[f'K{r_clear}'] = 0
-            ws_p_labor[f'M{r_clear}'] = f'=SUM(N{r_clear}:P{r_clear})'
+            ws_p_labor[f'G{r_clear}'] = f'=IF(B{r_clear}="","",M{r_clear}+SUM(Q{r_clear}:AB{r_clear}))'
+            ws_p_labor[f'J{r_clear}'] = ""
+            ws_p_labor[f'K{r_clear}'] = ""
+            ws_p_labor[f'M{r_clear}'] = f'=IF(B{r_clear}="","",SUM(N{r_clear}:P{r_clear}))'
             for c_col in range(14, 65):
                 ws_p_labor.cell(r_clear, c_col).value = None
 
@@ -388,6 +389,7 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
     # 5. Sheet: 인원투입계획_사후
     if '인원투입계획_사후' in wb.sheetnames:
         ws_a_labor = wb['인원투입계획_사후']
+        ws_a_labor.column_dimensions['F'].width = 18.0
         for idx, w_info in enumerate(actual_workers):
             r_w = 7 + idx
             ws_a_labor[f'B{r_w}'] = w_info[0]
