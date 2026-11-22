@@ -160,9 +160,15 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
         '여사원': 49
     }
 
-    # 2. Sheet: 인원투입계획 (사전 - 13개월 월별 투입 계획)
+    # 2. Sheet: 인원투입계획 (사전 - 13개월 월별 및 8월 일자별 투입 계획)
     if '인원투입계획' in wb.sheetnames:
         ws_p_labor = wb['인원투입계획']
+        aug_daily_inputs = [
+            {0: 1, 1: 1, 2: 1}, # 주진철: 8-5(수), 8-6(목), 8-7(금) = 3일
+            {0: 1, 1: 1, 2: 1}, # 권인경: 8-5(수), 8-6(목), 8-7(금) = 3일
+            {},                 # 우명광: 0일
+            {}                  # 박상태: 0일
+        ]
         for idx, w_info in enumerate(planned_workers):
             r_w = 7 + idx
             ws_p_labor[f'B{r_w}'] = w_info[0]
@@ -170,16 +176,25 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_w}'] = w_info[2]
             ws_p_labor[f'E{r_w}'] = w_info[3]
             ws_p_labor[f'F{r_w}'] = w_info[4]
-            ws_p_labor[f'G{r_w}'] = f'=SUM(M{r_w}:Y{r_w})'
+            ws_p_labor[f'G{r_w}'] = f'=M{r_w}+SUM(AO{r_w}:AZ{r_w})'
             ws_p_labor[f'J{r_w}'] = f'=G{r_w}'
             ws_p_labor[f'K{r_w}'] = 0
 
-            # 13개월 월별 일수 채우기 (Col M~Y, 13~25)
-            if idx < len(planned_monthly_days):
-                for m_idx, m_days in enumerate(planned_monthly_days[idx]):
-                    ws_p_labor.cell(r_w, 13 + m_idx).value = m_days
+            # M열 (8월 요약): =SUM(N{r_w}:AN{r_w})
+            ws_p_labor[f'M{r_w}'] = f'=SUM(N{r_w}:AN{r_w})'
 
-            for c_col in range(26, 58):
+            # N~AN열 (8월 27개 일자: 8-5 ~ 8-31)
+            w_aug = aug_daily_inputs[idx] if idx < len(aug_daily_inputs) else {}
+            for d_idx in range(27):
+                c_col = 14 + d_idx
+                ws_p_labor.cell(r_w, c_col).value = w_aug.get(d_idx, None)
+
+            # AO~AZ열 (9월 ~ 내년 8월, 12개 월: Col 41 ~ 52)
+            if idx < len(planned_monthly_days):
+                for m_idx, m_days in enumerate(planned_monthly_days[idx][1:]):
+                    ws_p_labor.cell(r_w, 41 + m_idx).value = m_days
+
+            for c_col in range(53, 65):
                 ws_p_labor.cell(r_w, c_col).value = None
 
         for r_clear in range(7 + len(planned_workers), 37):
@@ -188,10 +203,11 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_clear}'] = ""
             ws_p_labor[f'E{r_clear}'] = ""
             ws_p_labor[f'F{r_clear}'] = ""
-            ws_p_labor[f'G{r_clear}'] = f'=SUM(M{r_clear}:Y{r_clear})'
+            ws_p_labor[f'G{r_clear}'] = f'=M{r_clear}+SUM(AO{r_clear}:AZ{r_clear})'
             ws_p_labor[f'J{r_clear}'] = f'=G{r_clear}'
             ws_p_labor[f'K{r_clear}'] = 0
-            for c_col in range(13, 58):
+            ws_p_labor[f'M{r_clear}'] = f'=SUM(N{r_clear}:AN{r_clear})'
+            for c_col in range(14, 65):
                 ws_p_labor.cell(r_clear, c_col).value = None
 
         # 기본 사전 확정 투입 공수 (부장 160일, 차장 120일, 대리 160일, 계장 120일 = 총 560공수)
