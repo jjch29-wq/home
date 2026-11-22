@@ -318,21 +318,48 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
                     ws_p_exp[f'G{o_row}'] = 1.0
 
     # 4. Sheet: 장비감가상각 (사전)
-    if '장비감가상각' in wb.sheetnames and expense_data:
+    if '장비감가상각' in wb.sheetnames:
         ws_p_dep = wb['장비감가상각']
-        for idx, d_item in enumerate(expense_data.get('depreciation', [])[:8]):
+        dep_list = expense_data.get('depreciation', []) if expense_data else []
+        default_p_dep = [
+            {'item': "PAUT 장비", 'spec': "", 'qty': 1, 'days': 120, 'rate': 44444},
+            {'item': "PAUT SCANNER (MANUAL)", 'spec': "", 'qty': 1, 'days': 120, 'rate': 5556},
+            {'item': "PAUT SCANNER (COBRA)", 'spec': "", 'qty': 1, 'days': 120, 'rate': 16667},
+            {'item': "YOKE", 'spec': "", 'qty': 1, 'days': 10, 'rate': 222},
+            {'item': "현상용 탑차(5년간 보험비 포함)", 'spec': "현장별 차량기입시 탑차 구분 기입", 'qty': 1, 'days': 30, 'rate': 16667},
+            {'item': "스타렉스(5년간 보험비 포함)", 'spec': "현장별 차량기입시 스타렉스 구분 기입", 'qty': 1, 'days': 160, 'rate': 16667}
+        ]
+        active_p_dep = dep_list if dep_list else default_p_dep
+        start_d = datetime.date(2026, 8, 5)
+        end_d = datetime.date(2027, 8, 5)
+
+        for idx in range(8):
             d_row = 5 + idx
-            item_name = d_item.get('item', '')
-            spec = d_item.get('spec', '')
-            qty = _to_f(d_item.get('qty', 0))
-            days = _to_f(d_item.get('days', 0))
-            rate = _to_f(d_item.get('rate', 0))
-            if item_name:
-                ws_p_dep[f'B{d_row}'] = item_name
-                ws_p_dep[f'C{d_row}'] = spec
-                ws_p_dep[f'D{d_row}'] = qty
-                ws_p_dep[f'G{d_row}'] = days
-                ws_p_dep[f'H{d_row}'] = rate
+            ws_p_dep[f'B{d_row}'] = idx + 1
+            if idx < len(active_p_dep):
+                d_item = active_p_dep[idx]
+                item_name = d_item.get('item', '')
+                spec = d_item.get('spec', '')
+                qty = _to_f(d_item.get('qty', 1))
+                days = _to_f(d_item.get('days', 0))
+
+                ws_p_dep[f'C{d_row}'] = item_name
+                ws_p_dep[f'D{d_row}'] = qty if qty > 0 else 1
+                ws_p_dep[f'E{d_row}'] = start_d
+                ws_p_dep[f'F{d_row}'] = end_d
+                ws_p_dep[f'G{d_row}'] = days if days > 0 else ""
+                ws_p_dep[f'H{d_row}'] = f'=IFERROR(VLOOKUP(C{d_row},장비마스터,5,FALSE),0)'
+                ws_p_dep[f'I{d_row}'] = f'=ROUND(N(D{d_row})*G{d_row}*H{d_row}, 0)'
+                ws_p_dep[f'J{d_row}'] = spec
+            else:
+                ws_p_dep[f'C{d_row}'] = ""
+                ws_p_dep[f'D{d_row}'] = ""
+                ws_p_dep[f'E{d_row}'] = ""
+                ws_p_dep[f'F{d_row}'] = ""
+                ws_p_dep[f'G{d_row}'] = ""
+                ws_p_dep[f'H{d_row}'] = f'=IF(C{d_row}="","",IFERROR(VLOOKUP(C{d_row},장비마스터,5,FALSE),0))'
+                ws_p_dep[f'I{d_row}'] = f'=IF(OR(C{d_row}="",G{d_row}=""),"",ROUND(N(D{d_row})*G{d_row}*H{d_row}, 0))'
+                ws_p_dep[f'J{d_row}'] = ""
 
     # 5. Sheet: 인원투입계획_사후
     if '인원투입계획_사후' in wb.sheetnames:
@@ -427,12 +454,12 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
                     ws_a_exp['F25'] = price
                     ws_a_exp['G25'] = 1.0
 
-            for r_clr in range(49, 53):
+            for r_clr in range(48, 52):
                 ws_a_exp[f'D{r_clr}'] = 0
                 ws_a_exp[f'E{r_clr}'] = ""
                 ws_a_exp[f'G{r_clr}'] = 1.0
             for idx, r_item in enumerate(target_a_exp.get('rental', [])[:4]):
-                r_row = 49 + idx
+                r_row = 48 + idx
                 cat = r_item.get('cat', '')
                 spec = r_item.get('spec', '')
                 qty = _to_f(r_item.get('qty', 0))
@@ -446,12 +473,12 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
                     ws_a_exp[f'F{r_row}'] = price
                     ws_a_exp[f'G{r_row}'] = 1.0
 
-            for r_clr in range(58, 64):
+            for r_clr in range(57, 63):
                 ws_a_exp[f'D{r_clr}'] = 0
                 ws_a_exp[f'E{r_clr}'] = ""
                 ws_a_exp[f'G{r_clr}'] = 1.0
             for idx, o_item in enumerate(target_a_exp.get('outsource', [])[:6]):
-                o_row = 58 + idx
+                o_row = 57 + idx
                 cat = o_item.get('cat', '')
                 work = o_item.get('work', '')
                 count = _to_f(o_item.get('count', 0))
@@ -468,20 +495,33 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
     if '장비감가상각_사후' in wb.sheetnames:
         ws_a_dep = wb['장비감가상각_사후']
         target_a_exp = actual_expense_data if actual_expense_data else expense_data
-        if target_a_exp:
-            for idx, d_item in enumerate(target_a_exp.get('depreciation', [])[:8]):
-                d_row = 5 + idx
+        dep_a_list = target_a_exp.get('depreciation', []) if target_a_exp else []
+        for idx in range(8):
+            d_row = 5 + idx
+            ws_a_dep[f'B{d_row}'] = idx + 1
+            if idx < len(dep_a_list):
+                d_item = dep_a_list[idx]
                 item_name = d_item.get('item', '')
                 spec = d_item.get('spec', '')
-                qty = _to_f(d_item.get('qty', 0))
+                qty = _to_f(d_item.get('qty', 1))
                 days = _to_f(d_item.get('days', 0))
-                rate = _to_f(d_item.get('rate', 0))
-                if item_name:
-                    ws_a_dep[f'B{d_row}'] = item_name
-                    ws_a_dep[f'C{d_row}'] = spec
-                    ws_a_dep[f'D{d_row}'] = qty
+
+                ws_a_dep[f'C{d_row}'] = item_name
+                ws_a_dep[f'D{d_row}'] = qty if qty > 0 else 1
+                if days > 0:
                     ws_a_dep[f'G{d_row}'] = days
-                    ws_a_dep[f'H{d_row}'] = rate
+                ws_a_dep[f'H{d_row}'] = f'=IFERROR(VLOOKUP(C{d_row},장비감가상각!장비마스터,5,FALSE),0)'
+                ws_a_dep[f'I{d_row}'] = f'=ROUND(N(D{d_row})*G{d_row}*H{d_row}, 0)'
+                ws_a_dep[f'J{d_row}'] = spec
+            else:
+                ws_a_dep[f'C{d_row}'] = ""
+                ws_a_dep[f'D{d_row}'] = ""
+                ws_a_dep[f'E{d_row}'] = ""
+                ws_a_dep[f'F{d_row}'] = ""
+                ws_a_dep[f'G{d_row}'] = f'=IF(AND(ISNUMBER(E{d_row}),ISNUMBER(F{d_row}),F{d_row}>=E{d_row}),F{d_row}-E{d_row}+1,0)'
+                ws_a_dep[f'H{d_row}'] = f'=IF(C{d_row}="","",IFERROR(VLOOKUP(C{d_row},장비감가상각!장비마스터,5,FALSE),0))'
+                ws_a_dep[f'I{d_row}'] = f'=IF(OR(C{d_row}="",G{d_row}=""),"",ROUND(N(D{d_row})*G{d_row}*H{d_row}, 0))'
+                ws_a_dep[f'J{d_row}'] = ""
 
     # 8. Sheet: 실적배분
     if '실적배분' in wb.sheetnames:
