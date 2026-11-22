@@ -14,6 +14,47 @@ def to_float(val):
         return 0.0
 
 
+def load_central_work_log_attendance(base_dir=None):
+    """
+    중앙지사 작업일보(Material_Inventory.xlsx DailyUsage)에서
+    인력별·일자별 실제 투입 실적(공수)을 추출한다.
+    반환: {worker_name: {'rank': rank, 'dept': dept, 'type': '자사', 'method': method, 'dates': set(date_strs)}}
+    """
+    if base_dir is None:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
+    inv_candidates = [
+        os.path.join(base_dir, 'data', 'Material_Inventory.xlsx'),
+        os.path.abspath(os.path.join(base_dir, '..', 'data', 'Material_Inventory.xlsx')),
+        'G:/내 드라이브/07_Antigravity/PMI_Data/central/data/Material_Inventory.xlsx',
+        'F:/내 드라이브/07_Antigravity/PMI_Data/central/data/Material_Inventory.xlsx'
+    ]
+    
+    attendance = {}
+    import openpyxl
+    for inv_path in inv_candidates:
+        if os.path.exists(inv_path):
+            try:
+                wb_inv = openpyxl.load_workbook(inv_path, data_only=True)
+                if 'DailyUsage' in wb_inv.sheetnames:
+                    ws_inv = wb_inv['DailyUsage']
+                    for r in range(2, ws_inv.max_row + 1):
+                        dt = ws_inv.cell(r, 1).value
+                        user_str = ws_inv.cell(r, 14).value
+                        if dt and user_str:
+                            dt_str = dt.strftime('%Y-%m-%d') if isinstance(dt, datetime.datetime) else str(dt)[:10]
+                            parts = str(user_str).strip().split()
+                            rank = parts[0] if len(parts) >= 2 else ''
+                            name = parts[1] if len(parts) >= 2 else parts[0]
+                            if name not in attendance:
+                                attendance[name] = {'rank': rank, 'dept': '경인', 'type': '자사', 'method': 'PAUT/MT/PT', 'dates': set()}
+                            attendance[name]['dates'].add(dt_str)
+                    break
+            except Exception:
+                continue
+    return attendance
+
+
 def export_budget_estimation_to_excel(filepath, summary_data, labor_data, material_data, expense_data,
                                        actual_labor_data=None, actual_material_data=None, actual_expense_data=None,
                                        base_salaries=None):
@@ -361,15 +402,18 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
                 ws_p_dep[f'I{d_row}'] = f'=IF(OR(C{d_row}="",G{d_row}=""),"",ROUND(N(D{d_row})*G{d_row}*H{d_row}, 0))'
                 ws_p_dep[f'J{d_row}'] = ""
 
-    # 5. Sheet: 인원투입계획_사후 (사후 - 13개월 전월 일자별 그룹화 아코디언)
+    # 5. Sheet: 인원투입계획_사후 (사후 - 13개월 전월 일자별 그룹화 아코디언 및 실제 작업일보 자동 연동)
     if '인원투입계획_사후' in wb.sheetnames:
         ws_a_labor = wb['인원투입계획_사후']
         ws_a_labor.sheet_properties.outlinePr.summaryRight = False
         ws_a_labor.sheet_view.showOutlineSymbols = True
         ws_a_labor.column_dimensions['F'].width = 18.0
 
+        # 기본 9인 배치
+        worker_row_map = {}
         for idx, w_info in enumerate(actual_workers):
             r_w = 7 + idx
+            worker_row_map[w_info[0]] = r_w
             ws_a_labor[f'B{r_w}'] = w_info[0]
             ws_a_labor[f'C{r_w}'] = w_info[1]
             ws_a_labor[f'D{r_w}'] = w_info[2]
@@ -381,7 +425,63 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_a_labor[f'K{r_w}'] = f'=IF(B{r_w}="","",0)'
 
         summary_col_indices = [13, 41, 72, 104, 135, 167, 199, 228, 260, 291, 323, 354, 386]
-        for r_clear in range(7 + len(actual_workers), 37):
+
+        # 13개월 일자별 열 매핑 생성
+        s_d = datetime.date(2026, 8, 5)
+        e_d = datetime.date(2027, 8, 31)
+        cur_d = s_d
+        m_dict = {}
+        while cur_d <= e_d:
+            ym = (cur_d.year, cur_d.month)
+            if ym not in m_dict:
+                m_dict[ym] = []
+            m_dict[ym].append(cur_d)
+            cur_d += datetime.timedelta(days=1)
+
+        date_col_map = {}
+        c_i = 13
+        for ym, dlist in m_dict.items():
+            d_start = c_i + 1
+            for d_idx, dt_obj in enumerate(dlist):
+                date_col_map[dt_obj.strftime('%Y-%m-%d')] = d_start + d_idx
+            c_i = d_start + len(dlist)
+
+        # 기존 일자별 셀 초기화
+        for r in range(7, 37):
+            for c_col in range(14, 420):
+                if c_col not in summary_col_indices:
+                    ws_a_labor.cell(r, c_col).value = None
+
+        # 실제 작업일보(DailyUsage) 데이터 로드 및 일자별 투입 실적 반영
+        att_data = load_central_work_log_attendance()
+        next_worker_row = 7 + len(actual_workers)
+
+        for w_name, w_att in att_data.items():
+            if w_name in worker_row_map:
+                r_target = worker_row_map[w_name]
+            elif next_worker_row <= 36:
+                r_target = next_worker_row
+                worker_row_map[w_name] = r_target
+                next_worker_row += 1
+                ws_a_labor[f'B{r_target}'] = w_name
+                ws_a_labor[f'C{r_target}'] = w_att.get('rank', '부장')
+                ws_a_labor[f'D{r_target}'] = w_att.get('dept', '경인')
+                ws_a_labor[f'E{r_target}'] = w_att.get('type', '자사')
+                ws_a_labor[f'F{r_target}'] = w_att.get('method', 'PAUT/MT/PT')
+                ws_a_labor[f'H{r_target}'] = f'=IF(B{r_target}="","",IF(AND(B{r_target}<>"",E{r_target}="자사"),IFERROR(VLOOKUP(C{r_target},직급표,3,FALSE),0),0))'
+                ws_a_labor[f'I{r_target}'] = f'=IF(B{r_target}="","",ROUND(G{r_target}*H{r_target},0))'
+                ws_a_labor[f'J{r_target}'] = f'=IF(B{r_target}="","",G{r_target})'
+                ws_a_labor[f'K{r_target}'] = f'=IF(B{r_target}="","",0)'
+            else:
+                continue
+
+            for d_str in w_att['dates']:
+                if d_str in date_col_map:
+                    c_target = date_col_map[d_str]
+                    ws_a_labor.cell(r_target, c_target).value = 1
+
+        # 빈 행 정리 (next_worker_row ~ 36)
+        for r_clear in range(next_worker_row, 37):
             ws_a_labor[f'B{r_clear}'] = ""
             ws_a_labor[f'C{r_clear}'] = ""
             ws_a_labor[f'D{r_clear}'] = ""
