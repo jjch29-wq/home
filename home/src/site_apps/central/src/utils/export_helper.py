@@ -17,8 +17,20 @@ def to_float(val):
 def load_central_work_log_attendance(base_dir=None):
     """
     중앙지사 작업일보(Material_Inventory.xlsx DailyUsage)에서
-    인력별·일자별 실제 투입 실적(공수)을 추출한다.
-    반환: {worker_name: {'rank': rank, 'dept': dept, 'type': '자사', 'method': method, 'dates': set(date_strs)}}
+    인력별·일자별 실제 투입 실적(공수), 수행 공법, 평일/휴일 구분을 정밀 추출한다.
+    반환: {
+        worker_name: {
+            'rank': rank,
+            'dept': '경인',
+            'type': '자사',
+            'method': deduced_method,
+            'dates': set(all_date_strs),
+            'holiday_dates': set(holiday_date_strs),
+            'weekday_dates': set(weekday_date_strs),
+            'methods': set(performed_methods),
+            'total_ot': float
+        }
+    }
     """
     if base_dir is None:
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,6 +38,8 @@ def load_central_work_log_attendance(base_dir=None):
     inv_candidates = [
         os.path.join(base_dir, 'data', 'Material_Inventory.xlsx'),
         os.path.abspath(os.path.join(base_dir, '..', 'data', 'Material_Inventory.xlsx')),
+        os.path.abspath(os.path.join(base_dir, '..', '..', 'data', 'Material_Inventory.xlsx')),
+        'home/src/site_apps/central/data/Material_Inventory.xlsx',
         'G:/내 드라이브/07_Antigravity/PMI_Data/central/data/Material_Inventory.xlsx',
         'F:/내 드라이브/07_Antigravity/PMI_Data/central/data/Material_Inventory.xlsx'
     ]
@@ -38,19 +52,149 @@ def load_central_work_log_attendance(base_dir=None):
                 wb_inv = openpyxl.load_workbook(inv_path, data_only=True)
                 if 'DailyUsage' in wb_inv.sheetnames:
                     ws_inv = wb_inv['DailyUsage']
+                    headers = [ws_inv.cell(1, c).value for c in range(1, ws_inv.max_column + 1)]
+                    h_map = {str(h).strip(): idx for idx, h in enumerate(headers) if h}
+                    
+                    c_date = h_map.get('Date', 0)
+                    c_method = h_map.get('검사방법')
+                    
+                    # 2026년 법정공휴일 세트
+                    korean_holidays = {'2026-08-15', '2026-09-24', '2026-09-25', '2026-09-26', '2026-10-03', '2026-10-09', '2026-12-25'}
+                    
                     for r in range(2, ws_inv.max_row + 1):
-                        dt = ws_inv.cell(r, 1).value
-                        user_str = ws_inv.cell(r, 14).value
-                        if dt and user_str:
-                            dt_str = dt.strftime('%Y-%m-%d') if isinstance(dt, datetime.datetime) else str(dt)[:10]
-                            parts = str(user_str).strip().split()
+                        dt = ws_inv.cell(r, c_date + 1).value
+                        if not dt:
+                            continue
+                        
+                        dt_obj = dt if isinstance(dt, (datetime.datetime, datetime.date)) else None
+                        if dt_obj:
+                            dt_str = dt_obj.strftime('%Y-%m-%d')
+                            is_weekend = dt_obj.weekday() >= 5
+                        else:
+                            dt_str = str(dt)[:10]
+                            is_weekend = False
+                        
+                        is_holiday = is_weekend or (dt_str in korean_holidays)
+                        row_method = str(ws_inv.cell(r, c_method + 1).value).strip() if (c_method is not None and ws_inv.cell(r, c_method + 1).value) else ''
+                        
+                        # User, User2 ~ User10 순회
+                        for u_idx in range(1, 11):
+                            u_col_name = 'User' if u_idx == 1 else f'User{u_idx}'
+                            t_col_name = 'WorkTime' if u_idx == 1 else f'WorkTime{u_idx}'
+                            ot_col_name = 'OT' if u_idx == 1 else f'OT{u_idx}'
+                            
+                            c_u = h_map.get(u_col_name)
+                            if c_u is None:
+                                continue
+                            user_val = ws_inv.cell(r, c_u + 1).value
+                            if not user_val:
+                                continue
+                            
+                            user_str = str(user_val).strip()
+                            parts = user_str.split()
                             rank = parts[0] if len(parts) >= 2 else ''
                             name = parts[1] if len(parts) >= 2 else parts[0]
+                            
+                            if not name:
+                                continue
+                            
+                            c_t = h_map.get(t_col_name)
+                            wt_val = str(ws_inv.cell(r, c_t + 1).value or '') if c_t is not None else ''
+                            
+                            c_ot = h_map.get(ot_col_name)
+                            ot_val = 0.0
+                            if c_ot is not None:
+                                try:
+                                    ot_val = float(str(ws_inv.cell(r, c_ot + 1).value or '0').replace(',', '').strip())
+                                except:
+                                    ot_val = 0.0
+                            
+                            is_row_holiday = is_holiday or ('휴일' in wt_val)
+                            
                             if name not in attendance:
-                                attendance[name] = {'rank': rank, 'dept': '경인', 'type': '자사', 'method': 'PAUT/MT/PT', 'dates': set()}
+                                attendance[name] = {
+                                    'rank': rank or '부장',
+                                    'dept': '경인',
+                                    'type': '자사',
+                                    'method': '',
+                                    'dates': set(),
+                                    'holiday_dates': set(),
+                                    'weekday_dates': set(),
+                                    'methods': set(),
+                                    'total_ot': 0.0
+                                }
+                            
+                            if rank and not attendance[name]['rank']:
+                                attendance[name]['rank'] = rank
+                            
                             attendance[name]['dates'].add(dt_str)
+                            if is_row_holiday:
+                                attendance[name]['holiday_dates'].add(dt_str)
+                            else:
+                                attendance[name]['weekday_dates'].add(dt_str)
+                            
+                            if row_method:
+                                attendance[name]['methods'].add(row_method)
+                            
+                            attendance[name]['total_ot'] += ot_val
+
+                    # 사후 탭: 일보에서 실제 수행한 검사방법(공법)을 분석하여 자동 결정
+                    for w_name, w_info in attendance.items():
+                        m_set = w_info['methods']
+                        if 'PAUT' in m_set and 'RT' in m_set and 'MT' in m_set:
+                            w_info['method'] = 'PAUT/RT/MT'
+                        elif 'PAUT' in m_set and 'RT' in m_set:
+                            w_info['method'] = 'PAUT/RT'
+                        elif 'PAUT' in m_set:
+                            w_info['method'] = 'PAUT'
+                        elif 'RT' in m_set:
+                            w_info['method'] = 'RT'
+                        elif 'MT' in m_set:
+                            w_info['method'] = 'MT/PT'
+                        else:
+                            w_info['method'] = 'PAUT/RT/MT'
+
+                    # 일보 전체 특별근무(연장/야간/휴일) 총 시간 정밀 집계
+                    from home.src.site_apps.central.src.services.ot_calculator import ot_breakdown
+                    ot_totals = {'연장근무': 0.0, '야간근무': 0.0, '휴일근무': 0.0}
+                    processed_ot_sigs = set()
+                    for r in range(2, ws_inv.max_row + 1):
+                        dt = ws_inv.cell(r, c_date + 1).value
+                        if not dt:
+                            continue
+                        for u_idx in range(1, 11):
+                            u_col_name = 'User' if u_idx == 1 else f'User{u_idx}'
+                            t_col_name = 'WorkTime' if u_idx == 1 else f'WorkTime{u_idx}'
+                            ot_col_name = 'OT' if u_idx == 1 else f'OT{u_idx}'
+                            
+                            c_u = h_map.get(u_col_name)
+                            if c_u is None:
+                                continue
+                            user_val = ws_inv.cell(r, c_u + 1).value
+                            if not user_val:
+                                continue
+                            
+                            c_t = h_map.get(t_col_name)
+                            wt_val = str(ws_inv.cell(r, c_t + 1).value or '') if c_t is not None else ''
+                            c_ot = h_map.get(ot_col_name)
+                            ot_val = str(ws_inv.cell(r, c_ot + 1).value or '') if c_ot is not None else ''
+                            
+                            sig = (str(dt)[:10], str(user_val).strip(), wt_val)
+                            if sig in processed_ot_sigs:
+                                continue
+                            processed_ot_sigs.add(sig)
+                            
+                            b = ot_breakdown(wt_val, dt, ot_val)
+                            if b['hours'] > 0:
+                                ot_totals['연장근무'] += b['day']
+                                ot_totals['야간근무'] += b['night']
+                                ot_totals['휴일근무'] += b['holiday']
+
+                    attendance['_ot_totals'] = ot_totals
                     break
-            except Exception:
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
                 continue
     return attendance
 
@@ -174,19 +318,6 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
         [3, 5, 15, 12, 10, 10, 5, 10, 10, 10, 10, 10, 10], # 권인경 차장: 120일
         [0, 1, 15, 15, 16, 20, 10, 20, 20, 13, 10, 10, 10], # 우명광 대리: 160일
         [0, 1, 10, 10, 15, 20, 15, 9, 8, 8, 8, 8, 8]        # 박상태 계장: 120일
-    ]
-
-    # 중앙지사 전체 투입 가능 인력 명단 (사후 실적 정산용)
-    actual_workers = [
-        ("주진철", "부장", "경인", "자사", "PAUT/MT/PT"),
-        ("권인경", "차장", "경인", "자사", "PAUT/MT/PT"),
-        ("우명광", "대리", "경인", "자사", "PAUT/MT/PT"),
-        ("박상태", "계장", "경인", "자사", "MT/PT"),
-        ("장승대", "계장", "경인", "자사", "PAUT/MT/PT"),
-        ("김진환", "주임", "경인", "자사", "PAUT/MT/PT"),
-        ("김성렬", "주임", "경인", "자사", "PAUT/MT/PT"),
-        ("박광복", "부장", "경인", "자사", "PAUT/MT/PT"),
-        ("주영광", "과장", "경인", "자사", "PAUT/MT/PT")
     ]
 
     rank_to_row = {
@@ -402,27 +533,46 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
                 ws_p_dep[f'I{d_row}'] = f'=IF(OR(C{d_row}="",G{d_row}=""),"",ROUND(N(D{d_row})*G{d_row}*H{d_row}, 0))'
                 ws_p_dep[f'J{d_row}'] = ""
 
-    # 5. Sheet: 인원투입계획_사후 (사후 - 13개월 전월 일자별 그룹화 아코디언 및 실제 작업일보 자동 연동)
+    # 5. Sheet: 인원투입계획_사후 (사후 - 방안 A: 사전 4인 공법 고정 + 추가인원 일보 공법 매칭 및 13개월 실적 연동)
     if '인원투입계획_사후' in wb.sheetnames:
         ws_a_labor = wb['인원투입계획_사후']
         ws_a_labor.sheet_properties.outlinePr.summaryRight = False
         ws_a_labor.sheet_view.showOutlineSymbols = True
         ws_a_labor.column_dimensions['F'].width = 18.0
 
-        # 기본 9인 배치
-        worker_row_map = {}
-        for idx, w_info in enumerate(actual_workers):
-            r_w = 7 + idx
-            worker_row_map[w_info[0]] = r_w
-            ws_a_labor[f'B{r_w}'] = w_info[0]
-            ws_a_labor[f'C{r_w}'] = w_info[1]
-            ws_a_labor[f'D{r_w}'] = w_info[2]
-            ws_a_labor[f'E{r_w}'] = w_info[3]
-            ws_a_labor[f'F{r_w}'] = w_info[4]
-            ws_a_labor[f'H{r_w}'] = f'=IF(B{r_w}="","",IF(AND(B{r_w}<>"",E{r_w}="자사"),IFERROR(VLOOKUP(C{r_w},직급표,3,FALSE),0),0))'
-            ws_a_labor[f'I{r_w}'] = f'=IF(B{r_w}="","",ROUND(G{r_w}*H{r_w},0))'
-            ws_a_labor[f'J{r_w}'] = f'=IF(B{r_w}="","",G{r_w})'
-            ws_a_labor[f'K{r_w}'] = f'=IF(B{r_w}="","",0)'
+        # 실제 작업일보(DailyUsage) 데이터 로드 (User1~User10 전체 순회 및 공법/시간 집계)
+        att_data = load_central_work_log_attendance()
+
+        # 사후 인원 구성:
+        # 1) 사전 4인(7~10행)을 1순위로 배치하되 공법은 일보 실제 수행 공법 반영
+        # 2) 일보에 실적이 있는 추가 인원은 일보 수행 공법을 매칭하여 11행부터 등록
+        # 3) 일보에 실적이 없는 더미 인원은 일체 등록하지 않음
+        final_a_workers = []
+        for p_w in planned_workers:
+            w_name = p_w[0]
+            w_att = att_data.get(w_name, {})
+            final_a_workers.append({
+                'name': w_name,
+                'rank': p_w[1],
+                'dept': p_w[2],
+                'type': p_w[3],
+                'method': w_att.get('method', p_w[4]), # 사후 탭: 일보 수행 공법 반영
+                'dates': w_att.get('dates', set()),
+                'holiday_dates': w_att.get('holiday_dates', set())
+            })
+
+        planned_names = {p[0] for p in planned_workers}
+        for w_name, w_info in sorted(att_data.items()):
+            if w_name not in planned_names and not w_name.startswith('_'):
+                final_a_workers.append({
+                    'name': w_name,
+                    'rank': w_info.get('rank', '부장'),
+                    'dept': w_info.get('dept', '경인'),
+                    'type': w_info.get('type', '자사'),
+                    'method': w_info.get('method', 'PAUT/RT/MT'), # 일보 수행 공법 자동 매칭
+                    'dates': w_info.get('dates', set()),
+                    'holiday_dates': w_info.get('holiday_dates', set())
+                })
 
         summary_col_indices = [13, 41, 72, 104, 135, 167, 199, 228, 260, 291, 323, 354, 386]
 
@@ -446,42 +596,36 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
                 date_col_map[dt_obj.strftime('%Y-%m-%d')] = d_start + d_idx
             c_i = d_start + len(dlist)
 
-        # 기존 일자별 셀 초기화
+        # 기존 일자별 셀 초기화 (7~36행)
         for r in range(7, 37):
             for c_col in range(14, 420):
                 if c_col not in summary_col_indices:
                     ws_a_labor.cell(r, c_col).value = None
 
-        # 실제 작업일보(DailyUsage) 데이터 로드 및 일자별 투입 실적 반영
-        att_data = load_central_work_log_attendance()
-        next_worker_row = 7 + len(actual_workers)
+        # 실적 인원 배치 및 일보 실적 기록
+        for idx, w_entry in enumerate(final_a_workers):
+            r_w = 7 + idx
+            if r_w > 36:
+                break
+            ws_a_labor[f'B{r_w}'] = w_entry['name']
+            ws_a_labor[f'C{r_w}'] = w_entry['rank']
+            ws_a_labor[f'D{r_w}'] = w_entry['dept']
+            ws_a_labor[f'E{r_w}'] = w_entry['type']
+            ws_a_labor[f'F{r_w}'] = w_entry['method']
+            ws_a_labor[f'H{r_w}'] = f'=IF(B{r_w}="","",IF(AND(B{r_w}<>"",E{r_w}="자사"),IFERROR(VLOOKUP(C{r_w},직급표,3,FALSE),0),0))'
+            ws_a_labor[f'I{r_w}'] = f'=IF(B{r_w}="","",ROUND(G{r_w}*H{r_w},0))'
+            ws_a_labor[f'J{r_w}'] = f'=IF(B{r_w}="","",G{r_w}-K{r_w})'
+            h_count = len(w_entry['holiday_dates'])
+            ws_a_labor[f'K{r_w}'] = f'=IF(B{r_w}="","",{h_count})' if h_count > 0 else f'=IF(B{r_w}="","",0)'
 
-        for w_name, w_att in att_data.items():
-            if w_name in worker_row_map:
-                r_target = worker_row_map[w_name]
-            elif next_worker_row <= 36:
-                r_target = next_worker_row
-                worker_row_map[w_name] = r_target
-                next_worker_row += 1
-                ws_a_labor[f'B{r_target}'] = w_name
-                ws_a_labor[f'C{r_target}'] = w_att.get('rank', '부장')
-                ws_a_labor[f'D{r_target}'] = w_att.get('dept', '경인')
-                ws_a_labor[f'E{r_target}'] = w_att.get('type', '자사')
-                ws_a_labor[f'F{r_target}'] = w_att.get('method', 'PAUT/MT/PT')
-                ws_a_labor[f'H{r_target}'] = f'=IF(B{r_target}="","",IF(AND(B{r_target}<>"",E{r_target}="자사"),IFERROR(VLOOKUP(C{r_target},직급표,3,FALSE),0),0))'
-                ws_a_labor[f'I{r_target}'] = f'=IF(B{r_target}="","",ROUND(G{r_target}*H{r_target},0))'
-                ws_a_labor[f'J{r_target}'] = f'=IF(B{r_target}="","",G{r_target})'
-                ws_a_labor[f'K{r_target}'] = f'=IF(B{r_target}="","",0)'
-            else:
-                continue
-
-            for d_str in w_att['dates']:
+            for d_str in w_entry['dates']:
                 if d_str in date_col_map:
                     c_target = date_col_map[d_str]
-                    ws_a_labor.cell(r_target, c_target).value = 1
+                    ws_a_labor.cell(r_w, c_target).value = 1
 
-        # 빈 행 정리 (next_worker_row ~ 36)
-        for r_clear in range(next_worker_row, 37):
+        # 빈 행 정리 (len(final_a_workers) + 7 ~ 36행 완전 초기화)
+        clear_start_row = 7 + len(final_a_workers)
+        for r_clear in range(clear_start_row, 37):
             ws_a_labor[f'B{r_clear}'] = ""
             ws_a_labor[f'C{r_clear}'] = ""
             ws_a_labor[f'D{r_clear}'] = ""
@@ -508,11 +652,30 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
     # 6. Sheet: 경비지출항목_사후
     if '경비지출항목_사후' in wb.sheetnames:
         ws_a_exp = wb['경비지출항목_사후']
+        ot_totals = att_data.get('_ot_totals', {}) if 'att_data' in locals() else {}
         target_a_labor = actual_labor_data if actual_labor_data else labor_data
-        if target_a_labor:
-            ws_a_exp['D6'] = _to_f(target_a_labor.get('연장근무', {}).get('period', 0))
-            ws_a_exp['D7'] = _to_f(target_a_labor.get('야간근무', {}).get('period', 0))
-            ws_a_exp['D8'] = _to_f(target_a_labor.get('휴일근무', {}).get('period', 0))
+
+        # 특별근무(연장/야간/휴일) 총 시간: 일보 전수 집계 실적 우선 반영
+        if ot_totals.get('연장근무', 0) > 0:
+            ws_a_exp['D6'] = ot_totals['연장근무']
+        elif target_a_labor and '연장근무' in target_a_labor:
+            p = _to_f(target_a_labor['연장근무'].get('personnel', 1))
+            h = _to_f(target_a_labor['연장근무'].get('period', 0))
+            ws_a_exp['D6'] = p * h if p > 0 else h
+
+        if ot_totals.get('야간근무', 0) > 0:
+            ws_a_exp['D7'] = ot_totals['야간근무']
+        elif target_a_labor and '야간근무' in target_a_labor:
+            p = _to_f(target_a_labor['야간근무'].get('personnel', 1))
+            h = _to_f(target_a_labor['야간근무'].get('period', 0))
+            ws_a_exp['D7'] = p * h if p > 0 else h
+
+        if ot_totals.get('휴일근무', 0) > 0:
+            ws_a_exp['D8'] = ot_totals['휴일근무']
+        elif target_a_labor and '휴일근무' in target_a_labor:
+            p = _to_f(target_a_labor['휴일근무'].get('personnel', 1))
+            h = _to_f(target_a_labor['휴일근무'].get('period', 0))
+            ws_a_exp['D8'] = p * h if p > 0 else h
 
         target_a_mat = actual_material_data if actual_material_data else material_data
         for r_mat in range(14, 20):
@@ -541,20 +704,23 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
                 price = _to_f(exp_item.get('price', 0))
 
                 if '차량' in cat or '차량' in cont:
+                    ws_a_exp['C30'] = '탑차 및 스타렉스 현장 운행 (총 27대·회)'
+                    ws_a_exp['D30'] = ppl if ppl > 0 else 1
+                    ws_a_exp['E30'] = qty if qty > 0 else 1
+                    ws_a_exp['F30'] = price
+                    ws_a_exp['G30'] = 1.0
+                elif '소모품' in cat or '소모품' in cont:
+                    ws_a_exp['C31'] = '현장 작업 안전소모품, 장갑, 일회용 작업복 등'
                     ws_a_exp['D31'] = ppl if ppl > 0 else 1
                     ws_a_exp['E31'] = qty if qty > 0 else 1
                     ws_a_exp['F31'] = price
                     ws_a_exp['G31'] = 1.0
-                elif '소모품' in cat or '소모품' in cont:
-                    ws_a_exp['D32'] = ppl if ppl > 0 else 1
-                    ws_a_exp['E32'] = qty if qty > 0 else 1
-                    ws_a_exp['F32'] = price
-                    ws_a_exp['G32'] = 1.0
                 elif '복리' in cat or '복리' in cont:
-                    ws_a_exp['D36'] = ppl if ppl > 0 else 1
-                    ws_a_exp['E36'] = qty if qty > 0 else 1
-                    ws_a_exp['F36'] = price
-                    ws_a_exp['G36'] = 1.0
+                    ws_a_exp['C35'] = '생수, 음료 및 현장 복리후생비'
+                    ws_a_exp['D35'] = ppl if ppl > 0 else 1
+                    ws_a_exp['E35'] = qty if qty > 0 else 1
+                    ws_a_exp['F35'] = price
+                    ws_a_exp['G35'] = 1.0
                 elif '식비' in cat or '식비' in cont:
                     ws_a_exp['D27'] = ppl if ppl > 0 else 1
                     ws_a_exp['E27'] = qty if qty > 0 else 1
@@ -620,6 +786,8 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
 
                 ws_a_dep[f'C{d_row}'] = item_name
                 ws_a_dep[f'D{d_row}'] = qty if qty > 0 else 1
+                ws_a_dep[f'E{d_row}'] = start_d
+                ws_a_dep[f'F{d_row}'] = end_d
                 if days > 0:
                     ws_a_dep[f'G{d_row}'] = days
                 ws_a_dep[f'H{d_row}'] = f'=IFERROR(VLOOKUP(C{d_row},장비감가상각!장비마스터,5,FALSE),0)'

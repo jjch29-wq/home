@@ -55,7 +55,7 @@ class DailyRecordSaveTests(unittest.TestCase):
     def test_fresh_exact_duplicate_requires_confirmation(self):
         self.app._daily_edit_source = None
         plan = {'records_to_save':[{'Date':'2026-10-23','Site':'A','Usage':10}]}
-        with patch('site_apps.central.src.views.daily_record_save.messagebox.askyesno',return_value=False) as ask:
+        with patch('site_apps.central.src.views.daily_record_save.messagebox.askyesnocancel',return_value=None) as ask:
             self.assertEqual(save_prepared(self.app,plan),0)
         ask.assert_called_once()
         self.app.save_data.assert_not_called()

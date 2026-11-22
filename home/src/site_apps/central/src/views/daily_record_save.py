@@ -20,25 +20,48 @@ def save_prepared(app, plan):
         if answer:
             replace = index
     else:
-        # Without a source, matching dates alone cannot identify an edit target.
-        for record in plan['records_to_save']:
+        # Without a source, check if an existing record matches the core job (Date, Site, Method, Pipe, Usage)
+        for record in plan.get('records_to_save', []):
             candidates = app.daily_usage_df
             if candidates.empty:
                 break
             match = pd.to_datetime(candidates['Date'], errors='coerce').dt.date == pd.to_datetime(record['Date']).date()
-            for key in ('Site', '검사방법', '검사품명', 'MaterialID', '관경(Inch)', 'Usage', '단가'):
-                if key not in candidates:
-                    continue
-                def canonical(value):
-                    if pd.isna(value): return ''
-                    if key in ('Usage', '단가'):
-                        try: return float(str(value).replace(',', '') or 0)
-                        except ValueError: pass
-                    return str(value).strip().removesuffix('.0') if key == 'MaterialID' else str(value).strip()
-                match &= candidates[key].map(canonical) == canonical(record.get(key, ''))
-            if match.any():
-                if not messagebox.askyesno('중복 기록 확인', '동일한 작업 기록이 있습니다. 별도 기록으로 추가할까요?\n기존 기록 수정은 최근 기록에서 불러온 뒤 저장해주세요.', parent=app.root):
+            
+            def canon(val, is_num=False):
+                if pd.isna(val): return ''
+                if is_num:
+                    try: return float(str(val).replace(',', '') or 0)
+                    except ValueError: pass
+                return str(val).strip()
+
+            core_match = match.copy()
+            for k, is_num in [('Site', False), ('검사방법', False), ('관경(Inch)', False), ('Usage', True)]:
+                if k in candidates:
+                    core_match &= candidates[k].map(lambda v: canon(v, is_num)) == canon(record.get(k, ''), is_num)
+
+            if core_match.any():
+                matched_idx = candidates[core_match].index[0]
+                matched_row = candidates.loc[matched_idx]
+                date_s = str(record.get('Date', '')).split()[0]
+                method_s = str(record.get('검사방법', ''))
+                pipe_s = str(record.get('관경(Inch)', ''))
+                usage_s = str(record.get('Usage', ''))
+                
+                ans = messagebox.askyesnocancel(
+                    '기존 작업 덮어쓰기',
+                    f"{date_s}에 동일한 규격·수량의 작업이 이미 등록되어 있습니다.\n({method_s} {pipe_s} {usage_s})\n\n"
+                    "기존 기록을 수정(덮어쓰기)할까요?\n\n"
+                    "• [예]: 기존 기록 덮어쓰기 (수정 반영)\n"
+                    "• [아니오]: 별도 새 작업으로 추가\n"
+                    "• [취소]: 저장 취소",
+                    parent=app.root
+                )
+                if ans is None:
                     return 0
+                if ans:
+                    replace = matched_idx
+                    snapshot = matched_row.copy(deep=True)
+                    source = (replace, snapshot)
                 break
     names = ('daily_usage_df', 'transactions_df', 'materials_df', 'monthly_usage_df')
     frames = {name:getattr(app, name).copy(deep=True) for name in names}

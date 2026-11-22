@@ -252,8 +252,8 @@ class DailyWorkLogExporter:
         raw_ndt = data.get('ndt_results', [])
         ndt_results = [r for r in raw_ndt if any(str(v).strip() for v in r.values())] if raw_ndt else []
         start_row = 32
-        total_rows = max(8, len(ndt_results) + 1)
-        for i in range(total_rows): # minimum 8 rows to fill Page 1 nicely without page overflow
+        total_rows = max(14, len(ndt_results) + 1)
+        for i in range(total_rows): # minimum 14 rows to fill Page 1 with balanced top/bottom margins
             row_idx = start_row + i
             res = ndt_results[i] if i < len(ndt_results) else {}
             
@@ -342,11 +342,12 @@ class DailyWorkLogExporter:
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 1 if total_rows <= 15 else 0
+        ws.page_setup.fitToHeight = 1 if total_rows <= 14 else 0
         ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.print_area = f'A1:T{start_row + total_rows - 1}'
         ws.print_title_rows = '30:31'
         ws.print_options.horizontalCentered = True
+        ws.print_options.verticalCentered = True
         
         # Header/Footer (Auto Page Numbering)
         ws.oddHeader.right.text = "Page &P of &N"

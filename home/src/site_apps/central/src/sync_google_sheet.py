@@ -287,17 +287,6 @@ def push_record_to_web_app(
     """
     if is_development():
         return disabled_sync_result()
-    try:
-        import requests
-    except ImportError:
-        logger.error("requests 라이브러리가 설치되지 않아 Push를 건너뜁니다.")
-        return {"status": "error", "message": "requests not installed"}
-
-    cfg = load_sync_config()
-    target_url = web_app_url or cfg.get("web_app_url")
-    if not target_url:
-        return {"status": "error", "message": "Google Apps Script 웹 앱 URL이 설정되지 않았습니다."}
-
     payload = {
         "action": action,
         "entry_time": str(original_entry_time or record.get("EntryTime", "")).split(".")[0].strip(),
@@ -305,14 +294,28 @@ def push_record_to_web_app(
     }
 
     try:
-        resp = requests.post(
-            target_url,
-            json=payload,
-            headers={"User-Agent": "Central-Office-PC/1.0"},
-            timeout=15,
-            allow_redirects=True
-        )
-        data = resp.json()
+        try:
+            import requests
+            resp = requests.post(
+                target_url,
+                json=payload,
+                headers={"User-Agent": "Central-Office-PC/1.0"},
+                timeout=15,
+                allow_redirects=True
+            )
+            data = resp.json()
+        except ImportError:
+            import json
+            import urllib.request
+            data_bytes = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(
+                target_url,
+                data=data_bytes,
+                headers={"User-Agent": "Central-Office-PC/1.0", "Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
         logger.info(f"중앙지사 구글 시트 Push 성공 ({action}): {data.get('message', '')}")
         return data
     except Exception as e:
