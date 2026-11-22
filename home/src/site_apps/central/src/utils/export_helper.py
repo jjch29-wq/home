@@ -361,10 +361,13 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
                 ws_p_dep[f'I{d_row}'] = f'=IF(OR(C{d_row}="",G{d_row}=""),"",ROUND(N(D{d_row})*G{d_row}*H{d_row}, 0))'
                 ws_p_dep[f'J{d_row}'] = ""
 
-    # 5. Sheet: 인원투입계획_사후
+    # 5. Sheet: 인원투입계획_사후 (사후 - 13개월 전월 일자별 그룹화 아코디언)
     if '인원투입계획_사후' in wb.sheetnames:
         ws_a_labor = wb['인원투입계획_사후']
+        ws_a_labor.sheet_properties.outlinePr.summaryRight = False
+        ws_a_labor.sheet_view.showOutlineSymbols = True
         ws_a_labor.column_dimensions['F'].width = 18.0
+
         for idx, w_info in enumerate(actual_workers):
             r_w = 7 + idx
             ws_a_labor[f'B{r_w}'] = w_info[0]
@@ -372,17 +375,25 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_a_labor[f'D{r_w}'] = w_info[2]
             ws_a_labor[f'E{r_w}'] = w_info[3]
             ws_a_labor[f'F{r_w}'] = w_info[4]
-            for c_col in range(13, 58):
-                ws_a_labor.cell(r_w, c_col).value = None
+            ws_a_labor[f'H{r_w}'] = f'=IF(B{r_w}="","",IF(AND(B{r_w}<>"",E{r_w}="자사"),IFERROR(VLOOKUP(C{r_w},직급표,3,FALSE),0),0))'
+            ws_a_labor[f'I{r_w}'] = f'=IF(B{r_w}="","",ROUND(G{r_w}*H{r_w},0))'
+            ws_a_labor[f'J{r_w}'] = f'=IF(B{r_w}="","",G{r_w})'
+            ws_a_labor[f'K{r_w}'] = f'=IF(B{r_w}="","",0)'
 
+        summary_col_indices = [13, 41, 72, 104, 135, 167, 199, 228, 260, 291, 323, 354, 386]
         for r_clear in range(7 + len(actual_workers), 37):
             ws_a_labor[f'B{r_clear}'] = ""
             ws_a_labor[f'C{r_clear}'] = ""
             ws_a_labor[f'D{r_clear}'] = ""
             ws_a_labor[f'E{r_clear}'] = ""
             ws_a_labor[f'F{r_clear}'] = ""
-            for c_col in range(13, 58):
-                ws_a_labor.cell(r_clear, c_col).value = None
+            ws_a_labor[f'H{r_clear}'] = f'=IF(B{r_clear}="","",IF(AND(B{r_clear}<>"",E{r_clear}="자사"),IFERROR(VLOOKUP(C{r_clear},직급표,3,FALSE),0),0))'
+            ws_a_labor[f'I{r_clear}'] = f'=IF(B{r_clear}="","",ROUND(G{r_clear}*H{r_clear},0))'
+            ws_a_labor[f'J{r_clear}'] = f'=IF(B{r_clear}="","",G{r_clear})'
+            ws_a_labor[f'K{r_clear}'] = f'=IF(B{r_clear}="","",0)'
+            for c_col in range(14, 420):
+                if c_col not in summary_col_indices:
+                    ws_a_labor.cell(r_clear, c_col).value = None
 
         target_a_labor = actual_labor_data if actual_labor_data else labor_data
         if target_a_labor:
