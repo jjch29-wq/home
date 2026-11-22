@@ -121,15 +121,25 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_info['D15'] = 1.0
             ws_info['D17'] = "정산 진행중"
 
-    central_workers = [
+    # 실제 2026년 중앙지사 사전실행예산 확정 투입 인원 (4인, 총 560공수)
+    planned_workers = [
         ("주진철", "부장", "경인", "자사", "PAUT/MT/PT"),
+        ("권인경", "차장", "경인", "자사", "PAUT/MT/PT"),
         ("우명광", "대리", "경인", "자사", "PAUT/MT/PT"),
+        ("박상태", "계장", "경인", "자사", "MT/PT")
+    ]
+
+    # 중앙지사 전체 투입 가능 인력 명단 (사후 실적 정산용)
+    actual_workers = [
+        ("주진철", "부장", "경인", "자사", "PAUT/MT/PT"),
+        ("권인경", "차장", "경인", "자사", "PAUT/MT/PT"),
+        ("우명광", "대리", "경인", "자사", "PAUT/MT/PT"),
+        ("박상태", "계장", "경인", "자사", "MT/PT"),
         ("장승대", "계장", "경인", "자사", "PAUT/MT/PT"),
         ("김진환", "주임", "경인", "자사", "PAUT/MT/PT"),
         ("김성렬", "주임", "경인", "자사", "PAUT/MT/PT"),
         ("박광복", "부장", "경인", "자사", "PAUT/MT/PT"),
-        ("주영광", "과장", "경인", "자사", "PAUT/MT/PT"),
-        ("박상태", "계장", "경인", "자사", "PAUT/MT/PT")
+        ("주영광", "과장", "경인", "자사", "PAUT/MT/PT")
     ]
 
     rank_to_row = {
@@ -147,7 +157,7 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
     # 2. Sheet: 인원투입계획 (사전)
     if '인원투입계획' in wb.sheetnames:
         ws_p_labor = wb['인원투입계획']
-        for idx, w_info in enumerate(central_workers):
+        for idx, w_info in enumerate(planned_workers):
             r_w = 7 + idx
             ws_p_labor[f'B{r_w}'] = w_info[0]
             ws_p_labor[f'C{r_w}'] = w_info[1]
@@ -157,7 +167,7 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             for c_col in range(13, 58):
                 ws_p_labor.cell(r_w, c_col).value = None
 
-        for r_clear in range(7 + len(central_workers), 37):
+        for r_clear in range(7 + len(planned_workers), 37):
             ws_p_labor[f'B{r_clear}'] = ""
             ws_p_labor[f'C{r_clear}'] = ""
             ws_p_labor[f'D{r_clear}'] = ""
@@ -166,14 +176,29 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             for c_col in range(13, 58):
                 ws_p_labor.cell(r_clear, c_col).value = None
 
+        # 기본 사전 확정 투입 공수 (부장 160일, 차장 120일, 대리 160일, 계장 120일 = 총 560공수)
+        default_planned_labor = {
+            '부장': {'personnel': 1, 'period': 160},
+            '차장': {'personnel': 1, 'period': 120},
+            '대리': {'personnel': 1, 'period': 160},
+            '계장': {'personnel': 1, 'period': 120}
+        }
+        active_p_labor = dict(default_planned_labor)
         if labor_data:
-            for rank, r_idx in rank_to_row.items():
-                if rank in labor_data:
-                    vals = labor_data[rank]
-                    p = _to_f(vals.get('personnel'))
-                    d = _to_f(vals.get('period'))
-                    ws_p_labor[f'E{r_idx}'] = p if p > 0 else ""
-                    ws_p_labor[f'F{r_idx}'] = d if d > 0 else ""
+            for rank, vals in labor_data.items():
+                if rank in rank_to_row and _to_f(vals.get('period')) > 0:
+                    active_p_labor[rank] = vals
+
+        for rank, r_idx in rank_to_row.items():
+            if rank in active_p_labor:
+                vals = active_p_labor[rank]
+                p = _to_f(vals.get('personnel'))
+                d = _to_f(vals.get('period'))
+                ws_p_labor[f'E{r_idx}'] = p if p > 0 else ""
+                ws_p_labor[f'F{r_idx}'] = d if d > 0 else ""
+            else:
+                ws_p_labor[f'E{r_idx}'] = ""
+                ws_p_labor[f'F{r_idx}'] = ""
 
     # 3. Sheet: 경비예상지출항목 (사전)
     if '경비예상지출항목' in wb.sheetnames:
@@ -290,7 +315,7 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
     # 5. Sheet: 인원투입계획_사후
     if '인원투입계획_사후' in wb.sheetnames:
         ws_a_labor = wb['인원투입계획_사후']
-        for idx, w_info in enumerate(central_workers):
+        for idx, w_info in enumerate(actual_workers):
             r_w = 7 + idx
             ws_a_labor[f'B{r_w}'] = w_info[0]
             ws_a_labor[f'C{r_w}'] = w_info[1]
@@ -300,7 +325,7 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             for c_col in range(13, 58):
                 ws_a_labor.cell(r_w, c_col).value = None
 
-        for r_clear in range(7 + len(central_workers), 37):
+        for r_clear in range(7 + len(actual_workers), 37):
             ws_a_labor[f'B{r_clear}'] = ""
             ws_a_labor[f'C{r_clear}'] = ""
             ws_a_labor[f'D{r_clear}'] = ""
