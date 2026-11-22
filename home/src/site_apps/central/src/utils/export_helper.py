@@ -121,11 +121,11 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_info['D15'] = 1.0
             ws_info['D17'] = "정산 진행중"
 
-    # 실제 2026년 중앙지사 사전실행예산 확정 투입 인원 및 13개월 월별 투입 계획
+    # 실제 2026년 중앙지사 사전실행예산 확정 투입 인원 및 13개월 월별 투입 계획 (사전원가 고정 기준 - 변경 금지)
     planned_workers = [
-        ("주진철", "부장", "경인", "자사", "PAUT/MT/PT"),
-        ("권인경", "차장", "경인", "자사", "PAUT/MT/PT"),
-        ("우명광", "대리", "경인", "자사", "PAUT/MT/PT"),
+        ("주진철", "부장", "경인", "자사", "PAUT/RT/MT"),
+        ("권인경", "차장", "경인", "자사", "RT/MT/PT"),
+        ("우명광", "대리", "경인", "자사", "RT/MT/PT"),
         ("박상태", "계장", "경인", "자사", "MT/PT")
     ]
     planned_monthly_days = [
