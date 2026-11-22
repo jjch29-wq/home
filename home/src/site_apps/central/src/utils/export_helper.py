@@ -326,7 +326,7 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             {'item': "PAUT SCANNER (MANUAL)", 'spec': "", 'qty': 1, 'days': 120, 'rate': 5556},
             {'item': "PAUT SCANNER (COBRA)", 'spec': "", 'qty': 1, 'days': 120, 'rate': 16667},
             {'item': "YOKE", 'spec': "", 'qty': 1, 'days': 10, 'rate': 222},
-            {'item': "현상용 탑차(5년간 보험비 포함)", 'spec': "현장별 차량기입시 탑차 구분 기입", 'qty': 1, 'days': 30, 'rate': 16667},
+            {'item': "현장용 탑차(5년간 보험비 포함)", 'spec': "현장별 차량기입시 탑차 구분 기입", 'qty': 1, 'days': 30, 'rate': 16667},
             {'item': "스타렉스(5년간 보험비 포함)", 'spec': "현장별 차량기입시 스타렉스 구분 기입", 'qty': 1, 'days': 160, 'rate': 16667}
         ]
         active_p_dep = dep_list if dep_list else default_p_dep
