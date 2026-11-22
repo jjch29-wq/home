@@ -174,8 +174,10 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_w}'] = w_info[2]
             ws_p_labor[f'E{r_w}'] = w_info[3]
             ws_p_labor[f'F{r_w}'] = w_info[4]
+            ws_p_labor[f'H{r_w}'] = f'=IF(B{r_w}="","",IF(AND(B{r_w}<>"",E{r_w}="자사"),IFERROR(VLOOKUP(C{r_w},직급표,3,FALSE),0),0))'
+            ws_p_labor[f'I{r_w}'] = f'=IF(B{r_w}="","",ROUND(G{r_w}*H{r_w},0))'
             ws_p_labor[f'J{r_w}'] = f'=IF(B{r_w}="","",G{r_w})'
-            ws_p_labor[f'K{r_w}'] = 0
+            ws_p_labor[f'K{r_w}'] = f'=IF(B{r_w}="","",0)'
 
         summary_col_indices = [13, 41, 72, 104, 135, 167, 199, 228, 260, 291, 323, 354, 386]
         for r_clear in range(7 + len(planned_workers), 37):
@@ -184,8 +186,10 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_p_labor[f'D{r_clear}'] = ""
             ws_p_labor[f'E{r_clear}'] = ""
             ws_p_labor[f'F{r_clear}'] = ""
-            ws_p_labor[f'J{r_clear}'] = ""
-            ws_p_labor[f'K{r_clear}'] = ""
+            ws_p_labor[f'H{r_clear}'] = f'=IF(B{r_clear}="","",IF(AND(B{r_clear}<>"",E{r_clear}="자사"),IFERROR(VLOOKUP(C{r_clear},직급표,3,FALSE),0),0))'
+            ws_p_labor[f'I{r_clear}'] = f'=IF(B{r_clear}="","",ROUND(G{r_clear}*H{r_clear},0))'
+            ws_p_labor[f'J{r_clear}'] = f'=IF(B{r_clear}="","",G{r_clear})'
+            ws_p_labor[f'K{r_clear}'] = f'=IF(B{r_clear}="","",0)'
             for c_col in range(14, 420):
                 if c_col not in summary_col_indices:
                     ws_p_labor.cell(r_clear, c_col).value = None
