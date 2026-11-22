@@ -122,14 +122,14 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
             ws_info['D17'] = "정산 진행중"
 
     central_workers = [
-        ("주진철", "부장", "중앙", "자사", "PAUT/MT/PT"),
-        ("우명광", "대리", "중앙", "자사", "PAUT/MT/PT"),
-        ("장승대", "계장", "중앙", "자사", "PAUT/MT/PT"),
-        ("김진환", "주임", "중앙", "자사", "PAUT/MT/PT"),
-        ("김성렬", "주임", "중앙", "자사", "PAUT/MT/PT"),
-        ("박광복", "부장", "중앙", "자사", "PAUT/MT/PT"),
-        ("주영광", "과장", "중앙", "자사", "PAUT/MT/PT"),
-        ("박상태", "계장", "중앙", "자사", "PAUT/MT/PT")
+        ("주진철", "부장", "경인", "자사", "PAUT/MT/PT"),
+        ("우명광", "대리", "경인", "자사", "PAUT/MT/PT"),
+        ("장승대", "계장", "경인", "자사", "PAUT/MT/PT"),
+        ("김진환", "주임", "경인", "자사", "PAUT/MT/PT"),
+        ("김성렬", "주임", "경인", "자사", "PAUT/MT/PT"),
+        ("박광복", "부장", "경인", "자사", "PAUT/MT/PT"),
+        ("주영광", "과장", "경인", "자사", "PAUT/MT/PT"),
+        ("박상태", "계장", "경인", "자사", "PAUT/MT/PT")
     ]
 
     rank_to_row = {
@@ -340,7 +340,7 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
                 ws_a_exp[f'F{r_mat}'] = _to_f(m_item.get('price', 0))
                 ws_a_exp[f'I{r_mat}'] = '○'
 
-        for r_clr in range(25, 44):
+        for r_clr in range(25, 43):
             ws_a_exp[f'D{r_clr}'] = 0
             ws_a_exp[f'E{r_clr}'] = ""
             ws_a_exp[f'G{r_clr}'] = 1.0

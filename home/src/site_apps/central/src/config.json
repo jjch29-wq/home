@@ -81,10 +81,10 @@
         }
     },
     "TREE_WIDTHS": {
-        "date": 171,
-        "company": 263,
-        "loc": 206,
-        "type": 117,
+        "date": 106,
+        "company": 143,
+        "loc": 425,
+        "type": 102,
         "time": 167,
         "mat": 217,
         "qty": 163,
