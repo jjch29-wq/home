@@ -605,8 +605,8 @@ class DailyWorkLogTab(ttk.Frame):
             else: w = 8
 
             if c in ('작업구분', '핫태핑차수'):
-                values = ['', '일반', '핫태핑'] if c == '작업구분' else ['', '1차', '2차']
-                ent = ttk.Combobox(grid_frame, width=7, values=values, state='readonly')
+                values = ['', '일반', '핫태핑', 'PAD', 'PAD(C심)', 'PAD(L심)', 'PAD(CAP)'] if c == '작업구분' else ['', '1차', '2차']
+                ent = ttk.Combobox(grid_frame, width=10, values=values, state='readonly')
                 ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky='ew')
                 row_entries[c] = ent
             elif c == '검사방법':
@@ -758,7 +758,15 @@ class DailyWorkLogTab(ttk.Frame):
                 self._refresh_hot_summary()
                 return
 
-            if pipe in SIZE_LENGTH:
+            target_col = None
+            if method == 'PAUT': target_col = 'PAUT'
+            elif method == 'RT': target_col = 'RT_OR'
+            elif method == 'MT': target_col = 'MT'
+            elif method == 'PT': target_col = 'PT'
+
+            if r['작업구분'].get() == 'PAD(L심)':
+                length_str = "1.0000"
+            elif pipe in SIZE_LENGTH:
                 length = SIZE_LENGTH[pipe]
                 length_str = f"{length:.4f}"
 
@@ -771,18 +779,14 @@ class DailyWorkLogTab(ttk.Frame):
                             length_str = ""
                     except ValueError:
                         length_str = ""
+            else:
+                length_str = ""
 
-                target_col = None
-                if method == 'PAUT': target_col = 'PAUT'
-                elif method == 'RT': target_col = 'RT_OR'
-                elif method == 'MT': target_col = 'MT'
-                elif method == 'PT': target_col = 'PT'
-
-                if target_col and not r[target_col].get().strip():
-                    # Clear other length columns if we are auto-filling
-                    for col in ['RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT']:
-                        r[col].delete(0, tk.END)
-                    r[target_col].insert(0, length_str)
+            if target_col and length_str and not r[target_col].get().strip():
+                # Clear other length columns if we are auto-filling
+                for col in ['RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT']:
+                    r[col].delete(0, tk.END)
+                r[target_col].insert(0, length_str)
 
             # Update '구간정보' display based on method
             if '구간정보' in r and hasattr(r['구간정보'], 'entries'):
@@ -839,6 +843,8 @@ class DailyWorkLogTab(ttk.Frame):
         def on_hot_change(event=None, r=row_entries):
             if r['작업구분'].get() == '핫태핑':
                 self._edit_hot_tapping(r)
+            elif str(r['작업구분'].get()).startswith('PAD'):
+                on_ndt_change(event, r)
         row_entries['작업구분'].bind('<<ComboboxSelected>>', on_hot_change)
         row_entries['검사방법'].bind('<<ComboboxSelected>>', on_ndt_change)
         row_entries['검사방법'].bind('<FocusOut>', on_ndt_change)

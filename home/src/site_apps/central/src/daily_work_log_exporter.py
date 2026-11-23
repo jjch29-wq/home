@@ -262,9 +262,12 @@ class DailyWorkLogExporter:
             set_cell(f'C{row_idx}', res.get('검사방법', ''))
             set_cell(f'D{row_idx}', res.get('구간', ''), align=self.align_nowrap)
             line_text = str(res.get('라인번호', '') or '')
-            if res.get('작업구분') == '핫태핑':
+            work_type = str(res.get('작업구분', '') or '').strip()
+            if work_type == '핫태핑':
                 hot_text = f"핫태핑 {res.get('핫태핑개소', '')} / {res.get('핫태핑차수', '')} / {res.get('핫태핑개소수', '1')}개소"
                 line_text = f'{line_text}\n{hot_text}'.strip()
+            elif work_type.startswith('PAD'):
+                line_text = f'{line_text}\n{work_type}'.strip() if line_text else work_type
             
             line_str = line_text
             num_lines = line_str.count('\n') + 1
@@ -332,9 +335,7 @@ class DailyWorkLogExporter:
             set_cell(f'T{row_idx}', res.get('PT', ''))
             
             if i == len(ndt_results):
-                ws.merge_cells(f'B{row_idx}:T{row_idx}')
-                ws[f'B{row_idx}'].value = "- 이 하 여 백 -"
-                ws[f'B{row_idx}'].alignment = Alignment(horizontal='center', vertical='center')
+                merge_and_set(f'B{row_idx}:T{row_idx}', "- 이 하 여 백 -", font=self.font_normal, align=self.align_center, border=self.border_thin)
                 
             ws.row_dimensions[row_idx].height = max(34, num_lines * 17) if (num_lines > 1 or res.get('작업구분') == '핫태핑') else 20
 

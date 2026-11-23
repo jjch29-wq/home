@@ -385,7 +385,7 @@ def setup_daily_usage_tab_impl(self):
     row0 = ttk.Frame(self.ndt_calc_frame)
     row0.pack(fill='x', pady=2)
     ttk.Label(row0, text="구분:").pack(side='left')
-    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["열수송관", "핫태핑"], width=18, state="readonly").pack(side='left', padx=2)
+    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["열수송관", "핫태핑", "PAD", "PAD(C심)", "PAD(L심)", "PAD(CAP)"], width=18, state="readonly").pack(side='left', padx=2)
     ttk.Label(row0, text="  작업형태:").pack(side='left', padx=(5,0))
     for t in ["일반", "야간", "휴일"]:
         ttk.Radiobutton(row0, text=t, value=t, variable=self.ndt_work_time_var).pack(side='left', padx=2)
@@ -549,7 +549,7 @@ def setup_daily_usage_tab_impl(self):
             loc_type_val = self.ndt_loc_type_var.get().strip()
             # 화면 명칭은 계약 명칭인 '열수송관'으로 표시하되,
             # 기존 단가 설정 파일의 '열배관' 키와 호환한다.
-            contract_loc = {"열수송관": "열배관", "핫태핑": "열배관"}.get(loc_type_val, loc_type_val)
+            contract_loc = {"열수송관": "열배관", "핫태핑": "열배관", "PAD": "열배관"}.get(loc_type_val, loc_type_val)
             
             if contract_loc in LABOR_COST:
                 labor_rates = LABOR_COST[contract_loc].get(work_time, {})
@@ -650,8 +650,11 @@ def setup_daily_usage_tab_impl(self):
     def on_method_change_auto_unit_logic(e):
         method = self.cb_daily_test_method.get().strip()
         # Refresh choices only: restored records and current input are never erased.
-        self.cb_daily_material.configure(values=self._get_material_candidates())
-        print(f"[DEBUG] on_method_change_auto_unit_logic triggered. method='{method}'")
+        if isinstance(self.cb_daily_material, ttk.Combobox):
+            try:
+                self.cb_daily_material.configure(values=self._get_material_candidates())
+            except Exception:
+                pass
         unit_map = {'RT': '매', 'UT': 'P,M,I/D', 'MT': 'P,M,I/D', 'PT': 'P,M,I/D', 'PAUT': 'M,I/D'}
         if method in unit_map: self.cb_daily_unit.set(unit_map[method])
 
@@ -719,8 +722,7 @@ def setup_daily_usage_tab_impl(self):
             self.ndt_calc_frame.grid_remove()
             self.rtk_grid.grid_remove() # [NEW] Hide RTK
             try: self.empty_guide_frame.grid_remove() 
-            except: pass
-        return "break" 
+            except: pass 
     self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_change_auto_unit_logic, add='+')
     self.cb_daily_test_method.bind('<KeyRelease>', on_method_change_auto_unit_logic, add='+')
     

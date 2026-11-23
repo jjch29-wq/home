@@ -118,7 +118,11 @@ def setup_stock_tab_impl(self):
     
     ttk.Label(filter_frame, text="검색어:").grid(row=1, column=6, padx=2, pady=2, sticky='e')
     self.search_var = tk.StringVar()
-    self.search_var.trace_add('write', lambda *args: self.update_stock_view())
+    def _debounced_stock_search(*args):
+        if hasattr(self, '_stock_search_timer') and self._stock_search_timer:
+            self.root.after_cancel(self._stock_search_timer)
+        self._stock_search_timer = self.root.after(150, self.update_stock_view)
+    self.search_var.trace_add('write', _debounced_stock_search)
     self.search_entry = ttk.Entry(filter_frame, textvariable=self.search_var, width=20)
     self.search_entry.grid(row=1, column=7, padx=2, pady=2)
     
