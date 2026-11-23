@@ -145,6 +145,39 @@ class DailyReportShiftTests(unittest.TestCase):
             finally:
                 book.close()
 
+    def test_pad_breakdown_renders_in_inspection_details(self):
+        pad_details = [
+            {'work_type': 'PAD(C심)', 'pipe_size': '800A', 'method': 'MT', 'points': 3, 'quantity': 7.6605, 'joints': ['S01', 'S02', 'S03']},
+            {'work_type': 'PAD(L심)', 'pipe_size': '1000mm', 'method': 'MT', 'points': 4, 'quantity': 4.0, 'joints': ['S04', 'S05', 'S06', 'S07']},
+            {'work_type': 'PAD(CAP)', 'pipe_size': '100A', 'method': 'MT', 'points': 1, 'quantity': 0.3591, 'joints': ['S08']},
+        ]
+        data = {
+            'date': datetime.date(2026, 11, 23),
+            'inspection_item': 'PAD',
+            'methods': {'MT(주간)': {'unit': 'M', 'qty': 12.0196, 'price': 75433, 'travel': 0, 'total': 906675}},
+            'pad_details': pad_details,
+            'note': '[PAD 세부내역] PAD(C심) 800A: 3개소(7.6605m) / PAD(L심): 4개소(4.0000m) / PAD(CAP) 100A: 1개소(0.3591m)'
+        }
+        template = ROOT / 'home/src/site_apps/central/resources/Template_DailyWorkReport.xlsx'
+        with tempfile.TemporaryDirectory(dir=ROOT / 'tmp') as directory:
+            output = Path(directory) / 'pad_report.xlsx'
+            with contextlib.redirect_stdout(io.StringIO()):
+                DailyWorkReportManager(str(template)).generate_report(data, output)
+            book = openpyxl.load_workbook(output)
+            try:
+                sheet = book.active
+                self.assertEqual(sheet['B13'].value, 'MT(주간)')
+                self.assertAlmostEqual(sheet['H13'].value, 12.0196)
+                b18_val = sheet['B18'].value
+                self.assertIn('PAD(C심) 800A : 3 POINT / 검사길이 7.6605 M', b18_val)
+                self.assertIn('PAD(L심) 1000mm : 4 POINT / 검사길이 4.0000 M', b18_val)
+                self.assertIn('PAD(CAP) 100A : 1 POINT / 검사길이 0.3591 M', b18_val)
+                self.assertIn('PAD 소계', b18_val)
+                self.assertIn('총 검사길이 12.0196 M', b18_val)
+                self.assertIn('Joint: S01, S02, S03', b18_val)
+            finally:
+                book.close()
+
 
 if __name__ == '__main__':
     unittest.main()

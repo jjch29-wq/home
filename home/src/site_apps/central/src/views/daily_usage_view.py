@@ -421,31 +421,72 @@ def setup_daily_usage_tab_impl(self):
             ndt_type = self.cb_daily_test_method.get().strip().upper() or 'MT'
             selected_loc = self.ndt_loc_type_var.get().strip()
 
-            matched_lengths = []
+            from collections import OrderedDict
+            grouped = OrderedDict()
             for r in ndt_results:
                 method = str(r.get('검사방법', '')).strip().upper()
                 work_type = str(r.get('작업구분', '')).strip()
                 if method == ndt_type and work_type.startswith('PAD'):
                     if selected_loc not in ('PAD', '') and work_type != selected_loc:
                         continue
+                    pipe = str(r.get('관경', '')).strip()
+                    if pipe and pipe.isdigit():
+                        pipe += 'A'
+                    joint = str(r.get('Joint No.', '')).strip()
+                    sec = str(r.get('구간', '')).strip()
+                    shift = str(r.get('근무구분', '')).strip() or '주간'
                     length_val = r.get(ndt_type, '')
                     try:
                         val = float(str(length_val).replace(',', '').strip())
-                        if val > 0:
-                            matched_lengths.append(val)
                     except (ValueError, TypeError):
-                        pass
+                        val = 0.0
 
-            if matched_lengths:
-                total_len = sum(matched_lengths)
-                total_joints = len(matched_lengths)
+                    key = (work_type, pipe, shift)
+                    if key not in grouped:
+                        grouped[key] = {
+                            'work_type': work_type,
+                            'pipe_size': pipe,
+                            'method': method,
+                            'shift': shift,
+                            'points': 0,
+                            'quantity': 0.0,
+                            'joints': [],
+                            'sections': []
+                        }
+                    grouped[key]['points'] += 1
+                    grouped[key]['quantity'] += val
+                    if joint and joint not in grouped[key]['joints']:
+                        grouped[key]['joints'].append(joint)
+                    if sec and sec not in grouped[key]['sections']:
+                        grouped[key]['sections'].append(sec)
+
+            if grouped:
+                total_len = sum(g['quantity'] for g in grouped.values())
+                total_joints = sum(g['points'] for g in grouped.values())
                 self.ndt_ori_joint_var.set(str(total_joints))
                 self.ndt_ori_qty_var.set(f"{total_len:.4f}")
                 self.ent_daily_test_amount.delete(0, tk.END)
                 self.ent_daily_test_amount.insert(0, f"{total_len:.4f}")
+
+                # 세부내역 문자열 구성 및 비고(ent_daily_note) 자동 반영
+                parts = []
+                summary_parts = []
+                for (wt, pipe, shift), g in grouped.items():
+                    pipe_disp = f" {pipe}" if pipe else ""
+                    parts.append(f"{wt}{pipe_disp}: {g['points']}개소({g['quantity']:.4f}m)")
+                    summary_parts.append(f"{wt}{pipe_disp}:{g['points']}")
+
+                breakdown_str = "[PAD 세부내역] " + " / ".join(parts)
+                cur_note = self.ent_daily_note.get().strip() if hasattr(self, 'ent_daily_note') else ''
+                if not cur_note or cur_note.startswith('[PAD 세부내역]'):
+                    self.ent_daily_note.delete(0, tk.END)
+                    self.ent_daily_note.insert(0, breakdown_str)
+
+                self._last_pad_synced_breakdown = list(grouped.values())
+
                 if hasattr(self, 'lbl_ndt_calc_result'):
                     self.lbl_ndt_calc_result.config(
-                        text=f"📋 작업일보 {selected_loc} 연동: {total_len:.4f}m ({total_joints}건)",
+                        text=f"📋 작업일보 {selected_loc} 연동: {total_len:.4f}m ({total_joints}건 - {', '.join(summary_parts)})",
                         foreground="#047857"
                     )
                 return total_len, total_joints

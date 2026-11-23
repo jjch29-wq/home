@@ -117,3 +117,71 @@ def collect_inspection_details(records, size_lengths):
                     detail['points'] = round(points)
         result.append(dict(detail, method=method, pipe_size=pipe, shift=shift))
     return result
+
+
+def collect_pad_details(date_val, method=None, history_path=None):
+    """daily_work_history.json의 ndt_results에서 해당 일자(및 검사방법)의 PAD 작업 세부내역을 집계합니다."""
+    try:
+        import os
+        import json
+        if not history_path:
+            from site_apps.central.src.data_sync import get_history_path
+            history_path = get_history_path()
+        if not history_path or not os.path.exists(history_path):
+            return []
+        with open(history_path, 'r', encoding='utf-8') as f:
+            hist = json.load(f)
+
+        date_str = date_val.strftime('%Y-%m-%d') if hasattr(date_val, 'strftime') else str(date_val).strip()
+        day_data = hist.get(date_str, {})
+        ndt_results = day_data.get('ndt_results', [])
+        if not ndt_results:
+            return []
+
+        target_method = str(method).strip().upper() if method else ''
+
+        from collections import OrderedDict
+        grouped = OrderedDict()
+        for r in ndt_results:
+            m = str(r.get('검사방법', '')).strip().upper()
+            if target_method and m != target_method:
+                continue
+            wt = str(r.get('작업구분', '')).strip()
+            if not wt.startswith('PAD'):
+                continue
+            pipe = str(r.get('관경', '')).strip()
+            if pipe and pipe.isdigit():
+                pipe += 'A'
+            joint = str(r.get('Joint No.', '')).strip()
+            sec = str(r.get('구간', '')).strip()
+            shift = str(r.get('근무구분', '')).strip() or '주간'
+            len_val = r.get(m, '')
+            try:
+                l_num = float(str(len_val).replace(',', '').strip())
+            except (ValueError, TypeError):
+                l_num = 0.0
+
+            key = (wt, pipe, shift)
+            if key not in grouped:
+                grouped[key] = {
+                    'work_type': wt,
+                    'pipe_size': pipe,
+                    'method': m,
+                    'shift': shift,
+                    'points': 0,
+                    'quantity': 0.0,
+                    'joints': [],
+                    'sections': []
+                }
+            grouped[key]['points'] += 1
+            grouped[key]['quantity'] += l_num
+            if joint and joint not in grouped[key]['joints']:
+                grouped[key]['joints'].append(joint)
+            if sec and sec not in grouped[key]['sections']:
+                grouped[key]['sections'].append(sec)
+
+        return list(grouped.values())
+    except Exception as e:
+        print(f"Error collecting PAD details: {e}")
+        return []
+

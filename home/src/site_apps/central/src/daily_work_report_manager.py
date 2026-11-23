@@ -498,6 +498,9 @@ class DailyWorkReportManager:
                     cell.value = None
 
         inspection_lines = []
+        pad_details = data.get('pad_details', [])
+        has_pad = bool(pad_details) or str(data.get('inspection_item', '')).upper() == 'PAD'
+
         for detail in data.get('inspection_details', []):
             method = str(detail.get('method', '')).strip().upper()
             shift = str(detail.get('shift', '')).strip()
@@ -516,6 +519,9 @@ class DailyWorkReportManager:
             if pipe_size:
                 quantity_label = '검사매수' if method == 'RT' else '검사길이'
                 quantity_unit = '매' if method == 'RT' else 'M'
+                # If this method is covered by pad_details, skip redundant generic line
+                if has_pad and pad_details and any(p.get('method') == method for p in pad_details):
+                    continue
                 if method == 'RT':
                     rejects = float(detail.get('reject_films', 0) or 0)
                     inspection_lines.append(f"• {label} {pipe_size}: {point_text}P / REJ {rejects:g}매 / 검사매수 {quantity_text}매")
@@ -524,8 +530,28 @@ class DailyWorkReportManager:
                         f"• {label} {pipe_size}: {point_text} POINT / {quantity_label} {quantity_text} {quantity_unit}"
                     )
 
-        detail_text = "검사 상세\n" + "\n".join(inspection_lines) if inspection_lines else ""
+        if pad_details:
+            pad_total_pts = 0
+            pad_total_len = 0.0
+            for pd_item in pad_details:
+                wt = pd_item.get('work_type', 'PAD')
+                pipe = pd_item.get('pipe_size', '')
+                pts = pd_item.get('points', 0)
+                qty = pd_item.get('quantity', 0.0)
+                joints = pd_item.get('joints', [])
+                pad_total_pts += pts
+                pad_total_len += qty
+                pipe_str = f" {pipe}" if pipe else ""
+                joint_str = f" (Joint: {', '.join(joints[:8])}{' 외' if len(joints) > 8 else ''})" if joints else ""
+                inspection_lines.append(f"• {wt}{pipe_str} : {pts} POINT / 검사길이 {qty:.4f} M{joint_str}")
+            if len(pad_details) > 1:
+                inspection_lines.append(f"• [PAD 소계] : {pad_total_pts} POINT / 총 검사길이 {pad_total_len:.4f} M")
+
+        detail_header = "검사 상세 (PAD 세부내역)\n" if pad_details else "검사 상세\n"
+        detail_text = detail_header + "\n".join(inspection_lines) if inspection_lines else ""
         memo_text = str(data.get('note', '') or '').strip()
+        if pad_details and memo_text.startswith('[PAD 세부내역]'):
+            memo_text = ""
         note_text = "\n\n".join(text for text in (detail_text, memo_text) if text)
         if note_text:
             start_cell = sheet.cell(row=note_range_start, column=2)

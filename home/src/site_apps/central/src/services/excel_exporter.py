@@ -128,14 +128,29 @@ def export_daily_work_report_impl(self):
         data['car_no'] = format_vehicle_numbers(all_vehicles)
 
         note_texts = []
-        # [FIX] A18:S25 메모 영역에는 '비고'가 아닌 '상시 패널(메모)' 내용만 입력되도록 수정
         if hasattr(self, 'main_memo_text'):
             try:
                 ui_memo = self.main_memo_text.get('1.0', tk.END).strip()
                 if ui_memo:
                     note_texts.append(ui_memo)
             except: pass
-                
+
+        # Also collect ent_daily_note if available and not redundant
+        if hasattr(self, 'ent_daily_note'):
+            try:
+                ui_note = self.ent_daily_note.get().strip()
+                if ui_note and ui_note not in note_texts:
+                    note_texts.append(ui_note)
+            except: pass
+
+        if not note_texts and not site_records.empty:
+            for n_col in ('Note', '비고'):
+                if n_col in site_records.columns:
+                    for val in site_records[n_col].dropna().unique():
+                        v_clean = str(val).strip()
+                        if v_clean and v_clean.lower() != 'nan' and v_clean not in note_texts:
+                            note_texts.append(v_clean)
+
         data['note'] = "\n".join(note_texts)
 
         # [NEW] 공사 수행현황 (Section 1) - DB site_records에 있는 모든 방식 집계
@@ -166,8 +181,15 @@ def export_daily_work_report_impl(self):
                 }
 
         # Original RT points and reject films; REP is a separate record.
-        from site_apps.central.src.services.report_inspection import collect_inspection_details, inspection_method_shift
+        from site_apps.central.src.services.report_inspection import collect_inspection_details, collect_pad_details, inspection_method_shift
         data['inspection_details'] = collect_inspection_details(site_records, getattr(self, 'SIZE_LENGTH', {}))
+
+        # [NEW] Collect PAD breakdown from work log or last sync
+        pad_details = collect_pad_details(date_val, method)
+        if not pad_details and hasattr(self, '_last_pad_synced_breakdown') and self._last_pad_synced_breakdown:
+            pad_details = self._last_pad_synced_breakdown
+        if pad_details:
+            data['pad_details'] = pad_details
 
         # [FALLBACK] site_records가 없거나 inspection_details가 비어있는 경우 화면 입력값 기반 복원
         if not data.get('inspection_details') and hasattr(self, 'cb_daily_test_method'):
