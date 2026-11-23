@@ -287,6 +287,11 @@ def push_record_to_web_app(
     """
     if is_development():
         return disabled_sync_result()
+    cfg = load_sync_config()
+    target_url = web_app_url or cfg.get("web_app_url")
+    if not target_url:
+        return {"status": "error", "message": "Google Apps Script 웹 앱 URL이 설정되지 않았습니다."}
+
     payload = {
         "action": action,
         "entry_time": str(original_entry_time or record.get("EntryTime", "")).split(".")[0].strip(),
