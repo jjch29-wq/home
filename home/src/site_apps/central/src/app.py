@@ -3137,7 +3137,7 @@ class MaterialManager:
                 col_name = tree.heading(column_id)['text']
             except:
                 col_name = ''
-            if col_name != '작업자': return
+            if col_name != '작업자' and column_id != worker_col_id: return
         else:
             if worker_col_id:
                 column_id = worker_col_id
@@ -3145,7 +3145,9 @@ class MaterialManager:
                 column_id = "#1"
 
         tags = tree.item(item_id, 'tags')
-        if not tags or 'total' in tags: return
+        if tags and 'total' in tags: return
+        if tree == getattr(self, 'daily_usage_tree', None):
+            if not tags: return
 
         try:
             full_info = []
@@ -3422,23 +3424,32 @@ class MaterialManager:
                     if b:
                         bbox = b
                         break
-            if not bbox: return
             
-            x, y, w, h = bbox
-            root_x = tree.winfo_rootx() + x
-            root_y = tree.winfo_rooty() + y
+            if bbox:
+                x, y, w, h = bbox
+                root_x = tree.winfo_rootx() + x
+                root_y = tree.winfo_rooty() + y
+            elif event and hasattr(event, 'x_root') and hasattr(event, 'y_root'):
+                root_x = event.x_root
+                root_y = event.y_root
+                w, h = 120, 25
+            else:
+                root_x = tree.winfo_rootx() + 50
+                root_y = tree.winfo_rooty() + 50
+                w, h = 120, 25
             
             previous_popup = getattr(self, '_worker_detail_popup', None)
             if previous_popup is not None and previous_popup.winfo_exists():
-                previous_popup.destroy()
+                try: previous_popup.destroy()
+                except: pass
             popup = tk.Toplevel(self.root)
             self._worker_detail_popup = popup
             popup.overrideredirect(True)
             popup.attributes("-topmost", True)
             popup.configure(bg='white', highlightbackground="#0078d7", highlightthickness=2)
             
-            popup_width = max(w, 550)
-            popup_height = 450
+            popup_width = max(w, 560)
+            popup_height = 460
             
             # 1. Horizontal positioning (Center relative to cell)
             final_x = root_x - (popup_width - w) // 2
@@ -3449,6 +3460,20 @@ class MaterialManager:
             # [SMART CHECK] If the popup would go off-screen at the top, show it BELOW instead
             if final_y < 0:
                 final_y = root_y + h + 5
+
+            # Screen bounds constraint
+            try:
+                screen_w = self.root.winfo_screenwidth()
+                screen_h = self.root.winfo_screenheight()
+                if final_x + popup_width > screen_w:
+                    final_x = screen_w - popup_width - 10
+                if final_x < 10:
+                    final_x = 10
+                if final_y + popup_height > screen_h:
+                    final_y = screen_h - popup_height - 30
+                if final_y < 10:
+                    final_y = 10
+            except: pass
             
             # Initial relative offsets from the cell root
             popup._rel_offset_x = final_x - root_x
@@ -3481,6 +3506,38 @@ class MaterialManager:
             popup.bind("<Button-1>", start_drag)
             popup.bind("<B1-Motion>", do_drag)
             
+            # --- Header Frame with Title & Close Button ---
+            header_frame = tk.Frame(popup, bg="#0078d7")
+            header_frame.pack(fill='x', side='top')
+
+            title_text = "👤 작업자 상세 투입 내역"
+            if tree != getattr(self, 'daily_usage_tree', None) and year_val and month_val:
+                title_parts = [f"[{year_val}년 {month_val}월]"]
+                if site: title_parts.append(site)
+                if method: title_parts.append(method)
+                title_parts.append("작업자 투입 내역")
+                title_text = "👤 " + " ".join(title_parts)
+
+            title_lbl = tk.Label(header_frame, text=title_text, bg="#0078d7", fg="white", 
+                                 font=('Malgun Gothic', 9, 'bold'))
+            title_lbl.pack(side='left', padx=8, pady=5)
+
+            def manual_close():
+                if hasattr(popup, '_dismissal'):
+                    popup._dismissal.close()
+                elif popup.winfo_exists():
+                    popup.destroy()
+
+            close_btn = tk.Button(header_frame, text="✕", bg="#0078d7", fg="white", bd=0, 
+                                  font=('Arial', 9, 'bold'), activebackground="#c42b1c", 
+                                  activeforeground="white", cursor="hand2", command=manual_close)
+            close_btn.pack(side='right', padx=6, pady=2)
+
+            header_frame.bind("<Button-1>", start_drag)
+            header_frame.bind("<B1-Motion>", do_drag)
+            title_lbl.bind("<Button-1>", start_drag)
+            title_lbl.bind("<B1-Motion>", do_drag)
+
             content_frame = ttk.Frame(popup, padding=10)
             content_frame.pack(fill='both', expand=True)
             

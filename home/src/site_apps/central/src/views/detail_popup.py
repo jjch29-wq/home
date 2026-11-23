@@ -1,6 +1,7 @@
 """Keyboard and focus lifecycle for the borderless record detail popup."""
 import tkinter as tk
 import uuid
+import time
 
 
 class DetailPopupDismissal:
@@ -11,6 +12,7 @@ class DetailPopupDismissal:
         self.pending = set()
         self.tag = f'RecordDetailEscape_{uuid.uuid4().hex}'
         self.widgets = []
+        self._created_time = time.time()
         focused = root.focus_get()
         candidates = [root, origin, focused]
 
@@ -57,6 +59,9 @@ class DetailPopupDismissal:
         self.schedule(self.close_if_outside)
 
     def close_if_outside(self):
+        # Ignore focus transitions during popup initialization / menu dismiss
+        if time.time() - getattr(self, '_created_time', 0) < 0.5:
+            return
         focused = self.root.focus_get()
         if focused is not None:
             try:
