@@ -9318,17 +9318,21 @@ class MaterialManager:
         # 4. 업체(Company) 데이터 수집
         company_data_list = []
         client_code = self.cb_daily_client.get().strip() if hasattr(self, 'cb_daily_client') else '한국지역난방공사'
+        if not client_code:
+            client_code = '한국지역난방공사'
         if hasattr(self, 'ndt_company_entries'):
             for company_entries in self.ndt_company_entries:
-                company_code = company_entries['_company'].get().strip() or client_code
+                is_first = (company_entries == self.ndt_company_entries[0])
+                # [FIX] 첫 번째(주요) 레코드의 회사코드는 항상 발주처(client_code)를 유지하여 자재 협력사 코드로 오염 방지
+                company_code = client_code if is_first else (company_entries['_company'].get().strip() or client_code)
                 ndt_data = {name: to_f(company_entries.get(name)) for name in self.ndt_materials_all}
                 
                 # [REFINEMENT] Create record if there is NDT data OR it is the first entry (guaranteed row)
-                if any(v > 0 for v in ndt_data.values()) or company_entries == self.ndt_company_entries[0]:
+                if any(v > 0 for v in ndt_data.values()) or is_first:
                     company_data_list.append({
                         '회사코드': company_code,
                         'ndt_data': ndt_data,
-                        'is_primary': company_entries == self.ndt_company_entries[0]
+                        'is_primary': is_first
                     })
         
         if not company_data_list: # [FALLBACK] Ensure at least one row exists
@@ -10332,8 +10336,20 @@ class MaterialManager:
                 except: pass
             self._last_daily_date = self.ent_daily_date.get_date()
             if hasattr(self, 'cb_daily_client'):
-                client_val = self.clean_nan(record.get('회사코드', '')) or '한국지역난방공사'
-                self.cb_daily_client.set(client_val)
+                client_val = self.clean_nan(record.get('회사코드', '')).strip()
+                valid_clients = ['한국지역난방공사', '한국지역난방공사 중앙지사']
+                if hasattr(self.cb_daily_client, 'cget'):
+                    try:
+                        vals = list(self.cb_daily_client.cget('values'))
+                        if vals:
+                            valid_clients = vals
+                    except: pass
+                if client_val in valid_clients:
+                    self.cb_daily_client.set(client_val)
+                elif '한국지역난방' in client_val:
+                    self.cb_daily_client.set(client_val)
+                else:
+                    self.cb_daily_client.set('한국지역난방공사')
             if '업체명' in record:
                 comp_val = self.clean_nan(record['업체명']).split(' [')[0]
                 self.cb_daily_company.set(comp_val)
@@ -10573,7 +10589,11 @@ class MaterialManager:
                 
                 # Also load company if available
                 if '회사코드' in record:
-                    first['_company'].set(self.clean_nan(record.get('회사코드')))
+                    raw_co = self.clean_nan(record.get('회사코드', '')).strip()
+                    if raw_co and raw_co not in ('한국지역난방공사', '한국지역난방공사 중앙지사'):
+                        first['_company'].set(raw_co)
+                    else:
+                        first['_company'].set('')
 
             # 8. Note
             note_val = self.clean_nan(record.get('Note', ''))
