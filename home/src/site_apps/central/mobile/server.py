@@ -330,7 +330,7 @@ def get_config():
         "worktimes": WORKTIMES,
         "pipe_sizes": list(SIZE_LENGTH.keys()),
         "methods": ["PAUT", "RT", "MT", "PT"],
-        "loc_types": ["열수송관", "플랜트(관리소)", "열배관", "핫태핑"],
+        "loc_types": ["열수송관", "플랜트(관리소)", "열배관", "핫태핑", "PAD", "PAD(C심)", "PAD(L심)", "PAD(CAP)"],
         "units": ["M", "매", "EA", "P,M,I/D", "Point", "SET", "CAN", "KG", "Inch", "Dia", "I/D"],
         "test_items": ["Pipe", "Piping", "Tank", "Vessel", "Plate", "Beam", "Structure", "기타"],
         "applied_codes": ["지역난방시방서", "KS", "ASME", "AWS", "API", "KEPIC", "기타"],

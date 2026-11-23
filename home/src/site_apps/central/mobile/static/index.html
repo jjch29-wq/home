@@ -119,6 +119,10 @@
             <option value="플랜트(관리소)">플랜트(관리소)</option>
             <option value="열배관">열배관</option>
             <option value="핫태핑">핫태핑</option>
+            <option value="PAD">PAD</option>
+            <option value="PAD(C심)">PAD(C심)</option>
+            <option value="PAD(L심)">PAD(L심)</option>
+            <option value="PAD(CAP)">PAD(CAP)</option>
           </select>
         </div>
         <div>
@@ -906,7 +910,7 @@
 
     const DEFAULT_CONFIG = {
       companies: ["GS네오텍", "다림건설(주)", "한국지역난방공사", "한국지역난방공사 중앙지사"],
-      loc_types: ["열수송관", "플랜트(관리소)", "열배관", "핫태핑"],
+      loc_types: ["열수송관", "플랜트(관리소)", "열배관", "핫태핑", "PAD", "PAD(C심)", "PAD(L심)", "PAD(CAP)"],
       users: [
         "계장 박상태", "계장 박재욱", "계장 손주연", "계장 이경재", "계장 이은수", "계장 이준우", "계장 장승대", "계장 한지원",
         "과장 유상훈", "과장 주영광", "대리 김성현", "대리 박만영", "대리 우명광", "대리 윤석현",
@@ -1030,6 +1034,7 @@
       });
     }
 
+    // Hot-tapping toggle & PAD auto-values
     document.getElementById("select-loc-type").addEventListener("change", function () {
       const isHotTap = this.value === "핫태핑";
       const card = document.getElementById("hottap-card");
@@ -1037,6 +1042,12 @@
         card.classList.remove("hidden");
       } else {
         card.classList.add("hidden");
+      }
+      if (this.value === "PAD(L심)") {
+        const qtyInput = document.getElementById("input-qty");
+        if (qtyInput && (!qtyInput.value || parseFloat(qtyInput.value) === 0)) {
+          qtyInput.value = "1.0000";
+        }
       }
     });
 
