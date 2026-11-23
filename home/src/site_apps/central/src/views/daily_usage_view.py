@@ -404,14 +404,66 @@ def setup_daily_usage_tab_impl(self):
         widget = ttk.Combobox(hot_row, textvariable=var, values=values, state='readonly', width=width) if values else ttk.Entry(hot_row, textvariable=var, width=width)
         widget.pack(side='left')
     hot_parts = ttk.Label(self.ndt_calc_frame, textvariable=self.hot_tap_parts_var)
+
+    def _sync_pad_from_work_log(silent=False):
+        try:
+            from site_apps.central.src.data_sync import get_history_path
+            p = get_history_path()
+            if not p or not os.path.exists(p):
+                return None, None
+            with open(p, 'r', encoding='utf-8') as f:
+                hist = json.load(f)
+
+            cur_date = str(self.ent_daily_date.get()).strip()
+            day_data = hist.get(cur_date, {})
+            ndt_results = day_data.get('ndt_results', [])
+
+            ndt_type = self.cb_daily_test_method.get().strip().upper() or 'MT'
+            selected_loc = self.ndt_loc_type_var.get().strip()
+
+            matched_lengths = []
+            for r in ndt_results:
+                method = str(r.get('검사방법', '')).strip().upper()
+                work_type = str(r.get('작업구분', '')).strip()
+                if method == ndt_type and work_type.startswith('PAD'):
+                    if selected_loc not in ('PAD', '') and work_type != selected_loc:
+                        continue
+                    length_val = r.get(ndt_type, '')
+                    try:
+                        val = float(str(length_val).replace(',', '').strip())
+                        if val > 0:
+                            matched_lengths.append(val)
+                    except (ValueError, TypeError):
+                        pass
+
+            if matched_lengths:
+                total_len = sum(matched_lengths)
+                total_joints = len(matched_lengths)
+                self.ndt_ori_joint_var.set(str(total_joints))
+                self.ndt_ori_qty_var.set(f"{total_len:.4f}")
+                self.ent_daily_test_amount.delete(0, tk.END)
+                self.ent_daily_test_amount.insert(0, f"{total_len:.4f}")
+                if hasattr(self, 'lbl_ndt_calc_result'):
+                    self.lbl_ndt_calc_result.config(
+                        text=f"📋 작업일보 {selected_loc} 연동: {total_len:.4f}m ({total_joints}건)",
+                        foreground="#047857"
+                    )
+                return total_len, total_joints
+        except Exception as e:
+            print("Error syncing PAD from work log:", e)
+        return None, None
+
     def update_hot_panel(*_):
-        if self.ndt_loc_type_var.get() == '핫태핑':
+        loc = self.ndt_loc_type_var.get()
+        if loc == '핫태핑':
             hot_row.pack(fill='x', pady=2)
             hot_parts.pack(fill='x')
             self.hot_tap_parts_var.set(STAGES[self.hot_tap_stage_var.get()] + ' (1개소 기준)')
         else:
             hot_row.pack_forget()
             hot_parts.pack_forget()
+        if loc.startswith('PAD'):
+            _sync_pad_from_work_log()
     self.ndt_loc_type_var.trace_add('write', update_hot_panel)
     self.hot_tap_stage_var.trace_add('write', update_hot_panel)
 
@@ -461,6 +513,12 @@ def setup_daily_usage_tab_impl(self):
     ttk.Entry(row4, textvariable=self.ndt_rej_joint_var, width=5).pack(side='left', padx=2)
     ttk.Label(row4, text='RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도').pack(side='left', padx=5)
 
+    row5 = ttk.Frame(self.ndt_calc_frame)
+    row5.pack(fill='x', pady=3)
+    self.lbl_ndt_calc_result = ttk.Label(row5, text="", font=('Malgun Gothic', 9, 'bold'), foreground="#047857")
+    self.lbl_ndt_calc_result.pack(side='left', padx=5)
+    ttk.Button(row5, text="👉 검사정보 확인", command=lambda: self.daily_entry_notebook.select(0), width=14).pack(side='right', padx=5)
+
     def _calculate_ndt_fee():
         try:
             from site_apps.central.src.ndt_billing_tab import MATERIAL_COST, LABOR_COST
@@ -477,11 +535,26 @@ def setup_daily_usage_tab_impl(self):
                 
                 size_lookup = getattr(self, 'SIZE_LENGTH', {})
                 is_hot = self.ndt_loc_type_var.get() == '핫태핑'
-                from site_apps.central.src.services.inspection_quantity import quantity_per_joint
-                length = inspection_length(self.hot_tap_size_var.get(), self.hot_tap_stage_var.get()) if is_hot else quantity_per_joint(ndt_type, pipe_val, size_lookup)
-                if length is not None:
+                is_pad = str(self.ndt_loc_type_var.get()).startswith('PAD')
+
+                if is_pad:
+                    pad_len, pad_j = _sync_pad_from_work_log(silent=True)
+                    if pad_len is not None and pad_len > 0:
+                        calculated_qty = pad_len
+                    else:
+                        try:
+                            calculated_qty = float(self.ndt_ori_qty_var.get().replace(',', ''))
+                        except (ValueError, TypeError):
+                            from site_apps.central.src.services.inspection_quantity import quantity_per_joint
+                            length = quantity_per_joint(ndt_type, pipe_val, size_lookup) or 0.0
+                            ori_joints = float(self.ndt_ori_joint_var.get() or 1)
+                            calculated_qty = ori_joints * length
+                    self.ent_daily_test_amount.delete(0, tk.END)
+                    self.ent_daily_test_amount.insert(0, f"{calculated_qty:.4f}")
+                elif is_hot:
+                    from site_apps.central.src.hot_tapping import inspection_length
+                    length = inspection_length(self.hot_tap_size_var.get(), self.hot_tap_stage_var.get())
                     total_joints = 0.0
-                    
                     ori_str = getattr(self, 'ndt_ori_joint_var').get().strip().replace(',', '')
                     if ori_str:
                         try:
@@ -489,7 +562,6 @@ def setup_daily_usage_tab_impl(self):
                             total_joints += j
                             getattr(self, 'ndt_ori_qty_var').set(f"{j * length:g}" if ndt_type == 'RT' else f"{j * length:.4f}")
                         except ValueError: pass
-                        
                     rep_str = getattr(self, 'ndt_rep_joint_var').get().strip().replace(',', '')
                     if rep_str:
                         try:
@@ -497,13 +569,35 @@ def setup_daily_usage_tab_impl(self):
                             total_joints += j
                             getattr(self, 'ndt_rep_qty_var').set(f"{j * length:g}" if ndt_type == 'RT' else f"{j * length:.4f}")
                         except ValueError: pass
-                        
                     if total_joints > 0:
                         calculated_qty = total_joints * length
-                        if ndt_type == 'RT':
-                            calculated_qty = float(self.ndt_ori_qty_var.get() or 0)
                         self.ent_daily_test_amount.delete(0, tk.END)
-                        self.ent_daily_test_amount.insert(0, f"{calculated_qty:g}" if ndt_type == 'RT' else f"{calculated_qty:.4f}")
+                        self.ent_daily_test_amount.insert(0, f"{calculated_qty:.4f}")
+                else:
+                    from site_apps.central.src.services.inspection_quantity import quantity_per_joint
+                    length = quantity_per_joint(ndt_type, pipe_val, size_lookup)
+                    if length is not None:
+                        total_joints = 0.0
+                        ori_str = getattr(self, 'ndt_ori_joint_var').get().strip().replace(',', '')
+                        if ori_str:
+                            try:
+                                j = float(ori_str)
+                                total_joints += j
+                                getattr(self, 'ndt_ori_qty_var').set(f"{j * length:g}" if ndt_type == 'RT' else f"{j * length:.4f}")
+                            except ValueError: pass
+                        rep_str = getattr(self, 'ndt_rep_joint_var').get().strip().replace(',', '')
+                        if rep_str:
+                            try:
+                                j = float(rep_str)
+                                total_joints += j
+                                getattr(self, 'ndt_rep_qty_var').set(f"{j * length:g}" if ndt_type == 'RT' else f"{j * length:.4f}")
+                            except ValueError: pass
+                        if total_joints > 0:
+                            calculated_qty = total_joints * length
+                            if ndt_type == 'RT':
+                                calculated_qty = float(self.ndt_ori_qty_var.get() or 0)
+                            self.ent_daily_test_amount.delete(0, tk.END)
+                            self.ent_daily_test_amount.insert(0, f"{calculated_qty:g}" if ndt_type == 'RT' else f"{calculated_qty:.4f}")
             # ---------------------------------------
             
             qty_str = self.ent_daily_test_amount.get().replace(',','')
@@ -591,6 +685,12 @@ def setup_daily_usage_tab_impl(self):
             
             self.ent_daily_test_fee.delete(0, tk.END)
             self.ent_daily_test_fee.insert(0, f"{subtotal:,.0f}")
+
+            if hasattr(self, 'lbl_ndt_calc_result'):
+                self.lbl_ndt_calc_result.config(
+                    text=f"⚡ 산출 완료: 단가 {unit_price:,.0f}원 | 수량 {qty:g} | 검사비 {subtotal:,.0f}원 (검사정보 탭 반영)",
+                    foreground="#1d4ed8"
+                )
             
             self._last_ndt_factor = factor
             self._last_ndt_adj_qty = adj_qty
