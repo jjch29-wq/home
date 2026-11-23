@@ -873,7 +873,7 @@ class DailyWorkLogTab(ttk.Frame):
                         next_num = str(int(num_str) + 1).zfill(len(num_str))
                         r['Joint No.'].insert(0, prefix + next_num)
 
-            for col in ['업체', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
+            for col in ['업체', '공사구분', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
                 if col == '규격' and r['검사방법'].get().strip().upper() != prev_row['검사방법'].get().strip().upper():
                     continue
                 if col in ('구간정보', '결과') and (r['검사방법'].get().strip().upper() == 'RT' or prev_row['검사방법'].get().strip().upper() == 'RT'):
@@ -888,6 +888,10 @@ class DailyWorkLogTab(ttk.Frame):
                         else:
                             r[col].delete(0, tk.END)
                             r[col].insert(0, prev_val)
+                        if col == '업체':
+                            on_company_selected(r)
+                        elif col == '구간':
+                            on_section_selected(r)
 
             on_ndt_change(None, r)
             defaults = default_rt_copy(widget_rt_values(r), self._rt_context())
