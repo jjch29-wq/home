@@ -936,14 +936,13 @@ class MaterialManager:
         messagebox.showinfo("마이그레이션 완료", "기존 데이터가 새로운 형식으로 변환되었습니다.")
     
     def enable_autocomplete(self, combobox, values_list_attr=None, values_list=None, prefix_list=None):
-        """Standardize to Native Dropdown: Filter values but use standard system dropdown."""
+        """Standardize to Native Dropdown: Filter values smoothly without UI blocking."""
         if not hasattr(self, '_autocomplete_timers'):
             self._autocomplete_timers = {}
 
         def perform_filter(event_widget, force_all=False):
             """Filter combobox values based on typed text."""
             typed = str(event_widget.get()).strip()
-            widget_name = str(event_widget)
             
             if not typed and not force_all:
                 return  # Don't filter on empty input unless forced
@@ -964,153 +963,42 @@ class MaterialManager:
             else:
                 new_values = [v for v in all_values if typed.lower() in str(v).lower()]
             
-            print(f"[FILTER] new_values count: {len(new_values)}, changed: {list(event_widget['values']) != list(new_values)}")
-            
             # Update values if changed
             if list(event_widget['values']) != list(new_values):
                 event_widget['values'] = new_values
-            
-            # Auto-open dropdown after typing (only if not empty and has focus)
-            if not force_all and typed and len(new_values) > 0:
-                # Cancel any pending open
-                if hasattr(event_widget, '_dropdown_timer'):
-                    event_widget.after_cancel(event_widget._dropdown_timer)
-                
-                def open_dropdown():
-                    try:
-                        # [STABILITY] Check if it was recently selected to avoid "sticky" dropdown
-                        if getattr(event_widget, '_just_selected', False):
-                            return
-
-                        # Only if still has focus and NOT already open (heuristic)
-                        if event_widget.focus_get() == event_widget:
-                            pos = event_widget.index(tk.INSERT)
-                            event_widget.event_generate('<Alt-Down>')
-                            # Keep typing position
-                            event_widget.after(50, lambda: event_widget.icursor(pos))
-                    except Exception:
-                        pass
-                
-                event_widget._dropdown_timer = event_widget.after(400, open_dropdown)
-
 
         def on_keyrelease(event):
-            """Filter values as user types. Down arrow or click ▼ to see filtered list."""
-            # Cancel any pending dropdown open while typing
-            if hasattr(combobox, '_dropdown_timer'):
-                combobox.after_cancel(combobox._dropdown_timer)
-                delattr(combobox, '_dropdown_timer')
-            
+            """Filter values as user types smoothly."""
             if event.keysym in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
                 return
             
-            # Use a timer to wait for typing to stop before filtering
+            # Cancel any previous timer for this combobox
             if combobox in self._autocomplete_timers:
                 self.root.after_cancel(self._autocomplete_timers[combobox])
             
             def delayed_filter():
                 try:
-                    # Poll for value to handle Korean IME composition
-                    max_polls = 20
-                    poll_count = [0]
-                    last_val = ['']
-                    
-                    def poll_for_value():
-                        try:
-                            current_val = combobox.get()
-                            if not last_val[0] and current_val:
-                                perform_filter(combobox, force_all=False)
-                                return
-                            if not current_val and poll_count[0] < max_polls:
-                                last_val[0] = current_val
-                                poll_count[0] += 1
-                                combobox.after(50, poll_for_value)
-                                return
-                            if current_val:
-                                perform_filter(combobox, force_all=False)
-                            else:
-                                perform_filter(combobox, force_all=True)
-                        except Exception: pass
-                    
-                    poll_for_value()
-                except Exception: pass
+                    perform_filter(combobox, force_all=False)
+                except Exception:
+                    pass
                 
-            self._autocomplete_timers[combobox] = self.root.after(200, delayed_filter)
+            self._autocomplete_timers[combobox] = self.root.after(120, delayed_filter)
 
         combobox.bind('<KeyRelease>', on_keyrelease, add='+')
 
-        # [NEW] Guard against "sticky" dropdown after selection
+        # Guard against sticky dropdown after selection
         def _on_selected(e=None):
             combobox._just_selected = True
             def _reset(): combobox._just_selected = False
-            combobox.after(500, _reset)
+            combobox.after(300, _reset)
             
         combobox.bind('<<ComboboxSelected>>', _on_selected, add='+')
-        
-        # [NEW] Also bind to KeyPress for Korean input composition support
-        def on_keypress(event):
-            """Handle KeyPress for Korean input composition."""
-            print(f"[KEYPRESS] keysym={event.keysym}, char='{event.char}'")
-            # For Korean input, schedule filter on any keypress too
-            if event.keysym not in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
-                # Cancel existing timer
-                if combobox in self._autocomplete_timers:
-                    self.root.after_cancel(self._autocomplete_timers[combobox])
-                
-                # Also cancel dropdown timer
-                if hasattr(combobox, '_dropdown_timer'):
-                    combobox.after_cancel(combobox._dropdown_timer)
-                    delattr(combobox, '_dropdown_timer')
-                
-                # Schedule filter with polling for Korean IME composition
-                def delayed_filter_korean():
-                    try:
-                        # Poll for Korean IME composition - check every 50ms for up to 1 second
-                        max_polls = 20
-                        poll_count = [0]
-                        last_val = ['']
-                        
-                        def poll_for_value():
-                            try:
-                                current_val = combobox.get()
-                                print(f"[KOREAN-POLL] count={poll_count[0]}, value='{current_val}'")
-                                
-                                # If value appeared, filter immediately
-                                if not last_val[0] and current_val:
-                                    print(f"[KOREAN-POLL] Value appeared: '{current_val}'")
-                                    perform_filter(combobox, force_all=False)
-                                    return
-                                
-                                # Keep polling while empty
-                                if not current_val and poll_count[0] < max_polls:
-                                    last_val[0] = current_val
-                                    poll_count[0] += 1
-                                    combobox.after(50, poll_for_value)
-                                    return
-                                
-                                # Done polling
-                                if current_val:
-                                    perform_filter(combobox, force_all=False)
-                                else:
-                                    # [KOREAN IME] Show all values
-                                    print(f"[KOREAN-POLL] Timeout, showing all values")
-                                    perform_filter(combobox, force_all=True)
-                            except Exception as e:
-                                print(f"[KOREAN-POLL] Error: {e}")
-                        
-                        poll_for_value()
-                    except Exception as e:
-                        print(f"[KOREAN] Error: {e}")
-                
-                timer_id = self.root.after(400, delayed_filter_korean)  # 400ms for Korean IME
-                self._autocomplete_timers[combobox] = timer_id
-        
-        combobox.bind('<KeyPress>', on_keypress, add=True)
 
         def on_focus_in(event):
             try:
                 combobox.selection_range(0, tk.END)
-            except: pass
+            except Exception:
+                pass
             perform_filter(combobox, force_all=True)
             
         combobox.bind('<FocusIn>', on_focus_in, add=True)

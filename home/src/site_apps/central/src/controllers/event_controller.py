@@ -361,9 +361,11 @@ def on_tab_changed_impl(self, event=None):
         # 1. Save configuration when tab changes (respects is_ready via save_tab_config)
         self.save_tab_config()
 
-        # 1-1. 탭 이동 시 실제 데이터(Excel)도 자동 저장
-        if getattr(self, 'is_ready', False):
+        # 1-1. 탭 이동 시 실제 데이터(Excel)는 변경사항이 있을 때만 안전하게 저장
+        # (단순 탭 이동/조회 시 동기식 대용량 엑셀 디스크 쓰기로 인한 UI 멈춤 현상 제거)
+        if getattr(self, 'is_ready', False) and getattr(self, '_data_dirty', False):
             self.save_data()
+            self._data_dirty = False
         
         # 2. Handle specific tab UI adjustments
         current_tab = self.notebook.select()

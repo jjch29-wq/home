@@ -898,18 +898,29 @@ class NDTCalculatorTab(ttk.Frame):
         def _on_billing_type_selected(event=None):
             _update_billing_sections()
 
+        self._history_mtime = None
         def _populate_filter_options(event=None):
             try:
-                with open(get_history_path(), 'r', encoding='utf-8') as source:
-                    history = json.load(source)
-                self._history_mapping = extract_company_section_line_mapping(history)
-                sites = ['전체'] + self._history_mapping['all_companies']
+                hist_path = get_history_path()
+                mtime = os.path.getmtime(hist_path) if os.path.exists(hist_path) else 0
+                if not hasattr(self, '_history_mapping') or getattr(self, '_history_mtime', None) != mtime:
+                    with open(hist_path, 'r', encoding='utf-8') as source:
+                        history = json.load(source)
+                    self._history_mapping = extract_company_section_line_mapping(history)
+                    self._history_mtime = mtime
+                sites = ['전체'] + self._history_mapping.get('all_companies', [])
             except (OSError, ValueError):
                 sites = ['전체']
             self.cb_billing_site['values'] = sites
             if self.cb_billing_site.get() not in sites:
                 self.cb_billing_site.set('전체')
             _update_billing_sections()
+
+        self._line_filter_timer = None
+        def _debounced_filter_line(e=None):
+            if self._line_filter_timer:
+                self.root.after_cancel(self._line_filter_timer)
+            self._line_filter_timer = self.root.after(150, self.filter_billing_tree)
 
         self._refresh_billing_filter_combos = _populate_filter_options
         _populate_filter_options()
@@ -919,7 +930,7 @@ class NDTCalculatorTab(ttk.Frame):
         self.cb_billing_type.bind('<<ComboboxSelected>>', _on_billing_type_selected)
         self.cb_billing_line.bind('<<ComboboxSelected>>', lambda e: self.filter_billing_tree())
         self.cb_billing_line.bind('<Return>', lambda e: self.filter_billing_tree())
-        self.cb_billing_line.bind('<KeyRelease>', lambda e: self.filter_billing_tree())
+        self.cb_billing_line.bind('<KeyRelease>', _debounced_filter_line)
             
         ttk.Button(lbl_frame, text="🔍 조회(일보 연동)", command=self.import_from_work_log, style="Primary.TButton").pack(side=tk.LEFT, padx=(3, 0))
             
