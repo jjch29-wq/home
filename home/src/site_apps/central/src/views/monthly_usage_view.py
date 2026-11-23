@@ -122,7 +122,7 @@ def setup_monthly_usage_tab_impl(self):
         if item:
             self.monthly_usage_tree.selection_set(item)
             menu = tk.Menu(self.root, tearoff=0)
-            menu.add_command(label="👤 작업자 상세 내역 보기", command=lambda: self.show_worker_popup(event, self.monthly_usage_tree))
+            menu.add_command(label="👤 작업자 상세 내역 보기", command=lambda: self.show_worker_popup(event, self.monthly_usage_tree, is_menu=True))
             menu.add_separator()
             menu.add_command(label="🔍 조회 (새로고침)", command=self.update_monthly_usage_view)
             menu.add_command(label="📊 엑셀 내보내기", command=self.export_monthly_usage_history)
@@ -537,8 +537,6 @@ def update_monthly_usage_view_impl(self):
         df['검사방법'] = '미지정'
 
     grouped = df.groupby(['Year', 'Month', 'Site', '검사방법', '_MatGroup'], dropna=False).agg(agg_dict).reset_index()
-    
-    self.monthly_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.monthly_usage_tree), add="+")
     
     # Store df for selection handling
     self.current_monthly_df = df

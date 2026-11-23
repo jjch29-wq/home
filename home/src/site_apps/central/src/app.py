@@ -3109,18 +3109,44 @@ class MaterialManager:
         from site_apps.central.src.models.worker_model import format_worker_summary_impl
         return format_worker_summary_impl(self, *args, **kwargs)
 
-    def show_worker_popup(self, event, tree):
+    def show_worker_popup(self, event, tree, is_menu=False):
         """Show a floating window (dropdown-style) with full record details for the clicked row"""
-        item_id = tree.identify_row(event.y)
-        column_id = tree.identify_column(event.x)
-        if not item_id or not column_id: return
-            
-        col_name = tree.heading(column_id)['text']
-        if col_name != '작업자': return
-            
+        item_id = tree.identify_row(event.y) if event and hasattr(event, 'y') else None
+        if not item_id and tree.selection():
+            item_id = tree.selection()[0]
+        if not item_id: return
+
+        column_id = tree.identify_column(event.x) if event and hasattr(event, 'x') else None
+
+        # Determine target '작업자' column ID
+        worker_col_id = None
+        cols = list(tree['columns'])
+        display_cols = list(tree['displaycolumns']) if tree['displaycolumns'] else cols
+        for idx, col in enumerate(cols):
+            if col == '작업자':
+                try:
+                    d_idx = display_cols.index(col)
+                    worker_col_id = f"#{d_idx + 1}"
+                except:
+                    worker_col_id = f"#{idx + 1}"
+                break
+
+        if not is_menu:
+            if not column_id: return
+            try:
+                col_name = tree.heading(column_id)['text']
+            except:
+                col_name = ''
+            if col_name != '작업자': return
+        else:
+            if worker_col_id:
+                column_id = worker_col_id
+            elif not column_id and display_cols:
+                column_id = "#1"
+
         tags = tree.item(item_id, 'tags')
         if not tags or 'total' in tags: return
-            
+
         try:
             full_info = []
             if tree == getattr(self, 'daily_usage_tree', None):
@@ -3205,22 +3231,197 @@ class MaterialManager:
                     print(f"Popup error: {e}")
                     return
             else:
-                # Fallback for other trees (Monthly usage, etc.)
+                # 월별 집계 트리뷰 (메인 및 분리 팝업창 공통)
                 vals = tree.item(item_id, 'values')
-                cols = tree['columns']
-                try:
-                    w_idx = cols.index('작업자')
-                    t_idx = cols.index('작업시간')
-                    raw_names = vals[w_idx]
-                    raw_times = vals[t_idx]
-                    full_info.append(f"작업자: {raw_names}")
-                    full_info.append(f"작업시간: {raw_times}")
-                except: return
+                row_dict = dict(zip(cols, vals))
+
+                year_val = row_dict.get('연도', '')
+                month_val = row_dict.get('월', '')
+                site = str(row_dict.get('현장', '')).strip()
+                method = str(row_dict.get('검사방법', row_dict.get('구분', ''))).strip()
+                mat_name = str(row_dict.get('품목명', '')).strip()
+                qty = str(row_dict.get('수량', '')).strip()
+                unit_price = str(row_dict.get('단가', '')).strip()
+                fee = str(row_dict.get('금액', row_dict.get('검사비', ''))).strip()
+                ot_hours = str(row_dict.get('OT시간', '')).strip()
+                ot_amt = str(row_dict.get('OT금액', '')).strip()
+
+                full_info.append("[월별 집계 기본 정보]")
+                full_info.append(f"• 연월: {year_val}년 {month_val}월")
+                full_info.append(f"• 현장: {site}")
+                full_info.append(f"• 검사방법: {method} | 품목명: {mat_name}")
+                if qty:
+                    cost_line = f"• 수량: {qty}"
+                    if unit_price: cost_line += f" | 단가: {unit_price}원"
+                    if fee: cost_line += f" | 금액: {fee}원"
+                    full_info.append(cost_line)
+                if ot_hours or ot_amt:
+                    full_info.append(f"• 총 OT시간: {ot_hours}시간 | 총 OT금액: {ot_amt}원")
+
+                # Filter subset from current_monthly_df or daily_usage_df
+                df_source = getattr(self, 'current_monthly_df', None)
+                if df_source is None or df_source.empty:
+                    df_source = getattr(self, 'daily_usage_df', None)
+
+                subset_df = pd.DataFrame()
+                if df_source is not None and not df_source.empty:
+                    try:
+                        y_int = int(year_val)
+                        m_int = int(month_val)
+                        s_df = df_source.copy()
+                        if 'Year' not in s_df.columns or 'Month' not in s_df.columns:
+                            s_df['Year'] = pd.to_datetime(s_df['Date'], errors='coerce').dt.year
+                            s_df['Month'] = pd.to_datetime(s_df['Date'], errors='coerce').dt.month
+
+                        mask = (s_df['Year'] == y_int) & (s_df['Month'] == m_int)
+                        if site:
+                            mask = mask & (s_df['Site'].astype(str).str.strip() == site)
+                        if method and method not in ('미지정', '-'):
+                            mask = mask & (s_df['검사방법'].astype(str).str.strip().str.upper() == method.upper())
+
+                        # Material matching
+                        matching_ids = []
+                        if hasattr(self, 'materials_df') and not self.materials_df.empty:
+                            matches = self.materials_df[self.materials_df['품목명'].astype(str).str.contains(mat_name, case=False, na=False)]
+                            if not matches.empty:
+                                matching_ids = matches['MaterialID'].tolist()
+
+                        if mat_name and mat_name not in ('-', 'MT약품', 'PT약품', '품목 미지정'):
+                            if not matching_ids:
+                                if mat_name in s_df['MaterialID'].astype(str).values:
+                                    matching_ids = [mat_name]
+                                else:
+                                    m_norm = mat_name.replace(' ', '').upper()
+                                    for p_id in s_df['MaterialID'].dropna().unique():
+                                        if str(p_id).replace(' ', '').upper() == m_norm:
+                                            matching_ids.append(p_id)
+                            if matching_ids:
+                                mask = mask & (s_df['MaterialID'].isin(matching_ids))
+
+                        subset_df = s_df[mask]
+                    except Exception as ex:
+                        print(f"Error filtering monthly subset for popup: {ex}")
+
+                if not subset_df.empty:
+                    def find_paired_cols_local(columns_list):
+                        pairs = []
+                        col_set = set(columns_list)
+                        for i in range(1, 11):
+                            u_n = 'User' if i == 1 else f'User{i}'
+                            w_n = 'WorkTime' if i == 1 else f'WorkTime{i}'
+                            o_n = 'OT' if i == 1 else f'OT{i}'
+                            if u_n in col_set:
+                                pairs.append((u_n, w_n if w_n in col_set else None, o_n if o_n in col_set else None))
+                        return pairs
+
+                    s_cols = [str(c).strip().replace(' ', '') for c in subset_df.columns]
+                    subset_norm = subset_df.copy()
+                    subset_norm.columns = s_cols
+                    pairs = find_paired_cols_local(subset_norm.columns)
+
+                    worker_rows = []
+                    from site_apps.central.src.services.ot_calculator import ot_breakdown
+
+                    for _, r in subset_norm.iterrows():
+                        d_str = self._safe_format_datetime(r.get('Date', ''), '%Y-%m-%d')
+                        r_note = self.clean_nan(r.get('Note', ''))
+                        for uc, wc, oc in pairs:
+                            u_name = self.clean_nan(r.get(uc, ''))
+                            if u_name:
+                                w_time = self.clean_nan(r.get(wc, '')) if wc else ''
+                                o_val = self.clean_nan(r.get(oc, '')) if oc else ''
+                                ot_res = ot_breakdown(w_time, r.get('Date'), o_val)
+                                worker_rows.append({
+                                    'Date': d_str,
+                                    'Worker': u_name,
+                                    'WorkTime': w_time,
+                                    'OTValue': o_val,
+                                    'OT_H': ot_res['hours'],
+                                    'OT_A': ot_res['amount'],
+                                    'Day_H': ot_res['day'],
+                                    'Night_H': ot_res['night'],
+                                    'Holiday_H': ot_res['holiday'],
+                                    'Day_A': ot_res['day_amount'],
+                                    'Night_A': ot_res['night_amount'],
+                                    'Holiday_A': ot_res['holiday_amount'],
+                                    'Note': r_note
+                                })
+
+                    if worker_rows:
+                        w_df = pd.DataFrame(worker_rows)
+                        w_dedup = w_df.drop_duplicates(subset=['Date', 'Worker', 'WorkTime', 'OTValue'])
+
+                        # 공수 파싱 함수
+                        import re as _re
+                        def parse_work_count(val):
+                            s = str(val).strip()
+                            if not s: return 1.0
+                            try:
+                                m = _re.search(r'([0-9\.]+)', s)
+                                if m: return float(m.group(1))
+                            except: pass
+                            return 1.0
+
+                        w_dedup['Count'] = w_dedup['WorkTime'].apply(parse_work_count)
+
+                        full_info.append("\n[참여 작업자 종합 요약]")
+                        w_summary = w_dedup.groupby('Worker').agg({
+                            'Count': 'sum',
+                            'OT_H': 'sum',
+                            'OT_A': 'sum',
+                            'Day_H': 'sum',
+                            'Night_H': 'sum',
+                            'Holiday_H': 'sum',
+                        }).reset_index()
+
+                        for _, w_row in w_summary.iterrows():
+                            w_name = w_row['Worker']
+                            cnt = w_row['Count']
+                            oth = w_row['OT_H']
+                            ota = w_row['OT_A']
+                            summary_str = f"• {w_name}: 총 {cnt:.1f}공수"
+                            if oth > 0:
+                                ot_parts = []
+                                if w_row['Day_H'] > 0: ot_parts.append(f"연장 {w_row['Day_H']:.1f}h")
+                                if w_row['Night_H'] > 0: ot_parts.append(f"야간 {w_row['Night_H']:.1f}h")
+                                if w_row['Holiday_H'] > 0: ot_parts.append(f"휴일 {w_row['Holiday_H']:.1f}h")
+                                summary_str += f" | 총 OT {oth:.1f}시간 ({int(ota):,}원)"
+                                if ot_parts:
+                                    summary_str += f" [{', '.join(ot_parts)}]"
+                            full_info.append(summary_str)
+
+                        full_info.append("\n[일자별 상세 투입 내역]")
+                        dates_sorted = sorted(w_dedup['Date'].unique())
+                        for d in dates_sorted:
+                            d_records = w_dedup[w_dedup['Date'] == d]
+                            full_info.append(f"📅 {d}")
+                            for _, dr in d_records.iterrows():
+                                line = f"   - {dr['Worker']}"
+                                if dr['WorkTime']:
+                                    line += f" ({dr['WorkTime']})"
+                                if dr['OT_H'] > 0 or dr['OTValue']:
+                                    line += f" | OT: {dr['OTValue'] or dr['OT_H']}h ({int(dr['OT_A']):,}원)"
+                                if dr['Note']:
+                                    line += f" ※ {dr['Note']}"
+                                full_info.append(line)
+                else:
+                    full_w = row_dict.get('(Full작업자)', '')
+                    if full_w:
+                        full_info.append(f"\n[참여 작업자 목록]")
+                        full_info.append(f"• {full_w}")
 
             if not full_info: return
             
             # Get cell bounding box for precise positioning
-            bbox = tree.bbox(item_id, column_id)
+            bbox = tree.bbox(item_id, column_id) if column_id else None
+            if not bbox and worker_col_id:
+                bbox = tree.bbox(item_id, worker_col_id)
+            if not bbox:
+                for c in (display_cols if display_cols else cols):
+                    b = tree.bbox(item_id, c)
+                    if b:
+                        bbox = b
+                        break
             if not bbox: return
             
             x, y, w, h = bbox
