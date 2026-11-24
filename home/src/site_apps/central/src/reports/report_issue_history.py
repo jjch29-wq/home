@@ -143,12 +143,23 @@ def restore_report_numbers(mode, items, path=None):
             return None
         return (date, joint)
 
+    def line_joint_key(item, normalized=False):
+        line = str(item.get('Line No.') or item.get('Dwg') or item.get('ISO') or item.get('라인번호') or '').strip()
+        joint = str(item.get('Joint No.') or item.get('Joint') or '').strip()
+        if normalized:
+            joint = norm_joint(joint)
+        if not (line and joint):
+            return None
+        return (line, joint)
+
     numbers = {}
     inspection_numbers = {}
     norm_inspection_numbers = {}
     simple_numbers = {}
     date_joint_numbers = {}
     norm_date_joint_numbers = {}
+    line_joint_numbers = {}
+    norm_line_joint_numbers = {}
     report_lines = {}  # report_no -> set of line strings
     for entry in load_history(path):
         if entry.get('deleted_at') or entry.get('mode') != mode or not entry.get('report_no'):
@@ -173,6 +184,12 @@ def restore_report_numbers(mode, items, path=None):
             dj_norm_key = date_joint_key(item, normalized=True)
             if dj_norm_key is not None:
                 norm_date_joint_numbers.setdefault(dj_norm_key, set()).add(rep_no)
+            lj_key = line_joint_key(item)
+            if lj_key is not None:
+                line_joint_numbers.setdefault(lj_key, set()).add(rep_no)
+            lj_norm_key = line_joint_key(item, normalized=True)
+            if lj_norm_key is not None:
+                norm_line_joint_numbers.setdefault(lj_norm_key, set()).add(rep_no)
             item_line = str(item.get('Line No.') or item.get('Dwg') or item.get('라인번호') or '').strip()
             if item_line:
                 report_lines.setdefault(rep_no, set()).add(item_line)
@@ -220,6 +237,14 @@ def restore_report_numbers(mode, items, path=None):
                                     best_rep = None  # 동점이면 모호하므로 매칭 안 함
                             if best_rep:
                                 item['Report No'] = best_rep
+                        
+                        # 5단계: Line + Joint 매칭 (보고서가 다일자에 걸쳐 분할 발행된 경우)
+                        if not item.get('Report No'):
+                            lj_candidates = line_joint_numbers.get(line_joint_key(item), set())
+                            if not lj_candidates:
+                                lj_candidates = norm_line_joint_numbers.get(line_joint_key(item, normalized=True), set())
+                            if len(lj_candidates) == 1:
+                                item['Report No'] = next(iter(lj_candidates))
 
 
 def record_issue(mode, report_no, output_path, items, path=None):
