@@ -382,12 +382,21 @@ class InoutViewMixin:
         target_id = self.normalize_id(mat_id)
         if not target_id:
             return ""
+
+        # [PERF] Fast O(1) cache lookup
+        if not hasattr(self, '_mat_display_cache'):
+            self._mat_display_cache = {}
+        if mat_id in self._mat_display_cache:
+            return self._mat_display_cache[mat_id]
+        if target_id in self._mat_display_cache:
+            return self._mat_display_cache[target_id]
             
         mask = (self.materials_df['MaterialID'].notna()) & (self.materials_df['MaterialID'].apply(self.normalize_id) == target_id)
         mat_row = self.materials_df[mask]
             
         if mat_row.empty:
             # [NEW] Handle non-numeric IDs (raw names for PAUT) and orphans gracefully
+            self._mat_display_cache[mat_id] = str(mat_id)
             return str(mat_id)
             
         mat = mat_row.iloc[0]
@@ -395,6 +404,7 @@ class InoutViewMixin:
         
         # [SAFETY] If 품목명 is NaN/empty, fall back to str(mat_id)
         if pd.isna(name) or str(name).strip() == '':
+            self._mat_display_cache[mat_id] = str(mat_id)
             return str(mat_id)
         
         sn = mat.get('SN', '')
@@ -413,6 +423,8 @@ class InoutViewMixin:
         if spec and pd.notna(spec) and str(spec).strip():
             display = f"{display} [{str(spec).strip()}]"
             
+        self._mat_display_cache[mat_id] = display
+        self._mat_display_cache[target_id] = display
         return display
 
 
@@ -455,26 +467,42 @@ class InoutViewMixin:
     def update_material_combo(self):
         """Update both In/Out and Daily Usage material comboboxes with unified list"""
         mat_list = []
-        if not self.materials_df.empty:
-            # Create list with unified display format
-            # [STRICT] Robust check for Active status
-            active_mask = pd.to_numeric(self.materials_df.get('Active', 1), errors='coerce').fillna(1) > 0.5
-            active_df = self.materials_df[active_mask]
-            
-            for _, mat in active_df.iterrows():
-                display = self.get_material_display_name(mat['MaterialID'])
-                mat_list.append(display)
-        
-        # [NEW] Pre-calculate inactive items for efficient filtering (STRICT)
         inactive_ids = set()
         inactive_names = set()
+        if not hasattr(self, '_mat_display_cache'):
+            self._mat_display_cache = {}
+            
         if not self.materials_df.empty:
-            # Use strict numeric check
+            # [PERF] Fast single-pass vector iteration using itertuples
             active_vals = pd.to_numeric(self.materials_df.get('Active', 1), errors='coerce').fillna(1)
-            for idx, m in self.materials_df.iterrows():
-                if active_vals.loc[idx] < 0.5:
-                    inactive_ids.add(self.normalize_id(m.get('MaterialID')))
-                    inactive_names.add(str(m.get('품목명', '')).strip())
+            for idx, row in enumerate(self.materials_df.itertuples()):
+                is_active = active_vals.iloc[idx] > 0.5
+                mat_id = getattr(row, 'MaterialID', None)
+                norm_id = self.normalize_id(mat_id)
+                name = getattr(row, '품목명', '')
+                
+                if not is_active:
+                    if norm_id: inactive_ids.add(norm_id)
+                    if name: inactive_names.add(str(name).strip())
+                    continue
+                
+                if not name or str(name).strip() == '':
+                    continue
+                
+                sn = str(getattr(row, 'SN', '') or '').strip()
+                spec = str(getattr(row, '규격', '') or '').strip()
+                model = str(getattr(row, '모델명', '') or '').strip()
+                
+                display = name
+                if sn: display = f"{name}-{sn}"
+                if model and model != str(name).strip(): display = f"{display} ({model})"
+                if spec: display = f"{display} [{spec}]"
+                
+                mat_list.append(display)
+                if mat_id is not None:
+                    self._mat_display_cache[mat_id] = display
+                if norm_id:
+                    self._mat_display_cache[norm_id] = display
 
         # [NEW] Also collect historical material names from daily usage history (Only if still Active)
         history_materials = []
@@ -1463,9 +1491,8 @@ class InoutViewMixin:
         try:
             # Ensure filter candidates reflect latest data first
             self.update_material_combo()
-            # Then redraw history and stock views
+            # Then redraw history view (skip hidden stock view recalculation on simple tab switch)
             self.update_transaction_view()
-            self.update_stock_view()
         except Exception as e:
             messagebox.showerror("새로고침 오류", f"입출고 내역 새로고침 중 오류가 발생했습니다.\n{e}")
 
