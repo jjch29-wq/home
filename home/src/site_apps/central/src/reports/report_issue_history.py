@@ -134,26 +134,48 @@ def restore_report_numbers(mode, items, path=None):
             return None
         return (date, line, joint)
 
+    def date_joint_key(item, normalized=False):
+        joint = str(item.get('Joint No.') or item.get('Joint') or '').strip()
+        if normalized:
+            joint = norm_joint(joint)
+        date = str(item.get('Date') or '').strip()
+        if not (date and joint):
+            return None
+        return (date, joint)
+
     numbers = {}
     inspection_numbers = {}
     norm_inspection_numbers = {}
     simple_numbers = {}
+    date_joint_numbers = {}
+    norm_date_joint_numbers = {}
+    report_lines = {}  # report_no -> set of line strings
     for entry in load_history(path):
         if entry.get('deleted_at') or entry.get('mode') != mode or not entry.get('report_no'):
             continue
+        rep_no = entry['report_no']
         for item in entry['items']:
             key = identity(item)
             if key is not None:
-                numbers[key] = entry['report_no']
+                numbers[key] = rep_no
             fallback = inspection(item)
             if fallback is not None:
-                inspection_numbers.setdefault(fallback, set()).add(entry['report_no'])
+                inspection_numbers.setdefault(fallback, set()).add(rep_no)
             fallback_norm = inspection(item, normalized=True)
             if fallback_norm is not None:
-                norm_inspection_numbers.setdefault(fallback_norm, set()).add(entry['report_no'])
+                norm_inspection_numbers.setdefault(fallback_norm, set()).add(rep_no)
             simple_key = simple_inspection(item)
             if simple_key is not None:
-                simple_numbers.setdefault(simple_key, set()).add(entry['report_no'])
+                simple_numbers.setdefault(simple_key, set()).add(rep_no)
+            dj_key = date_joint_key(item)
+            if dj_key is not None:
+                date_joint_numbers.setdefault(dj_key, set()).add(rep_no)
+            dj_norm_key = date_joint_key(item, normalized=True)
+            if dj_norm_key is not None:
+                norm_date_joint_numbers.setdefault(dj_norm_key, set()).add(rep_no)
+            item_line = str(item.get('Line No.') or item.get('Dwg') or item.get('라인번호') or '').strip()
+            if item_line:
+                report_lines.setdefault(rep_no, set()).add(item_line)
     for item in items:
         key = identity(item)
         if key in numbers:
@@ -170,6 +192,34 @@ def restore_report_numbers(mode, items, path=None):
                     simple_candidates = simple_numbers.get(simple_inspection(item), set())
                     if len(simple_candidates) == 1:
                         item['Report No'] = next(iter(simple_candidates))
+                    elif not simple_candidates:
+                        # 4단계: 유연 매칭 (Date + Joint 조합으로 후보 탐색)
+                        dj_candidates = date_joint_numbers.get(date_joint_key(item), set())
+                        if not dj_candidates:
+                            dj_candidates = norm_date_joint_numbers.get(date_joint_key(item, normalized=True), set())
+                        if len(dj_candidates) == 1:
+                            item['Report No'] = next(iter(dj_candidates))
+                        elif len(dj_candidates) > 1:
+                            # 여러 후보가 있을 때, 라인번호 유사도(공통 토큰/관경 등)로 판별
+                            curr_line = str(item.get('Line No.') or item.get('Dwg') or item.get('라인번호') or '').strip().upper()
+                            curr_tokens = set(re.findall(r'[A-Za-z0-9]+', curr_line))
+                            best_rep = None
+                            best_score = -1
+                            for rep in dj_candidates:
+                                rep_line_set = report_lines.get(rep, set())
+                                max_score = 0
+                                for r_line in rep_line_set:
+                                    r_tokens = set(re.findall(r'[A-Za-z0-9]+', r_line.upper()))
+                                    common = len(curr_tokens & r_tokens)
+                                    if common > max_score:
+                                        max_score = common
+                                if max_score > best_score:
+                                    best_score = max_score
+                                    best_rep = rep
+                                elif max_score == best_score:
+                                    best_rep = None  # 동점이면 모호하므로 매칭 안 함
+                            if best_rep:
+                                item['Report No'] = best_rep
 
 
 def record_issue(mode, report_no, output_path, items, path=None):
