@@ -1193,6 +1193,15 @@ class MaterialManager:
         self.tab_budget = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_budget, text='공사실행예산서')
         self.setup_budget_tab()
+
+        # Tab 10: NDT Inspection Report Generator (비파괴검사 성적서/보고서)
+        try:
+            from site_apps.central.src.views.ndt_report_tab import NDTReportTab
+            self.tab_ndt_report = NDTReportTab(self.notebook, main_app=self)
+            self.notebook.add(self.tab_ndt_report, text='비파괴검사 성적서/보고서')
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to load NDTReportTab: {e}")
         
         # Select default tab instantly to prevent flicker: 마지막 보던 탭 또는 현장별 일일 사용량 기입
         init_tab = self.tab_daily_usage

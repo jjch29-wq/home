@@ -415,6 +415,11 @@ def on_closing_impl(self):
     self.save_tab_config(force=True)
     if hasattr(self, 'ndt_calculator') and hasattr(self.ndt_calculator, 'save_ui_state'):
         self.ndt_calculator.save_ui_state()
+    if hasattr(self, 'tab_ndt_report') and hasattr(self.tab_ndt_report, 'on_closing'):
+        try:
+            self.tab_ndt_report.on_closing()
+        except Exception:
+            pass
     self.is_ready = False  # 프로그램 종료 중 발생하는 UI 이벤트가 설정을 덮어쓰는 것 방지
     self.root.destroy()
 
