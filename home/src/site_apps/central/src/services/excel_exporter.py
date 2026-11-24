@@ -1,3 +1,7 @@
+from site_apps.central.src.tagged_ndt_writer import write_all_tagged_sections
+from site_apps.central.src.ndt_section_writer import write_ndt_sheet_openpyxl
+from openpyxl import Workbook
+from tkcalendar import DateEntry
 import pandas as pd
 import os
 import traceback
@@ -1021,3 +1025,994 @@ def export_central_daily_work_report_impl(self):
         import traceback
         traceback.print_exc()
         messagebox.showerror("오류", f"엑셀 생성 중 오류가 발생했습니다: {str(e)}")
+
+
+def export_weekly_report_impl(self):
+    """주간 업무보고 엑셀(알아서 생성) 출력"""
+    import pandas as pd
+    import datetime
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    import os
+
+    top = tk.Toplevel(self.root)
+    top.title("주간 업무보고서 출력")
+    top.geometry("460x390")
+    top.transient(self.root)
+    top.grab_set()
+
+    ttk.Label(top, text="🗓️ 주간 업무보고서 자동 생성", font=('Arial', 12, 'bold')).pack(pady=10)
+
+    now = datetime.datetime.now()
+    monday = now - datetime.timedelta(days=now.weekday())
+    sunday = monday + datetime.timedelta(days=6)
+
+    frame1 = ttk.Frame(top)
+    frame1.pack(pady=10)
+
+    from tkcalendar import DateEntry
+
+    ttk.Label(frame1, text="공사명:").grid(row=0, column=0, padx=5, pady=5, sticky='e')
+    project_name_entry = ttk.Entry(frame1, width=35)
+    project_name_entry.grid(row=0, column=1, padx=5, pady=5)
+
+    ttk.Label(frame1, text="시작일 (월):").grid(row=1, column=0, padx=5, pady=5)
+    start_cal = DateEntry(frame1, width=12, background='darkblue',
+                          foreground='white', borderwidth=2,
+                          date_pattern='yyyy-mm-dd', year=monday.year, month=monday.month, day=monday.day)
+    start_cal.grid(row=1, column=1, padx=5, sticky='w')
+
+    ttk.Label(frame1, text="종료일 (일):").grid(row=2, column=0, padx=5, pady=5)
+    end_cal = DateEntry(frame1, width=12, background='darkblue',
+                        foreground='white', borderwidth=2,
+                        date_pattern='yyyy-mm-dd', year=sunday.year, month=sunday.month, day=sunday.day)
+    end_cal.grid(row=2, column=1, padx=5, sticky='w')
+
+    frame2 = ttk.Frame(top)
+    frame2.pack(pady=5, fill='both', expand=True, padx=10)
+    ttk.Label(frame2, text="다음 주 작업 예정 및 의견:").pack(anchor='w')
+    next_week_txt = tk.Text(frame2, height=4, width=40)
+    next_week_txt.pack(fill='both', expand=True, pady=5)
+
+    def do_export():
+        project_name = project_name_entry.get().strip()
+        s_date = start_cal.get().strip()
+        e_date = end_cal.get().strip()
+        next_plan = next_week_txt.get("1.0", "end-1c").strip()
+        if not project_name:
+            messagebox.showwarning("입력 필요", "공사명을 입력해주세요.")
+            project_name_entry.focus_set()
+            return
+        try:
+            s_dt = pd.to_datetime(s_date).date()
+            e_dt = pd.to_datetime(e_date).date()
+        except Exception:
+            messagebox.showerror("오류", "날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)")
+            return
+
+        history_path = get_history_path()
+        if not os.path.exists(history_path):
+            messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
+            return
+
+        import json
+        with open(history_path, 'r', encoding='utf-8') as f:
+            history = json.load(f)
+
+        week_data = {}
+        cumulative_data = {}
+        for d_str, data in history.items():
+            try:
+                d_obj = pd.to_datetime(d_str).date()
+                if s_dt <= d_obj <= e_dt:
+                    week_data[d_str] = data
+                if d_obj <= e_dt:
+                    cumulative_data[d_str] = data
+            except: pass
+
+        if not cumulative_data:
+            messagebox.showinfo("알림", f"{e_date}까지 저장된 작업일보 데이터가 없습니다.")
+            return
+
+        def get_personnel_count(data, use_report_default=False):
+            """작업일보의 검사원 인원을 안전하게 숫자로 변환한다."""
+            p_data = data.get('personnel_data', {})
+            count = 0
+            try:
+                inspector = str(p_data.get('검사원_인원', '0')).strip()
+                manager = str(p_data.get('검사원_현장대리인', '0')).strip()
+                count = (int(inspector) if inspector.isdigit() else 0) + (int(manager) if manager.isdigit() else 0)
+            except Exception:
+                count = 0
+            return count if count > 0 else (1 if use_report_default else 0)
+
+        cumulative_time = 0
+        cumulative_ndt_methods = {}
+        for data in cumulative_data.values():
+            cumulative_time += 8
+            for result in data.get('ndt_results', []):
+                method = str(result.get("검사방법", "")).strip().upper()
+                if method:
+                    cumulative_ndt_methods[method] = cumulative_ndt_methods.get(method, 0) + 1
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "주간업무보고"
+
+        title_font = Font(name='맑은 고딕', size=16, bold=True)
+        head_font = Font(name='맑은 고딕', size=11, bold=True, color='FFFFFF')
+        norm_font = Font(name='맑은 고딕', size=10)
+        head_fill = PatternFill(start_color='4F81BD', end_color='4F81BD', fill_type='solid')
+        center_align = Alignment(horizontal='center', vertical='center')
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+        ws.merge_cells('A1:G1')
+        ws['A1'] = f"주간 업무보고서 ({s_date} ~ {e_date})"
+        ws['A1'].font = title_font
+        ws['A1'].alignment = center_align
+
+        ws.merge_cells('A2:G2')
+        ws['A2'] = f"공사명: {project_name}"
+        ws['A2'].font = Font(name='맑은 고딕', size=11, bold=True)
+        ws['A2'].alignment = center_align
+
+        headers = ['일자', '현장명', '작업내용', '투입인원', '작업시간', '검사실적', '비고']
+        for col_num, head in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col_num)
+            cell.value = head
+            cell.font = head_font
+            cell.fill = head_fill
+            cell.alignment = center_align
+            cell.border = thin_border
+
+        row_idx = 4
+        total_time = 0
+        total_ndt_methods = {}
+        center_align_wrap = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        # Sort dates
+        sorted_dates = sorted(week_data.keys())
+
+        if not sorted_dates:
+            ws.cell(row=row_idx, column=1, value=f"{s_date} ~ {e_date}").alignment = center_align
+            ws.cell(row=row_idx, column=2, value="중앙지사 관내").alignment = center_align
+            ws.cell(row=row_idx, column=3, value="금주 신규 작업 없음").alignment = center_align
+            ws.cell(row=row_idx, column=4, value="-").alignment = center_align
+            ws.cell(row=row_idx, column=5, value="0 시간").alignment = center_align
+            ws.cell(row=row_idx, column=6, value="0 POINT").alignment = center_align
+            ws.cell(row=row_idx, column=7, value="누계 및 차주 계획 참조").alignment = center_align_wrap
+            for col_num in range(1, 8):
+                ws.cell(row=row_idx, column=col_num).border = thin_border
+                ws.cell(row=row_idx, column=col_num).font = norm_font
+            row_idx += 1
+
+        for date_val in sorted_dates:
+            data = week_data[date_val]
+
+            # NDT results
+            ndt_results = data.get('ndt_results', [])
+            daily_ndt_methods = {}
+            for r in ndt_results:
+                method = str(r.get("검사방법", "")).strip().upper()
+                if method:
+                    daily_ndt_methods[method] = daily_ndt_methods.get(method, 0) + 1
+                    total_ndt_methods[method] = total_ndt_methods.get(method, 0) + 1
+
+            daily_ndt_texts = [f"{m} {c} POINT" for m, c in daily_ndt_methods.items()]
+            ndt_text = "\n".join(daily_ndt_texts) if daily_ndt_texts else "0 POINT"
+
+            # 같은 날짜·현장에서 검사한 관경을 한 작업내용으로 묶어 표시한다.
+            pipe_sizes = {
+                str(r.get("관경", "")).strip()
+                for r in ndt_results
+                if str(r.get("관경", "")).strip()
+            }
+            sorted_pipe_sizes = sorted(
+                pipe_sizes,
+                key=lambda value: int(re.search(r'\d+', value).group())
+                if re.search(r'\d+', value) else 0,
+                reverse=True,
+            )
+            work_description = (
+                f"{', '.join(sorted_pipe_sizes)} 검사 진행"
+                if sorted_pipe_sizes else "검사 작업 진행"
+            )
+
+            # Personnel data
+            w_count = get_personnel_count(data, use_report_default=True)
+
+            total_time += 8
+
+            ws.cell(row=row_idx, column=1, value=str(date_val)).alignment = center_align
+            ws.cell(row=row_idx, column=2, value="중앙지사 관내").alignment = center_align
+            ws.cell(row=row_idx, column=3, value=work_description).alignment = center_align_wrap
+            ws.cell(row=row_idx, column=4, value=f"{w_count} 명").alignment = center_align
+            ws.cell(row=row_idx, column=5, value="8 시간").alignment = center_align
+            ws.cell(row=row_idx, column=6, value=ndt_text).alignment = center_align_wrap
+            ws.cell(row=row_idx, column=7, value="").alignment = center_align
+
+            for col_num in range(1, 8):
+                ws.cell(row=row_idx, column=col_num).border = thin_border
+                ws.cell(row=row_idx, column=col_num).font = norm_font
+
+            row_idx += 1
+
+        ws.column_dimensions['A'].width = 15
+        ws.column_dimensions['B'].width = 25
+        ws.column_dimensions['C'].width = 25
+        ws.column_dimensions['D'].width = 12
+        ws.column_dimensions['E'].width = 12
+        ws.column_dimensions['F'].width = 22
+        ws.column_dimensions['G'].width = 20
+
+        ws.merge_cells(f'A{row_idx}:C{row_idx}')
+        ws.cell(row=row_idx, column=1, value="주간 합계").alignment = center_align
+        ws.cell(row=row_idx, column=1).font = Font(name='맑은 고딕', size=11, bold=True)
+        for col_num in range(1, 4):
+            ws.cell(row=row_idx, column=col_num).border = thin_border
+
+        ws.cell(row=row_idx, column=4, value=f"-").alignment = center_align
+        ws.cell(row=row_idx, column=5, value=f"{total_time} 시간").alignment = center_align
+
+        total_ndt_texts = [f"{m} {c} POINT" for m, c in total_ndt_methods.items()]
+        total_ndt_text = "\n".join(total_ndt_texts) if total_ndt_texts else "0 POINT"
+        ws.cell(row=row_idx, column=6, value=total_ndt_text).alignment = center_align_wrap
+        ws.cell(row=row_idx, column=7, value="").alignment = center_align
+
+        for col_num in range(4, 8):
+            ws.cell(row=row_idx, column=col_num).border = thin_border
+            ws.cell(row=row_idx, column=col_num).font = Font(name='맑은 고딕', size=11, bold=True)
+
+        if not week_data:
+            row_idx += 2
+            cumulative_ndt_texts = [f"{m} {c} POINT" for m, c in sorted(cumulative_ndt_methods.items())]
+            cumulative_ndt_text = ", ".join(cumulative_ndt_texts) if cumulative_ndt_texts else "검사실적 없음"
+            ws.merge_cells(f'A{row_idx}:G{row_idx+2}')
+            cell = ws.cell(row=row_idx, column=1)
+            cell.value = (f"■ 작업 누계 (최초 작업일 ~ {e_date})\n"
+                          f"작업일보 {len(cumulative_data)}일 / 투입 {cumulative_time} 시간 / {cumulative_ndt_text}")
+            cell.font = Font(name='맑은 고딕', size=11)
+            cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+            for r in range(row_idx, row_idx+3):
+                for c in range(1, 8):
+                    ws.cell(row=r, column=c).border = thin_border
+
+        row_idx += 4 if not week_data else 2
+        ws.merge_cells(f'A{row_idx}:G{row_idx+2}')
+        cell = ws.cell(row=row_idx, column=1)
+        cell.value = f"■ 다음 주 작업 예정 및 의견\n{next_plan or '미입력'}"
+        cell.font = Font(name='맑은 고딕', size=11)
+        cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+
+        # Draw borders for the merged cell block
+        for r in range(row_idx, row_idx+3):
+            for c in range(1, 8):
+                ws.cell(row=r, column=c).border = thin_border
+
+        out_name = f"주간업무보고_{s_date.replace('-','')}_{e_date.replace('-','')}.xlsx"
+        out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), out_name)
+
+        try:
+            wb.save(out_path)
+
+            msg_extra = ""
+            try:
+                import win32com.client as win32
+                import time
+                excel = win32.gencache.EnsureDispatch('Excel.Application')
+                excel.Visible = False
+                excel.DisplayAlerts = False
+
+                wb_com = excel.Workbooks.Open(out_path)
+                ws_com = wb_com.Sheets(1)
+                ws_com.UsedRange.CopyPicture(Format=2)
+                time.sleep(0.5)
+                wb_com.Close(False)
+                excel.Quit()
+
+                msg_extra = "\n\n💡 꿀팁: 카카오톡 전송을 위해 표가 '이미지'로 복사되었습니다!\n(카톡 창에서 Ctrl+V 를 누르시면 표가 그대로 붙여넣기 됩니다)"
+            except Exception as ex:
+                msg_extra = f"\n(클립보드 이미지 복사 실패: {ex})"
+
+            messagebox.showinfo("완료", f"주간보고서가 생성되었습니다.\n{out_path}{msg_extra}")
+            os.startfile(out_path)
+            top.destroy()
+        except Exception as e:
+            messagebox.showerror("오류", f"파일 저장 실패: {e}")
+
+    ttk.Button(top, text="보고서 생성 및 열기", command=do_export, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton').pack(pady=20)
+
+def export_monthly_ndt_report_impl(self):
+    """일일 사용 데이터를 월용역진도보고서 '3. 비파괴검사 현황' 시트에 자동 채움"""
+    import copy
+
+    if self.daily_usage_df.empty:
+        messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
+        return
+
+    # --- 0. 설정 다이얼로그 ---
+    top = tk.Toplevel(self.root)
+    top.title("월간 진도보고서 - 비파괴검사 현황 내보내기")
+    top.geometry("550x500")
+    top.transient(self.root)
+    top.grab_set()
+
+    ttk.Label(top, text="📊 월간 진도보고서 비파괴검사 현황 자동 입력", 
+              font=('Arial', 12, 'bold')).pack(pady=10)
+
+    # 대상 기간 선택
+    period_frame = ttk.LabelFrame(top, text="1. 대상 기간 (당월)")
+    period_frame.pack(fill='x', padx=15, pady=5)
+
+    now = datetime.datetime.now()
+    ttk.Label(period_frame, text="연도:").pack(side='left', padx=5)
+    year_var = tk.IntVar(value=now.year)
+    ttk.Spinbox(period_frame, from_=2024, to=2030, textvariable=year_var, width=6).pack(side='left')
+    ttk.Label(period_frame, text="  월:").pack(side='left', padx=5)
+    month_var = tk.IntVar(value=now.month)
+    ttk.Spinbox(period_frame, from_=1, to=12, textvariable=month_var, width=4).pack(side='left')
+
+    ttk.Label(period_frame, text="  문서번호:").pack(side='left', padx=5)
+    doc_num_var = tk.StringVar(value="01")
+    ttk.Entry(period_frame, textvariable=doc_num_var, width=5).pack(side='left')
+
+    # 현장 → 열배관/관리소 매핑
+    map_frame = ttk.LabelFrame(top, text="2. 현장명 → 시트 매핑 (열배관 / 관리소 구분)")
+    map_frame.pack(fill='x', padx=15, pady=5)
+
+    # 현재 데이터에 존재하는 현장명(Site) 목록 추출
+    site_list = sorted(self.daily_usage_df['Site'].dropna().unique().tolist()) if 'Site' in self.daily_usage_df.columns else []
+
+    ttk.Label(map_frame, text="열배관 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
+    main_var = tk.StringVar(value="")
+    ttk.Entry(map_frame, textvariable=main_var, width=60).pack(padx=5, pady=2)
+
+    ttk.Label(map_frame, text="관리소 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
+    mgmt_var = tk.StringVar(value="")
+    ttk.Entry(map_frame, textvariable=mgmt_var, width=60).pack(padx=5, pady=2)
+
+    ttk.Label(map_frame, text=f"💡 현재 등록된 현장: {', '.join(site_list) if site_list else '(없음)'}", 
+              foreground='blue', wraplength=500).pack(padx=5, pady=5)
+
+    # 파일 선택
+    file_frame = ttk.LabelFrame(top, text="3. 대상 엑셀 파일")
+    file_frame.pack(fill='x', padx=15, pady=5)
+
+    file_var = tk.StringVar(value=r"C:\Users\jjch2\Desktop\월용역진도보고서.xlsx")
+    ttk.Entry(file_frame, textvariable=file_var, width=55).pack(side='left', padx=5, pady=5)
+    def browse_file():
+        fp = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")], title="월용역진도보고서 선택")
+        if fp: file_var.set(fp)
+    ttk.Button(file_frame, text="찾기", command=browse_file).pack(side='left', padx=5)
+
+    # 진행
+    log_text = tk.Text(top, height=8, state='disabled', wrap='word')
+    log_text.pack(fill='both', expand=True, padx=15, pady=5)
+
+    def log(msg):
+        log_text.config(state='normal')
+        log_text.insert(tk.END, msg + "\n")
+        log_text.see(tk.END)
+        log_text.config(state='disabled')
+        top.update()
+
+    def do_export():
+        try:
+            year = year_var.get()
+            month = month_var.get()
+            doc_num = doc_num_var.get().strip() or "01"
+            filepath = file_var.get().strip()
+
+            main_sites = [s.strip() for s in main_var.get().split(',') if s.strip()]
+            mgmt_sites = [s.strip() for s in mgmt_var.get().split(',') if s.strip()]
+
+            if not main_sites and not mgmt_sites:
+                messagebox.showwarning("입력 오류", "열배관 또는 관리소에 해당하는 현장명을 최소 1개 입력해주세요.")
+                return
+            if not filepath:
+                messagebox.showwarning("입력 오류", "대상 엑셀 파일을 선택해주세요.")
+                return
+
+            log(f"▶ 기간: {year}년 {month}월")
+            log(f"▶ 열배관 현장: {main_sites}")
+            log(f"▶ 관리소 현장: {mgmt_sites}")
+
+            # --- 1. 데이터 필터링 ---
+            df = self.daily_usage_df.copy()
+            df['_date'] = pd.to_datetime(df['Date'], errors='coerce')
+            df = df[(df['_date'].dt.year == year) & (df['_date'].dt.month == month)]
+            log(f"▶ {year}년 {month}월 데이터: {len(df)}건")
+
+            if df.empty:
+                messagebox.showinfo("결과", f"{year}년 {month}월 데이터가 없습니다.")
+                return
+
+            # --- 2. 관경 → 필름규격 매핑 ---
+            def get_film_type(inch_val):
+                """관경(Inch)에서 RT 필름 규격 결정"""
+                try:
+                    v = str(inch_val).replace('"', '').replace("'", '').strip()
+                    if '/' in v and len(v) <= 5:  # 3/4 등 분수
+                        parts = v.split('/')
+                        num = float(parts[0]) / float(parts[1])
+                    else:
+                        num = float(v)
+
+                    if num >= 20:
+                        return 'B'   # B-TYPE (3⅓"×17")
+                    elif num >= 6:
+                        return 'A'   # A-TYPE (3⅓"×12")
+                    else:
+                        return 'A/2' # A/2-TYPE (3⅓"×6")
+                except:
+                    return 'A'  # 기본값
+
+            # --- 3. 집계 함수 ---
+            def aggregate_site(site_df):
+                """한 현장(열배관 or 관리소)의 데이터를 집계"""
+                result = {
+                    'RT': {'B': {}, 'A': {}, 'A/2': {}},
+                    'UT': {'data': {}},
+                    'PT': {'data': {}}
+                }
+                # 각 셀의 키: (shift, insp_type)
+                # shift: '주간' or '야간/휴일'
+                # insp_type: 'ORI' or 'REP'
+
+                for _, row in site_df.iterrows():
+                    method = str(row.get('검사방법', '')).strip().upper()
+                    if method not in ['RT', 'UT', 'PT', 'PAUT', 'MT']:
+                        continue
+
+                    work_type = str(row.get('작업형태', '주간')).strip()
+                    if work_type in ['야간', '휴일', '야간/휴일']:
+                        shift = '야간/휴일'
+                    else:
+                        shift = '주간'
+
+                    insp_type = str(row.get('검사구분', 'ORI')).strip().upper()
+                    if insp_type not in ['ORI', 'REP']:
+                        insp_type = 'ORI'
+
+                    try:
+                        qty = float(str(row.get('검사량', row.get('Usage', 0))).replace(',', '') or 0)
+                    except:
+                        qty = 0.0
+
+                    try:
+                        joints = float(str(row.get('조인트수', 0)).replace(',', '') or 0)
+                    except:
+                        joints = 0.0
+
+                    try:
+                        corr_factor = float(str(row.get('보정계수', 1)).replace(',', '') or 1)
+                    except:
+                        corr_factor = 1.0
+
+                    try:
+                        adj_qty = float(str(row.get('환산물량', 0)).replace(',', '') or 0)
+                    except:
+                        adj_qty = qty * corr_factor
+
+                    key = (shift, insp_type)
+
+                    if method == 'RT':
+                        film_type = get_film_type(row.get('관경(Inch)', ''))
+                        bucket = result['RT'][film_type]
+                        if key not in bucket:
+                            bucket[key] = {'qty': 0, 'joints': 0}
+                        bucket[key]['qty'] += qty
+                        bucket[key]['joints'] += joints
+
+                    elif method == 'UT':
+                        bucket = result['UT']['data']
+                        if key not in bucket:
+                            bucket[key] = {'qty': 0, 'joints': 0, 'adj_qty': 0}
+                        bucket[key]['qty'] += qty
+                        bucket[key]['joints'] += joints
+                        bucket[key]['adj_qty'] += adj_qty
+
+                    elif method == 'PT':
+                        bucket = result['PT']['data']
+                        if key not in bucket:
+                            bucket[key] = {'qty': 0, 'joints': 0, 'adj_qty': 0}
+                        bucket[key]['qty'] += qty
+                        bucket[key]['joints'] += joints
+                        bucket[key]['adj_qty'] += adj_qty
+
+                return result
+
+            # --- 4. 열배관 / 관리소 각각 집계 ---
+            main_df = df[df['Site'].isin(main_sites)] if main_sites else pd.DataFrame()
+            mgmt_df = df[df['Site'].isin(mgmt_sites)] if mgmt_sites else pd.DataFrame()
+
+            log(f"▶ 열배관 데이터: {len(main_df)}건, 관리소 데이터: {len(mgmt_df)}건")
+
+            main_agg = aggregate_site(main_df) if not main_df.empty else None
+            mgmt_agg = aggregate_site(mgmt_df) if not mgmt_df.empty else None
+
+                            # --- 5. 엑셀 기입 (openpyxl로 변경) ---
+            import openpyxl
+            from openpyxl.utils import get_column_letter
+            import os
+
+            save_path = filepath
+            wb = openpyxl.load_workbook(save_path)
+
+            def write_ndt_sheet_openpyxl(ws, agg):
+                if agg is None: return
+
+                def get_val(bucket, shift, insp_type, field='qty'):
+                    key = (shift, insp_type)
+                    return bucket.get(key, {}).get(field, 0)
+
+                def safe_set(row, col, val):
+                    if val and val != 0:
+                        ws.cell(row=row, column=col).value = round(val, 2) if isinstance(val, float) and val != int(val) else int(val) if isinstance(val, float) and val == int(val) else val
+
+                rt_types = {'B': 8, 'A': 9, 'A/2': 10}
+                rt_total = {'주간_joints': 0, '주간_ORI': 0, '주간_REP': 0,
+                            '야간_joints': 0, '야간_ORI': 0, '야간_REP': 0}
+
+                for film_key, row_num in rt_types.items():
+                    bucket = agg['RT'][film_key]
+                    j_day = get_val(bucket, '주간', 'ORI', 'joints') + get_val(bucket, '주간', 'REP', 'joints')
+                    ori_day = get_val(bucket, '주간', 'ORI', 'qty')
+                    rep_day = get_val(bucket, '주간', 'REP', 'qty')
+                    sum_day = ori_day + rep_day
+                    j_night = get_val(bucket, '야간/휴일', 'ORI', 'joints') + get_val(bucket, '야간/휴일', 'REP', 'joints')
+                    ori_night = get_val(bucket, '야간/휴일', 'ORI', 'qty')
+                    rep_night = get_val(bucket, '야간/휴일', 'REP', 'qty')
+                    sum_night = ori_night + rep_night
+                    j_total = j_day + j_night
+                    ori_total = ori_day + ori_night
+                    rep_total = rep_day + rep_night
+                    sum_total = ori_total + rep_total
+
+                    safe_set(row_num, 3, j_day)
+                    safe_set(row_num, 4, ori_day)
+                    safe_set(row_num, 5, rep_day)
+                    safe_set(row_num, 6, sum_day)
+                    safe_set(row_num, 7, j_night)
+                    safe_set(row_num, 8, ori_night)
+                    safe_set(row_num, 9, rep_night)
+                    safe_set(row_num, 10, sum_night)
+                    safe_set(row_num, 11, j_total)
+                    safe_set(row_num, 12, ori_total)
+                    safe_set(row_num, 13, rep_total)
+                    safe_set(row_num, 14, sum_total)
+
+                    rt_total['주간_joints'] += j_day
+                    rt_total['주간_ORI'] += ori_day
+                    rt_total['주간_REP'] += rep_day
+                    rt_total['야간_joints'] += j_night
+                    rt_total['야간_ORI'] += ori_night
+                    rt_total['야간_REP'] += rep_night
+
+                safe_set(11, 3, rt_total['주간_joints'])
+                safe_set(11, 4, rt_total['주간_ORI'])
+                safe_set(11, 5, rt_total['주간_REP'])
+                safe_set(11, 6, rt_total['주간_ORI'] + rt_total['주간_REP'])
+                safe_set(11, 7, rt_total['야간_joints'])
+                safe_set(11, 8, rt_total['야간_ORI'])
+                safe_set(11, 9, rt_total['야간_REP'])
+                safe_set(11, 10, rt_total['야간_ORI'] + rt_total['야간_REP'])
+                safe_set(11, 11, rt_total['주간_joints'] + rt_total['야간_joints'])
+                safe_set(11, 12, rt_total['주간_ORI'] + rt_total['야간_ORI'])
+                safe_set(11, 13, rt_total['주간_REP'] + rt_total['야간_REP'])
+                safe_set(11, 14, rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP'])
+
+                ut = agg['UT']['data']
+                ut_day_j = get_val(ut, '주간', 'ORI', 'joints') + get_val(ut, '주간', 'REP', 'joints')
+                ut_day_ori = get_val(ut, '주간', 'ORI', 'qty')
+                ut_day_rep = get_val(ut, '주간', 'REP', 'qty')
+                ut_night_j = get_val(ut, '야간/휴일', 'ORI', 'joints') + get_val(ut, '야간/휴일', 'REP', 'joints')
+                ut_night_ori = get_val(ut, '야간/휴일', 'ORI', 'qty')
+                ut_night_rep = get_val(ut, '야간/휴일', 'REP', 'qty')
+
+                safe_set(12, 3, ut_day_j)
+                safe_set(12, 4, ut_day_ori + ut_day_rep)
+                safe_set(12, 6, ut_day_ori + ut_day_rep)
+                safe_set(12, 7, ut_night_j)
+                safe_set(12, 8, ut_night_ori + ut_night_rep)
+                safe_set(12, 10, ut_night_ori + ut_night_rep)
+                safe_set(12, 11, ut_day_j + ut_night_j)
+                safe_set(12, 12, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+                safe_set(12, 14, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+
+                ut_day_adj = get_val(ut, '주간', 'ORI', 'adj_qty') + get_val(ut, '주간', 'REP', 'adj_qty')
+                ut_night_adj = get_val(ut, '야간/휴일', 'ORI', 'adj_qty') + get_val(ut, '야간/휴일', 'REP', 'adj_qty')
+                safe_set(13, 4, ut_day_adj)
+                safe_set(13, 6, ut_day_adj)
+                safe_set(13, 8, ut_night_adj)
+                safe_set(13, 10, ut_night_adj)
+                safe_set(13, 12, ut_day_adj + ut_night_adj)
+                safe_set(13, 14, ut_day_adj + ut_night_adj)
+
+                pt = agg['PT']['data']
+                pt_day_j = get_val(pt, '주간', 'ORI', 'joints') + get_val(pt, '주간', 'REP', 'joints')
+                pt_day_ori = get_val(pt, '주간', 'ORI', 'qty')
+                pt_day_rep = get_val(pt, '주간', 'REP', 'qty')
+                pt_night_j = get_val(pt, '야간/휴일', 'ORI', 'joints') + get_val(pt, '야간/휴일', 'REP', 'joints')
+                pt_night_ori = get_val(pt, '야간/휴일', 'ORI', 'qty')
+                pt_night_rep = get_val(pt, '야간/휴일', 'REP', 'qty')
+
+                safe_set(14, 3, pt_day_j)
+                safe_set(14, 4, pt_day_ori + pt_day_rep)
+                safe_set(14, 6, pt_day_ori + pt_day_rep)
+                safe_set(14, 7, pt_night_j)
+                safe_set(14, 8, pt_night_ori + pt_night_rep)
+                safe_set(14, 10, pt_night_ori + pt_night_rep)
+                safe_set(14, 11, pt_day_j + pt_night_j)
+                safe_set(14, 12, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+                safe_set(14, 14, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+
+                pt_day_adj = get_val(pt, '주간', 'ORI', 'adj_qty') + get_val(pt, '주간', 'REP', 'adj_qty')
+                pt_night_adj = get_val(pt, '야간/휴일', 'ORI', 'adj_qty') + get_val(pt, '야간/휴일', 'REP', 'adj_qty')
+                safe_set(15, 4, pt_day_adj)
+                safe_set(15, 6, pt_day_adj)
+                safe_set(15, 8, pt_night_adj)
+                safe_set(15, 10, pt_night_adj)
+                safe_set(15, 12, pt_day_adj + pt_night_adj)
+                safe_set(15, 14, pt_day_adj + pt_night_adj)
+
+                total_film = rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP']
+                safe_set(16, 11, 0)
+                safe_set(16, 12, total_film)
+
+            sheet_names = wb.sheetnames
+            if main_agg:
+                sheet_name = '3. 비파괴검사 현황 (열배관)'
+                if sheet_name in sheet_names:
+                    write_ndt_sheet_openpyxl(wb[sheet_name], main_agg)
+                    log(f"✅ '{sheet_name}' 시트 기입 완료")
+                else:
+                    log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+
+            if mgmt_agg:
+                sheet_name = '3. 비파괴검사 현황 (관리소)'
+                if sheet_name in sheet_names:
+                    write_ndt_sheet_openpyxl(wb[sheet_name], mgmt_agg)
+                    log(f"✅ '{sheet_name}' 시트 기입 완료")
+                else:
+                    log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+
+            history = {}
+            import json, os
+            history_path = get_history_path()
+            if os.path.exists(history_path):
+                with open(history_path, 'r', encoding='utf-8') as f:
+                    history = json.load(f)
+
+            # (Old PAUT block removed in favor of tagged writer below)
+            wb.save(save_path)
+            wb.close()
+            log(f"\n🎉 저장 완료: {save_path}")
+            messagebox.showinfo("완료", f"월간 진도보고서 비파괴검사 현황이 업데이트되었습니다.\n{save_path}")
+            import os
+            os.startfile(os.path.dirname(save_path))
+
+
+            # --- 4.5 NDT 결과서 섹션 태그 기반 자동 기입 ---
+            try:
+                import sys as _sys
+                import os as _os
+                _src = _os.path.dirname(_os.path.abspath(__file__))
+                if _src not in _sys.path:
+                    _sys.path.insert(0, _src)
+
+                from site_apps.central.src.tagged_ndt_writer import write_all_tagged_sections
+                target_month_str = f"{year}-{month:02d}"
+
+                # 저장된 파일을 다시 열어 NDT 기입
+                import openpyxl as _opx
+                wb2 = _opx.load_workbook(save_path)
+                ws2 = wb2.worksheets[0]
+
+                # 태그 기반 NDT 섹션 기입
+                write_all_tagged_sections(ws2, history, target_month_str, log_func=log)
+
+                wb2.save(save_path)
+                wb2.close()
+                log("✅ 태그 기반 NDT 결과서 전체 기입 완료")
+
+                log("✅ NDT 결과서 전체 기입 완료")
+
+                log("✅ NDT 결과서 전체 기입 완료")
+
+            except Exception as ex:
+                log(f"⚠️ NDT 결과서 기입 오류 (무시됨): {ex}")
+                import traceback
+                log(traceback.format_exc())
+                log("✅ 태그 변환 완료")
+            except Exception as ex:
+                log(f"⚠️ 태그 변환 중 오류 (무시됨): {ex}")
+
+        except Exception as e:
+
+            log(f"❌ 오류 발생: {e}")
+            import traceback
+            log(traceback.format_exc())
+            messagebox.showerror("오류", f"내보내기 중 오류: {e}")
+
+    btn_frame = ttk.Frame(top)
+    btn_frame.pack(pady=10)
+    ttk.Button(btn_frame, text="📊 내보내기 실행", command=do_export, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton').pack(side='left', padx=10)
+    ttk.Button(btn_frame, text="취소", command=top.destroy).pack(side='left', padx=10)
+
+def export_invoice_excel_impl(self):
+    """Export current filtered daily usage to official Invoice Excel (가산가평기성양식)"""
+    try:
+        import win32com.client as win32
+    except ImportError:
+        messagebox.showerror("오류", "pywin32 라이브러리가 설치되어 있지 않습니다.\n(pip install pywin32)")
+        return
+
+    selected_items = self.daily_usage_tree.selection()
+    if not selected_items:
+        items_to_export = self.daily_usage_tree.get_children()
+    else:
+        items_to_export = selected_items
+
+    if not items_to_export:
+        messagebox.showinfo("알림", "내보낼 데이터가 없습니다.")
+        return
+
+    records = []
+    cols = list(self.daily_usage_tree['columns'])
+
+    def safe_float(val):
+        try: return float(str(val).replace(',', '').strip())
+        except: return 0.0
+
+    def safe_int(val):
+        try: return int(float(str(val).replace(',', '').strip()))
+        except: return 0
+
+    for item in items_to_export:
+        tags = self.daily_usage_tree.item(item, 'tags')
+        if tags and 'total' in tags: continue
+
+        vals = self.daily_usage_tree.item(item, 'values')
+        if not vals: continue
+
+        row = dict(zip(cols, vals))
+
+        records.append({
+            "date": row.get("날짜", ""),
+            "loc": f"{row.get('현장', '')} / {row.get('검사품명', '')}".strip(" /"),
+            "ndt_type": row.get("검사방법", ""),
+            "work_time": row.get("작업형태", "일반") or "일반",
+            "material_type": row.get("품목명", ""),
+            "qty": safe_float(row.get("수량", 0)),
+            "unit": row.get("단위", ""),
+            "corr": safe_float(row.get("보정계수", 1)),
+            "adjusted_qty": safe_float(row.get("환산물량", 0)),
+            "mat_cost": safe_int(row.get("재료비", 0)),
+            "lab_cost": safe_int(row.get("인건비", 0)),
+            "overhead": safe_int(row.get("제경비", 0)),
+            "tech": safe_int(row.get("기술료", 0)),
+            "subtotal": safe_int(row.get("검사비", 0))
+        })
+
+    if not records:
+        messagebox.showwarning("기록 없음", "내보낼 작업 기록이 없습니다.")
+        return
+
+    top = tk.Toplevel(self.root)
+    top.title("실비 정산 및 기성청구서 출력")
+    top.geometry("350x400")
+    top.transient(self.root)
+    top.grab_set()
+
+    ttk.Label(top, text="엑셀 청구서 하단에 합산될\n추가 실비정산 금액을 입력하세요.\n(세액 미포함 금액)", justify=tk.CENTER).pack(pady=15)
+
+    exp_vars = {}
+    for label in ["장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비"]:
+        f = ttk.Frame(top)
+        f.pack(fill=tk.X, padx=20, pady=5)
+        ttk.Label(f, text=label, width=15).pack(side=tk.LEFT)
+        var = tk.IntVar(value=0)
+        ttk.Entry(f, textvariable=var, justify='right').pack(side=tk.RIGHT, expand=True, fill=tk.X)
+        exp_vars[label] = var
+
+    def do_export():
+        extra_expenses = {k: v.get() for k, v in exp_vars.items()}
+        top.destroy()
+
+        default_name = f"기성청구내역서_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        filepath = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=default_name, filetypes=[("Excel File", "*.xlsx")], title="정식 기성청구 엑셀 양식으로 저장")
+        if not filepath: return
+
+        try:
+            excel = win32.Dispatch("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+            wb = excel.Workbooks.Add()
+            ws = wb.ActiveSheet
+            ws.Name = "기성청구내역서"
+
+            ws.Range("A1:O2").Merge()
+            ws.Range("A1").Value = "비파괴검사기술용역 기성청구 내역서"
+            ws.Range("A1").Font.Size = 20
+            ws.Range("A1").Font.Bold = True
+            ws.Range("A1").HorizontalAlignment = -4108
+            ws.Range("A1").VerticalAlignment = -4108
+
+            ws.Range("A4:B4").Merge()
+            ws.Range("A4").Value = "공 사 명 :"
+            ws.Range("A4").Font.Bold = True
+            ws.Range("C4:J4").Merge()
+            project_name = records[0]["loc"].split('/')[0].strip() if records else ""
+            if not project_name: project_name = "가산~가평 천연가스 공급시설 건설공사 비파괴검사 기술용역"
+            ws.Range("C4").Value = project_name
+
+            ws.Range("L4:M4").Merge()
+            ws.Range("L4").Value = "청구일자 :"
+            ws.Range("L4").Font.Bold = True
+            ws.Range("L4").HorizontalAlignment = -4152
+            ws.Range("N4:O4").Merge()
+            ws.Range("N4").Value = datetime.datetime.now().strftime('%Y년 %m월 %d일')
+
+            headers = ["No.", "검사일자", "작업구간", "검사종류", "규격/자재", "근무형태", "실물량", "단위", "보정계수", "환산물량", 
+                       "재료비", "직접인건비", "제경비", "기술료", "공급가액소계"]
+
+            start_row = 6
+            for col, h in enumerate(headers, start=1):
+                cell = ws.Cells(start_row, col)
+                cell.Value = h
+                cell.Font.Bold = True
+                cell.Interior.Color = 14277081
+                cell.HorizontalAlignment = -4108
+                cell.Borders.LineStyle = 1
+
+            widths = [4, 11, 20, 9, 22, 9, 8, 5, 9, 9, 11, 12, 11, 11, 13]
+            for idx, w in enumerate(widths, start=1):
+                ws.Columns(idx).ColumnWidth = w
+
+            current_row = start_row + 1
+            total_mat = total_lab = total_ovr = total_tech = total_sub = 0
+            item_idx = 1
+
+            for g_type in ["RT", "UT", "PT", "MT", "ETC"]:
+                if g_type == "ETC":
+                    group_records = [r for r in records if not any(r["ndt_type"].upper().startswith(t) for t in ["RT", "UT", "PT", "MT"])]
+                else:
+                    group_records = [r for r in records if r["ndt_type"].upper().startswith(g_type)]
+
+                if not group_records: continue
+
+                sub_mat = sub_lab = sub_ovr = sub_tech = sub_sub = 0
+                for r in group_records:
+                    ws.Cells(current_row, 1).Value = item_idx
+                    ws.Cells(current_row, 2).Value = r["date"]
+                    ws.Cells(current_row, 3).Value = r["loc"].split()[0] if isinstance(r["loc"], str) and r["loc"] else r["loc"]
+                    ws.Cells(current_row, 4).Value = r["ndt_type"]
+                    ws.Cells(current_row, 5).Value = r["material_type"]
+                    ws.Cells(current_row, 6).Value = r["work_time"]
+                    ws.Cells(current_row, 7).Value = r["qty"]
+                    ws.Cells(current_row, 8).Value = r["unit"]
+                    ws.Cells(current_row, 9).Value = r["corr"]
+                    ws.Cells(current_row, 10).Value = r["adjusted_qty"]
+                    ws.Cells(current_row, 11).Value = r["mat_cost"]
+                    ws.Cells(current_row, 12).Value = r["lab_cost"]
+                    ws.Cells(current_row, 13).Value = r["overhead"]
+                    ws.Cells(current_row, 14).Value = r["tech"]
+                    ws.Cells(current_row, 15).Value = r["subtotal"]
+
+                    for c in range(1, 16):
+                        cell = ws.Cells(current_row, c)
+                        cell.Borders.LineStyle = 1
+                        if c <= 4 or c == 6 or c == 8: cell.HorizontalAlignment = -4108
+                        elif c == 5 or c == 3: cell.HorizontalAlignment = -4131
+                        else: cell.NumberFormat = "#,##0" if c >= 11 else "0.00"
+
+                    sub_mat += r["mat_cost"]; sub_lab += r["lab_cost"]; sub_ovr += r["overhead"]
+                    sub_tech += r["tech"]; sub_sub += r["subtotal"]
+                    item_idx += 1; current_row += 1
+
+                ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
+                ws.Cells(current_row, 1).Value = f"[{g_type}] 검사 소계"
+                ws.Cells(current_row, 1).HorizontalAlignment = -4108
+                ws.Cells(current_row, 1).Font.Bold = True
+
+                ws.Cells(current_row, 11).Value = sub_mat
+                ws.Cells(current_row, 12).Value = sub_lab
+                ws.Cells(current_row, 13).Value = sub_ovr
+                ws.Cells(current_row, 14).Value = sub_tech
+                ws.Cells(current_row, 15).Value = sub_sub
+
+                for c in range(1, 16):
+                    cell = ws.Cells(current_row, c)
+                    cell.Borders.LineStyle = 1
+                    cell.Font.Bold = True
+                    cell.Interior.Color = 15987699
+                    if c >= 11: cell.NumberFormat = "#,##0"
+
+                total_mat += sub_mat; total_lab += sub_lab; total_ovr += sub_ovr
+                total_tech += sub_tech; total_sub += sub_sub
+                current_row += 1
+
+            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
+            ws.Cells(current_row, 1).Value = "검사 비용 합계"
+            ws.Cells(current_row, 1).HorizontalAlignment = -4108
+            ws.Cells(current_row, 1).Font.Bold = True
+
+            ws.Cells(current_row, 11).Value = total_mat
+            ws.Cells(current_row, 12).Value = total_lab
+            ws.Cells(current_row, 13).Value = total_ovr
+            ws.Cells(current_row, 14).Value = total_tech
+            ws.Cells(current_row, 15).Value = total_sub
+
+            for c in range(1, 16):
+                cell = ws.Cells(current_row, c)
+                cell.Borders.LineStyle = 1
+                cell.Font.Bold = True
+                cell.Interior.Color = 14277081
+                if c >= 11: cell.NumberFormat = "#,##0"
+
+            current_row += 1
+            total_extra = 0
+            for name, val in extra_expenses.items():
+                if val > 0:
+                    ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+                    ws.Cells(current_row, 1).Value = f"+ {name}"
+                    ws.Cells(current_row, 1).HorizontalAlignment = -4152
+                    ws.Cells(current_row, 15).Value = val
+                    ws.Cells(current_row, 15).NumberFormat = "#,##0"
+                    for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
+                    total_extra += val
+                    current_row += 1
+
+            grand_subtotal = total_sub + total_extra
+
+            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+            ws.Cells(current_row, 1).Value = "공급가액 총액"
+            ws.Cells(current_row, 1).HorizontalAlignment = -4152
+            ws.Cells(current_row, 1).Font.Bold = True
+            ws.Cells(current_row, 15).Value = grand_subtotal
+            ws.Cells(current_row, 15).NumberFormat = "#,##0"
+            ws.Cells(current_row, 15).Font.Bold = True
+            for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
+
+            current_row += 1
+            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+            ws.Cells(current_row, 1).Value = "+ 부가가치세 (10%)"
+            ws.Cells(current_row, 1).HorizontalAlignment = -4152
+            vat_val = int(grand_subtotal * 0.1)
+            ws.Cells(current_row, 15).Value = vat_val
+            ws.Cells(current_row, 15).NumberFormat = "#,##0"
+            for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
+
+            current_row += 1
+            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+            ws.Cells(current_row, 1).Value = "최 종 기 성 청 구 액"
+            ws.Cells(current_row, 1).HorizontalAlignment = -4152
+            ws.Cells(current_row, 1).Font.Bold = True
+            ws.Cells(current_row, 1).Font.Size = 12
+
+            total_final = grand_subtotal + vat_val
+            ws.Cells(current_row, 15).Value = total_final
+            ws.Cells(current_row, 15).NumberFormat = "#,##0"
+            ws.Cells(current_row, 15).Font.Bold = True
+            ws.Cells(current_row, 15).Font.Size = 12
+
+            for c in range(1, 16):
+                cell = ws.Cells(current_row, c)
+                cell.Borders.LineStyle = 1
+                cell.Interior.Color = 13434879
+
+            filepath = filepath.replace("/", "\\")
+            wb.SaveAs(filepath)
+            wb.Close()
+            excel.Quit()
+
+            messagebox.showinfo("저장 완료", f"엑셀 기성청구 내역서가 성공적으로 생성되었습니다.\n{filepath}")
+            os.startfile(filepath)
+
+        except Exception as e:
+            messagebox.showerror("저장 오류", f"엑셀 파일 생성 중 오류가 발생했습니다.\n{str(e)}")
+            try: excel.Quit()
+            except: pass
+
+    ttk.Button(top, text="엑셀 출력 실행", command=do_export).pack(pady=20, ipady=5, fill=tk.X, padx=20)
