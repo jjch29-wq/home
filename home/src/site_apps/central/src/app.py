@@ -5370,9 +5370,8 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             if not getattr(self, 'is_ready', False):
                 return
 
-            # Force multiple updates to get correct dimensions
-            for _ in range(3):
-                self.daily_usage_paned.update_idletasks()
+            # Force update to get correct dimensions
+            self.daily_usage_paned.update_idletasks()
             
             # Get current paned window dimensions
             total_h = self.daily_usage_paned.winfo_height()

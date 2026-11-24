@@ -384,14 +384,10 @@ def on_tab_changed_impl(self, event=None):
            tab_text == '현장별 일일 사용량 기입':
             
             print("Daily usage tab selected - ensuring visibility")
-            # Force multiple updates when tab is selected
             self.refresh_inquiry_filters()
-            self.update_daily_usage_view() # [NEW] Trigger auto-hiding logic
-            self.root.after(50, self._ensure_daily_usage_sash_visibility)
-            self.root.after(200, self._ensure_daily_usage_sash_visibility)
-            self.root.after(400, self._ensure_canvas_scroll_region)
-            
-            # Also ensure the inner history sash is visible
+            self.update_daily_usage_view()
+            self.root.after(80, self._ensure_daily_usage_sash_visibility)
+            self.root.after(200, self._ensure_canvas_scroll_region)
             self.root.after(150, self._ensure_sash_visible)
         
         elif tab_text == '월별 집계':

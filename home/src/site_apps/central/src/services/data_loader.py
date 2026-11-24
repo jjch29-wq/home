@@ -540,6 +540,13 @@ def load_data_impl(self):
     except Exception as e:
         print(f"DEBUG: Initial refresh_inquiry_filters failed: {e}")
 
+    # [PERF] Record latest file modification time to prevent redundant reloads on tab switch
+    if hasattr(self, 'db_path') and os.path.exists(self.db_path):
+        try:
+            self._last_loaded_db_mtime = os.path.getmtime(self.db_path)
+        except Exception:
+            pass
+
 
 def save_data_impl(self, require_primary=True):
     """Serialize a complete workbook beside the original before replacing it."""
@@ -592,6 +599,10 @@ def save_data_impl(self, require_primary=True):
                 os.replace(temp_path, target)
                 temp_path = None
                 self._inventory_version = (target, saved_version)
+                try:
+                    self._last_loaded_db_mtime = os.path.getmtime(target)
+                except Exception:
+                    pass
                 return True
             except PermissionError:
                 if attempt < 2:

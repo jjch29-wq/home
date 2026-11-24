@@ -1432,10 +1432,14 @@ def update_daily_usage_view_impl(self):
     import re
     marker_pattern = MARKER_PATTERN
     
-    # Reload latest data from Excel if available
-    if hasattr(self, 'load_data'):
+    # [PERF OPTIMIZATION] Reload latest data from Excel only if file on disk was modified externally (mtime changed)
+    if hasattr(self, 'load_data') and hasattr(self, 'db_path') and os.path.exists(self.db_path):
         try:
-            self.load_data()
+            current_mtime = os.path.getmtime(self.db_path)
+            last_mtime = getattr(self, '_last_loaded_db_mtime', 0)
+            if current_mtime > last_mtime:
+                self.load_data()
+                self._last_loaded_db_mtime = current_mtime
         except Exception:
             pass
     
