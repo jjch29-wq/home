@@ -102,6 +102,7 @@ class DetailPopupTests(unittest.TestCase):
     def test_click_outside_closes_without_stealing_focus(self):
         root, popup, origin, content, scrollbar, handler, _ = self.fixture()
         root.idle()
+        handler._created_time = 0
         root.current_focus = origin
         handler.focus_out()
         root.idle()

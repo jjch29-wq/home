@@ -490,6 +490,7 @@ def update_monthly_usage_view_impl(self, force=False):
     from site_apps.central.src.services.ot_calculator import ot_breakdown
 
     def sync_dedup_and_calc_ot(row):
+        from site_apps.central.src.services.ot_calculator import ot_breakdown
         # 1. Calculate Activity-based OT (Max of all workers in this row)
         h_max = 0.0
         a_sum = 0

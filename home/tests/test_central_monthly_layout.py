@@ -5,8 +5,15 @@ from types import SimpleNamespace
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[1] / 'src/site_apps/central/src/app.py'
+TAB_CFG_SOURCE = Path(__file__).resolve().parents[1] / 'src/site_apps/central/src/views/tab_config_manager.py'
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
-METHODS = {node.name: node for node in ast.walk(TREE) if isinstance(node, ast.FunctionDef)}
+TAB_CFG_TREE = ast.parse(TAB_CFG_SOURCE.read_text(encoding='utf-8'))
+METHODS = {
+    node.name: node
+    for tree in (TREE, TAB_CFG_TREE)
+    for node in ast.walk(tree)
+    if isinstance(node, ast.FunctionDef)
+}
 
 
 def method(name):

@@ -72,7 +72,7 @@ class MaterialSelectionTests(unittest.TestCase):
             def tag_configure(self, *args, **kwargs): pass
             def selection(self): return ['chosen']
             def item(self, item): return {'values': next(row for row in self.rows if row[0] == '2')}
-        source = ast.parse((SRC / 'site_apps/central/src/app.py').read_text(encoding='utf-8'))
+        source = ast.parse((SRC / 'site_apps/central/src/views/app_dialogs.py').read_text(encoding='utf-8'))
         outer = next(n for n in ast.walk(source) if isinstance(n, ast.FunctionDef) and n.name == 'open_material_search_dialog')
         functions = [n for n in outer.body if isinstance(n, ast.FunctionDef) and n.name in ('refresh_list', 'on_select')]
         tree = Tree()
