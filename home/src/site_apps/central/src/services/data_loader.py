@@ -553,6 +553,9 @@ def save_data_impl(self, require_primary=True):
     """Serialize a complete workbook beside the original before replacing it."""
     import tempfile
     import hashlib
+    import logging
+    logger = logging.getLogger(__name__)
+    stage = 'preflight'
     def version(path):
         try:
             with open(path, 'rb') as stream:
@@ -589,9 +592,11 @@ def save_data_impl(self, require_primary=True):
         with tempfile.NamedTemporaryFile(prefix='.material-save-', suffix='.xlsx',
                                          dir=os.path.dirname(target), delete=False) as temp:
             temp_path = temp.name
+        stage = 'serialize'
         with pd.ExcelWriter(temp_path, engine='openpyxl') as writer:
             for sheet, frame in frames.items():
                 frame.to_excel(writer, sheet_name=sheet, index=False)
+        stage = 'replace-primary'
         for attempt in range(3):
             try:
                 if baseline != (target, version(target)):
@@ -602,8 +607,8 @@ def save_data_impl(self, require_primary=True):
                 self._inventory_version = (target, saved_version)
                 try:
                     self._last_loaded_db_mtime = os.path.getmtime(target)
-                except Exception:
-                    pass
+                except OSError as error:
+                    logger.warning('Inventory saved; mtime refresh failed (%s)', type(error).__name__)
                 self._monthly_view_dirty = True
                 return True
             except PermissionError:
@@ -612,13 +617,16 @@ def save_data_impl(self, require_primary=True):
                     continue
                 stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
                 conflict = os.path.splitext(target)[0] + f'_Conflict_{stamp}.xlsx'
+                stage = 'preserve-conflict-copy'
                 os.replace(temp_path, conflict)
                 temp_path = None
+                logger.warning('Inventory primary replacement denied; conflict copy preserved')
                 self.show_error_dialog('데이터 저장 지연/충돌',
                     f'원본 파일을 교체하지 못했습니다. 임시 백업: {conflict}\n'
                     '원본 파일을 닫은 뒤 다시 저장해주세요.')
                 return False # A conflict copy is not a successful save of the primary workbook.
     except Exception as error:
+        logger.error('Inventory save failed at %s (%s)', stage, type(error).__name__)
         self.show_error_dialog('데이터 저장 실패',
             f'원본 파일은 교체하지 않았습니다.\n{error}\n파일 상태를 확인하고 다시 저장해주세요.')
         return False
@@ -626,5 +634,5 @@ def save_data_impl(self, require_primary=True):
         if temp_path and os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
-            except OSError:
-                pass
+            except OSError as error:
+                logger.warning('Inventory temporary file cleanup failed (%s)', type(error).__name__)
