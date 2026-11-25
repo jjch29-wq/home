@@ -1,7 +1,5 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from site_apps.central.src.ndt_summary_exporter import NDTSummaryExporter
 from site_apps.central.src.services.monthly_report_manager import MonthlyReportManager
 from tkcalendar import DateEntry
 from datetime import datetime
@@ -61,6 +59,8 @@ class DailyWorkLogTab(ttk.Frame):
         super().__init__(parent, *args, **kwargs)
         self.parent = parent
         self.history_path = get_history_path()
+        self._history_cache = None
+        self._history_cache_mtime = None
         self._migrate_legacy_welder_ids()
         self.photo_root = get_process_photos_dir()
         self.data_connection_error = get_data_connection_error()
@@ -230,6 +230,17 @@ class DailyWorkLogTab(ttk.Frame):
         except (tk.TclError, AttributeError):
             pass
 
+    def _ensure_calendar_work_summary(self, event=None):
+        """달력 팝업이 처음 열릴 때 CalendarWorkSummary를 지연 로드한다."""
+        if getattr(self, 'calendar_work_summary', None) is None:
+            from site_apps.central.src.views.calendar_work_summary import CalendarWorkSummary
+            self.calendar_work_summary = CalendarWorkSummary(
+                self.date_entry, self,
+                site_getter=lambda: '중앙지사',
+                frame_getter=lambda: getattr(getattr(self, 'main_app', None), 'daily_usage_df', None),
+                history_getter=self.load_history)
+        return self.calendar_work_summary
+
     def _toggle_left_pane(self):
         if self._left_pane_visible:
             self._left_pane_width = self.paned.sashpos(0)
@@ -259,12 +270,9 @@ class DailyWorkLogTab(ttk.Frame):
         self.date_entry.grid(row=0, column=1, padx=(0, 6), pady=2, sticky="w")
         self.date_entry.bind("<<DateEntrySelected>>", self.on_date_change)
         self.date_entry.bind("<Return>", self.on_date_change)
-        from site_apps.central.src.views.calendar_work_summary import CalendarWorkSummary
-        self.calendar_work_summary = CalendarWorkSummary(
-            self.date_entry, self,
-            site_getter=lambda: '중앙지사',
-            frame_getter=lambda: getattr(getattr(self, 'main_app', None), 'daily_usage_df', None),
-            history_getter=self.load_history)
+        self.calendar_work_summary = None
+        self.date_entry._top_cal.bind('<Map>', self._ensure_calendar_work_summary, add='+')
+        self.date_entry.bind('<Button-1>', self._ensure_calendar_work_summary, add='+')
 
         self.date_status_label = tk.Label(
             left_box, text="○ 저장되지 않은 날짜", fg="#777777",
@@ -479,6 +487,39 @@ class DailyWorkLogTab(ttk.Frame):
         refresh_rows()
         search_entry.focus_set()
 
+    def _extract_history_choices(self, history=None):
+        """이력 데이터에서 업체/구간/라인/용접사 선택 목록을 추출한다."""
+        if history is None:
+            history = self.load_history()
+
+        sections = set()
+        lines = set()
+        companies = set()
+        welders = set(self.welder_names)
+        for day_data in history.values():
+            for row in day_data.get('ndt_results', []):
+                section = str(row.get('구간', '') or '').strip()
+                line_no = str(row.get('라인번호', '') or '').strip()
+                company = str(row.get('업체', '') or '').strip()
+                welder = self._normalize_welder_id(row.get('용접사', ''))
+                if section:
+                    sections.add(section)
+                if line_no:
+                    lines.add(line_no)
+                if company:
+                    companies.add(company)
+                if welder:
+                    welders.add(welder)
+
+        self.company_section_mapping = extract_company_section_line_mapping(history)
+        self.history_sections = [''] + sorted(sections)
+        self.history_lines = [''] + sorted(lines)
+        self.history_companies = [''] + sorted(companies)
+        self.history_welders = [''] + [
+            self._format_welder_display(welder_id)
+            for welder_id in sorted(welders)
+        ]
+
     def _build_right_pane(self, parent):
         # --- NDT Results Grid ---
         title_frame = ttk.Frame(parent)
@@ -497,26 +538,7 @@ class DailyWorkLogTab(ttk.Frame):
         self.ndt_cols = ('업체', '공사구분', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
                          'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT')
         history = self.load_history()
-        sections = set()
-        lines = set()
-        companies = set()
-        # 월간 보고서와 동일한 용접사 번호/성명 기준정보를 사용한다.
-        welders = set(self.welder_names)
-        for date_str, data in history.items():
-            for r in data.get('ndt_results', []):
-                if r.get('구간'): sections.add(r['구간'].strip())
-                if r.get('라인번호'): lines.add(r['라인번호'].strip())
-                if r.get('업체'): companies.add(r['업체'].strip())
-                if r.get('용접사'): welders.add(self._normalize_welder_id(r['용접사']))
-        
-        self.company_section_mapping = extract_company_section_line_mapping(history)
-        self.history_sections = [''] + sorted(list(sections))
-        self.history_lines = [''] + sorted(list(lines))
-        self.history_companies = [''] + sorted(list(companies))
-        self.history_welders = [''] + [
-            self._format_welder_display(welder_id)
-            for welder_id in sorted(welders)
-        ]
+        self._extract_history_choices(history)
 
         
         # Draw Headers
@@ -2302,6 +2324,11 @@ class DailyWorkLogTab(ttk.Frame):
 
     def export_ndt_summary(self):
         try:
+            from site_apps.central.src.ndt_summary_exporter import NDTSummaryExporter
+        except ImportError:
+            NDTSummaryExporter = None
+
+        try:
             with open(self.history_path, 'r', encoding='utf-8') as f:
                 history = json.load(f)
         except Exception as e:
@@ -2318,6 +2345,8 @@ class DailyWorkLogTab(ttk.Frame):
             return
             
         try:
+            if NDTSummaryExporter is None:
+                raise ImportError("NDTSummaryExporter 모듈을 불러올 수 없습니다.")
             exporter = NDTSummaryExporter(history)
             exporter.generate(file_path)
             messagebox.showinfo("완료", "NDT 누계 대장 엑셀 파일이 성공적으로 생성되었습니다.")
@@ -2472,13 +2501,24 @@ class DailyWorkLogTab(ttk.Frame):
 
     def load_history(self):
         try:
+            import os
+            current_mtime = os.path.getmtime(self.history_path) if os.path.exists(self.history_path) else None
+            if (getattr(self, '_history_cache', None) is not None and 
+                getattr(self, '_history_cache_mtime', None) is not None and 
+                current_mtime == self._history_cache_mtime):
+                return self._history_cache
+
             with open(self.history_path, 'r', encoding='utf-8') as f:
                 history = json.load(f)
             if not isinstance(history, dict) or any(not isinstance(day, dict) for day in history.values()):
                 raise ValueError('일보 이력 형식이 올바르지 않습니다.')
             self._rt_parent_history = [row for day in sorted(history) for row in history[day].get('ndt_results', [])]
+            self._history_cache = history
+            self._history_cache_mtime = current_mtime
             return history
         except FileNotFoundError:
+            self._history_cache = {}
+            self._history_cache_mtime = None
             return {}
         except (OSError, ValueError) as exc:
             messagebox.showerror('일보 이력 읽기 실패', f'이력을 읽지 못해 작업을 중단합니다. 원본 파일은 유지됩니다.\n{exc}')
@@ -2501,6 +2541,8 @@ class DailyWorkLogTab(ttk.Frame):
         with open(temp_path, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=4)
         os.replace(temp_path, self.history_path)
+        self._history_cache = history
+        self._history_cache_mtime = os.path.getmtime(self.history_path) if os.path.exists(self.history_path) else None
         self._refresh_ndt_history_choices(history)
         self._refresh_saved_date_markers(history)
         self._update_date_status(history)
@@ -2510,35 +2552,7 @@ class DailyWorkLogTab(ttk.Frame):
         """Refresh NDT combobox choices immediately after saving new rows."""
         if not hasattr(self, 'ndt_grid_entries'):
             return
-        if history is None:
-            history = self.load_history()
-
-        sections = set()
-        lines = set()
-        companies = set()
-        welders = set(self.welder_names)
-        for day_data in history.values():
-            for row in day_data.get('ndt_results', []):
-                section = str(row.get('구간', '') or '').strip()
-                line_no = str(row.get('라인번호', '') or '').strip()
-                company = str(row.get('업체', '') or '').strip()
-                welder = self._normalize_welder_id(row.get('용접사', ''))
-                if section:
-                    sections.add(section)
-                if line_no:
-                    lines.add(line_no)
-                if company:
-                    companies.add(company)
-                if welder:
-                    welders.add(welder)
-
-        self.history_sections = [''] + sorted(sections)
-        self.history_lines = [''] + sorted(lines)
-        self.history_companies = [''] + sorted(companies)
-        self.history_welders = [''] + [
-            self._format_welder_display(welder_id)
-            for welder_id in sorted(welders)
-        ]
+        self._extract_history_choices(history)
 
         for row_entries in self.ndt_grid_entries:
             row_entries['구간'].configure(values=self.history_sections)
@@ -2552,29 +2566,14 @@ class DailyWorkLogTab(ttk.Frame):
         if preview is not None:
             preview.refresh(history=history)
             return
-        if history is None:
-            history = self.load_history()
-
-        calendar = getattr(self.date_entry, '_calendar', None)
-        if calendar is None:
+        if not hasattr(self, 'date_entry'):
             return
-
-        try:
-            calendar.calevent_remove('all')
-            calendar.tag_config(
-                'saved_work_log', background='#2E7D32', foreground='white'
-            )
-            for date_str in history:
-                try:
-                    saved_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                except (TypeError, ValueError):
-                    continue
-                calendar.calevent_create(
-                    saved_date, '작업일보 저장됨', 'saved_work_log'
-                )
-        except (AttributeError, tk.TclError):
-            # tkcalendar 버전 차이가 있어도 날짜 선택 기능은 그대로 유지한다.
-            pass
+        top_cal = getattr(self.date_entry, '_top_cal', None)
+        if top_cal is not None and not top_cal.winfo_ismapped():
+            return
+        summary = self._ensure_calendar_work_summary()
+        if summary is not None:
+            summary.refresh(history=history)
 
     def _update_date_status(self, history=None):
         """현재 선택한 날짜의 저장 여부를 날짜 입력칸 아래에 표시한다."""
