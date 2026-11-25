@@ -4,6 +4,7 @@ import pandas as pd
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import math
+import re
 import datetime
 import json
 from tkcalendar import DateEntry
@@ -903,4 +904,712 @@ def update_monthly_usage_view_impl(self, force=False):
         self._last_monthly_cache_key = current_cache_key
         self._monthly_view_dirty = False
 
+import json
+import shutil
+import traceback
+from tkinter import simpledialog
+
+
+def _populate_monthly_summary_trees_impl(self, df, has_note=None):
+    """Helper to fill site and worker summary trees with given data subset"""
+    # Clear current views
+    for item in self.site_summary_tree.get_children():
+        self.site_summary_tree.delete(item)
+    for item in self.worker_summary_tree.get_children():
+        self.worker_summary_tree.delete(item)
+
+    # [NEW] Clear detached views
+    detached = self.detached_windows.get('monthly')
+    if detached:
+        for item in detached['site_tree'].get_children(): detached['site_tree'].delete(item)
+        for item in detached['worker_tree'].get_children(): detached['worker_tree'].delete(item)
+
+    if df.empty:
+        return
+
+    # --- Populate Site Summary ---
+    # Include MaterialID in grouping and add relevant NDT/Cost fields to aggregation
+    site_agg_dict = {
+        '검사비': 'sum',
+        '출장비': 'sum',
+        '제경비': 'sum',
+        '기술료': 'sum',
+        '환산물량': 'sum',
+        '재료비': 'sum',
+        '인건비': 'sum',
+        'Usage': 'sum',
+        '검사량': 'sum'
+    }
+
+    # Add RTK fields for RT매수 calculation
+    rtk_fields = ['RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크', 'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타']
+    for rf in rtk_fields:
+        if rf in df.columns: 
+            # [DEFENSIVE] Force numeric before aggregation
+            df[rf] = pd.to_numeric(df[rf], errors='coerce').fillna(0.0)
+            site_agg_dict[rf] = 'sum'
+
+    # Add NDT fields
+    ndt_map = {
+        'NDT_형광자분': 'sum',
+        'NDT_자분': 'sum',
+        'NDT_흑색자분': 'sum',
+        'NDT_페인트': 'sum',
+        'NDT_백색페인트': 'sum',
+        'NDT_침투제': 'sum',
+        'NDT_세척제': 'sum',
+        'NDT_현상제': 'sum',
+        'NDT_형광': 'sum',
+        'NDT_형광침투제': 'sum'
+    }
+    for nf in ndt_map:
+        if nf in df.columns: 
+            # [DEFENSIVE] Force numeric before aggregation
+            df[nf] = pd.to_numeric(df[nf], errors='coerce').fillna(0.0)
+            site_agg_dict[nf] = 'sum'
+
+    # Separate film materials (for RT) while grouping equipment/empty together (for PAUT, MT, PT)
+    def get_mat_group(r):
+        m = str(r.get('검사방법', '')).strip().upper()
+        if m == 'RT':
+            mid = r.get('MaterialID', '')
+            return '' if pd.isna(mid) else str(mid).strip()
+        return ''
+
+    df['_MatGroup'] = df.apply(get_mat_group, axis=1)
+
+    # Ensure Site and Method are strings and filled
+    if 'Site' in df.columns: df['Site'] = df['Site'].fillna('').astype(str)
+    if '검사방법' in df.columns: df['검사방법'] = df['검사방법'].fillna('미지정').astype(str)
+
+    if 'MaterialID' in site_agg_dict:
+        del site_agg_dict['MaterialID']
+
+    site_summary = df.groupby(['Site', '검사방법', '_MatGroup'], dropna=False).agg(site_agg_dict).reset_index()
+
+    # [NEW] Track active columns for dynamic hiding
+    site_cols = ('현장', '검사방법', '품목명', '수량', '단가', '금액', '형광자분', '흑색자분', '백색페인트', 
+                 '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
+    active_cols = set(['현장', '검사방법', '품목명', '수량', '단가', '금액']) # Mandatory columns
+
+    # Define a robust active check for numeric data
+    def is_active(val):
+        if val is None: return False
+        s = str(val).strip().lower()
+        if s in ('', '0', '0.0', '0.00', 'nan', 'none', '-'):
+            return False
+        try:
+            # Remove common separators and units for numeric check
+            v = float(s.replace(',', '').replace('원', '').replace('시간', '').strip())
+            return abs(v) > 0.001
+        except:
+            return bool(s)
+
+    tot_site_qty = 0.0
+    tot_site_test_fee = 0.0
+    tot_site_black_mag = 0.0
+    tot_site_white_paint = 0.0
+    tot_site_rtk = 0.0
+
+    for _, row in site_summary.iterrows():
+        # Get RT film usage from unified Usage column
+        film_total = row.get('Usage', 0.0)
+
+        # Calculate values
+        black_mag = row.get('NDT_자분', 0.0) + row.get('NDT_흑색자분', 0.0)
+        white_paint = row.get('NDT_페인트', 0.0) + row.get('NDT_백색페인트', 0.0)
+        pt_pen = row.get('NDT_침투제', 0.0)
+        pt_cln = row.get('NDT_세척제', 0.0)
+        pt_dev = row.get('NDT_현상제', 0.0)
+        pt_fluoro = row.get('NDT_형광', 0.0) + row.get('NDT_형광침투제', 0.0)
+
+        r_center = row.get('RTK_센터미스', 0.0)
+        r_density = row.get('RTK_농도', 0.0)
+        r_marking = row.get('RTK_마킹미스', 0.0)
+        r_film = row.get('RTK_필름마크', 0.0)
+        r_careless = row.get('RTK_취급부주의', 0.0)
+        r_customer = row.get('RTK_고객불만', 0.0)
+        r_other = row.get('RTK_기타', 0.0)
+        rtk_sum = r_center + r_density + r_marking + r_film + r_careless + r_customer + r_other
+
+        qty_v = row.get('검사량', 0.0)
+        test_fee_v = row.get('검사비', 0.0)
+        unit_price_v = (test_fee_v / qty_v) if (qty_v > 0 and test_fee_v > 0) else 0.0
+
+        tot_site_qty += qty_v
+        tot_site_test_fee += test_fee_v
+        tot_site_black_mag += black_mag
+        tot_site_white_paint += white_paint
+        tot_site_rtk += rtk_sum
+
+        # Track which columns are active using robust threshold
+        if is_active(unit_price_v): active_cols.add('단가')
+        if is_active(test_fee_v): active_cols.add('금액')
+        if is_active(row.get('NDT_형광자분', 0.0)): active_cols.add('형광자분')
+        if is_active(black_mag): active_cols.add('흑색자분')
+        if is_active(white_paint): active_cols.add('백색페인트')
+        if is_active(pt_pen): active_cols.add('침투제')
+        if is_active(pt_cln): active_cols.add('세척제')
+        if is_active(pt_dev): active_cols.add('현상제')
+        if is_active(pt_fluoro): active_cols.add('형광침투제')
+        if is_active(r_center): active_cols.add('센터미스')
+        if is_active(r_density): active_cols.add('농도')
+        if is_active(r_marking): active_cols.add('마킹미스')
+        if is_active(r_film): active_cols.add('필름마크')
+        if is_active(r_careless): active_cols.add('취급부주의')
+        if is_active(r_customer): active_cols.add('고객불만')
+        if is_active(r_other): active_cols.add('기타')
+        if is_active(rtk_sum): active_cols.add('RTK총계')
+
+        # Get Material Name from _MatGroup
+        curr_id = str(row.get('_MatGroup', '')).strip()
+        mat_name = ""
+        if curr_id and curr_id.lower() not in ('nan', 'none', '0', '0.0', ''):
+            try: 
+                m_f = float(curr_id)
+                if m_f != 0.0:
+                    matches = self.materials_df[pd.to_numeric(self.materials_df['MaterialID'], errors='coerce') == m_f]
+                    if not matches.empty: mat_name = str(matches.iloc[0]['품목명'])
+            except: pass
+            if not mat_name:
+                matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == str(curr_id)]
+                if not matches.empty: mat_name = str(matches.iloc[0]['품목명'])
+            if not mat_name and curr_id not in ('0', '0.0'):
+                mat_name = f"ID:{curr_id}"
+
+        method_str = str(row.get('검사방법', '')).strip().upper()
+        if not mat_name:
+            if method_str == 'MT':
+                mat_name = "MT약품"
+            elif method_str == 'PAUT':
+                mat_name = "-"
+            elif method_str == 'PT':
+                mat_name = "PT약품"
+            else:
+                mat_name = "-"
+
+        values = (
+            row['Site'],
+            row['검사방법'],
+            mat_name,
+            f"{qty_v:.1f}" if is_active(qty_v) else '',
+            f"{unit_price_v:,.0f}" if is_active(unit_price_v) else '',
+            f"{test_fee_v:,.0f}" if is_active(test_fee_v) else '',
+            f"{row.get('NDT_형광자분', 0.0):.1f}" if is_active(row.get('NDT_형광자분', 0.0)) else '',
+            f"{black_mag:.1f}" if is_active(black_mag) else '',
+            f"{white_paint:.1f}" if is_active(white_paint) else '',
+            f"{pt_pen:.1f}" if is_active(pt_pen) else '',
+            f"{pt_cln:.1f}" if is_active(pt_cln) else '',
+            f"{pt_dev:.1f}" if is_active(pt_dev) else '',
+            f"{pt_fluoro:.1f}" if is_active(pt_fluoro) else '',
+            f"{r_center:.1f}" if is_active(r_center) else '',
+            f"{r_density:.1f}" if is_active(r_density) else '',
+            f"{r_marking:.1f}" if is_active(r_marking) else '',
+            f"{r_film:.1f}" if is_active(r_film) else '',
+            f"{r_careless:.1f}" if is_active(r_careless) else '',
+            f"{r_customer:.1f}" if is_active(r_customer) else '',
+            f"{r_other:.1f}" if is_active(r_other) else '',
+            f"{rtk_sum:.1f}" if is_active(rtk_sum) else ''
+        )
+        self.site_summary_tree.insert('', tk.END, values=values)
+        if detached:
+            detached['site_tree'].insert('', tk.END, values=values)
+
+    # Add overall summary row to Site Summary
+    if not site_summary.empty:
+        self.site_summary_tree.tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
+        overall_site_unit_price = (tot_site_test_fee / tot_site_qty) if (tot_site_qty > 0 and tot_site_test_fee > 0) else 0.0
+        total_site_vals = (
+            '--- 전체 누계 ---',
+            '',
+            '',
+            f"{tot_site_qty:.1f}" if is_active(tot_site_qty) else '',
+            f"{overall_site_unit_price:,.0f}" if is_active(overall_site_unit_price) else '',
+            f"{tot_site_test_fee:,.0f}" if is_active(tot_site_test_fee) else '',
+            '', # 형광자분
+            f"{tot_site_black_mag:.1f}" if is_active(tot_site_black_mag) else '',
+            f"{tot_site_white_paint:.1f}" if is_active(tot_site_white_paint) else '',
+            '', '', '', '', # 침투제, 세척제, 현상제, 형광침투제
+            '', '', '', '', '', '', '', # RTK 세부
+            f"{tot_site_rtk:.1f}" if is_active(tot_site_rtk) else ''
+        )
+        self.site_summary_tree.insert('', tk.END, values=total_site_vals, tags=('total',))
+        if detached:
+            detached['site_tree'].tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
+            detached['site_tree'].insert('', tk.END, values=total_site_vals, tags=('total',))
+
+    # Apply dynamic column hiding to Site Summary
+    visible_sum_cols = [col for col in site_cols if col in active_cols]
+    self.site_summary_tree['displaycolumns'] = visible_sum_cols
+    if detached:
+        detached['site_tree']['displaycolumns'] = visible_sum_cols
+
+    # --- Populate Worker Summary ---
+    worker_data = []
+
+    # [ROBUST] Use the same precise column detection as update_monthly_usage_view
+    def find_paired_cols_local(cols):
+        pairs = []
+        col_set = set(cols)
+        for i in range(1, 11):
+            u_n = 'User' if i == 1 else f'User{i}'
+            w_n = 'WorkTime' if i == 1 else f'WorkTime{i}'
+            o_n = 'OT' if i == 1 else f'OT{i}'
+            if u_n in col_set:
+                pairs.append((u_n, w_n if w_n in col_set else None, o_n if o_n in col_set else None))
+        return pairs
+
+    df_norm = df.copy()
+    df_norm.columns = [str(c).strip().replace(' ', '') for c in df_norm.columns]
+
+    pairs = find_paired_cols_local(df_norm.columns)
+    for uc, wc, oc in pairs:
+        temp_df = pd.DataFrame()
+        temp_df['WorkerName'] = df_norm[uc]
+        temp_df['ShiftType'] = df_norm[wc] if wc else '주간'
+        temp_df['OTValue'] = df_norm[oc] if oc else ''
+
+        # Context for deduping
+        temp_df['Date'] = df_norm['Date'] if 'Date' in df_norm.columns else None
+        temp_df['Site'] = df_norm['Site'] if 'Site' in df_norm.columns else ''
+        temp_df['MaterialID'] = df_norm['MaterialID'] if 'MaterialID' in df_norm.columns else ''
+        temp_df['WorkTime'] = df_norm[wc] if wc else '' # This worker's own shift
+
+        worker_data.append(temp_df)
+
+    if worker_data:
+        # [NEW] Track active columns for dynamic hiding in Worker Summary
+        worker_sum_cols = ('작업자', '총공수', '연장(시간)', '야간(시간)', '휴일(시간)', '총OT(시간)', '연장(금액)', '야간(금액)', '휴일(금액)', '총OT(금액)')
+        active_worker_cols = set(['작업자', '총공수'])
+
+        worker_df = pd.concat(worker_data)
+        worker_df['WorkerName'] = worker_df['WorkerName'].apply(self.clean_nan)
+        worker_df = worker_df[worker_df['WorkerName'] != '']
+
+        # [NEW] Worker-level Deduping to prevent double-counting in split records
+        if not worker_df.empty:
+            def make_worker_key(row):
+                d = self._safe_format_datetime(row.get('Date', ''), '%Y-%m-%d')
+                s = str(row.get('Site', '')).strip()
+                w = str(row.get('WorkTime', '')).strip()
+                m = str(row.get('MaterialID', '')).strip()
+                un = str(row.get('WorkerName', '')).strip()
+                return (d, s, w, un)
+
+            worker_df['_dedupe_key'] = worker_df.apply(make_worker_key, axis=1)
+            # Keep the first instance of a worker in any given activity unit
+            worker_df = worker_df.drop_duplicates(subset=['_dedupe_key']).drop(columns=['_dedupe_key'])
+
+        if not worker_df.empty:
+            from site_apps.central.src.services.ot_calculator import ot_breakdown
+            calculated = worker_df.apply(lambda row: ot_breakdown(row['ShiftType'], row['Date'], row['OTValue']), axis=1)
+            for column, key in (('H_Day', 'day'), ('H_Night', 'night'), ('H_Holiday', 'holiday'),
+                                ('OT_H', 'hours'), ('A_Day', 'day_amount'), ('A_Night', 'night_amount'),
+                                ('A_Holiday', 'holiday_amount'), ('OT_A', 'amount')):
+                worker_df[column] = calculated.map(lambda result: result[key])
+            # [FIXED] Parse fractional work counts from ShiftType (e.g., "0.5주간" -> 0.5)
+            def parse_work_count(val):
+                s = str(val).strip()
+                if not s: return 1.0
+                try:
+                    # Extract first float/int found in string
+                    match = re.search(r'([0-9\.]+)', s)
+                    if match: return float(match.group(1))
+                except: pass
+                return 1.0
+
+            worker_df['Count'] = worker_df['ShiftType'].apply(parse_work_count)
+            # [REVERTED] Back to entry-based count
+            worker_summary = worker_df.groupby('WorkerName').agg({
+                'Count': 'sum',
+                'H_Day': 'sum',
+                'H_Night': 'sum',
+                'H_Holiday': 'sum',
+                'OT_H': 'sum',
+                'A_Day': 'sum',
+                'A_Night': 'sum',
+                'A_Holiday': 'sum',
+                'OT_A': 'sum'
+            }).reset_index()
+
+            for _, row in worker_summary.iterrows():
+                # Track active columns using robust is_active helper
+                if is_active(row['H_Day']): active_worker_cols.add('연장(시간)')
+                if is_active(row['H_Night']): active_worker_cols.add('야간(시간)')
+                if is_active(row['H_Holiday']): active_worker_cols.add('휴일(시간)')
+                if is_active(row['OT_H']): active_worker_cols.add('총OT(시간)')
+                if is_active(row['A_Day']): active_worker_cols.add('연장(금액)')
+                if is_active(row['A_Night']): active_worker_cols.add('야간(금액)')
+                if is_active(row['A_Holiday']): active_worker_cols.add('휴일(금액)')
+                if is_active(row['OT_A']): active_worker_cols.add('총OT(금액)')
+
+                values = (
+                    row['WorkerName'],
+                    f"{row['Count']:.1f}" if is_active(row['Count']) else "",
+                    f"{row['H_Day']:.1f}" if is_active(row['H_Day']) else "",
+                    f"{row['H_Night']:.1f}" if is_active(row['H_Night']) else "",
+                    f"{row['H_Holiday']:.1f}" if is_active(row['H_Holiday']) else "",
+                    f"{row['OT_H']:.1f}" if is_active(row['OT_H']) else "",
+                    f"{row['A_Day']:,.0f}" if is_active(row['A_Day']) else "",
+                    f"{row['A_Night']:,.0f}" if is_active(row['A_Night']) else "",
+                    f"{row['A_Holiday']:,.0f}" if is_active(row['A_Holiday']) else "",
+                    f"{row['OT_A']:,.0f}" if is_active(row['OT_A']) else ""
+                )
+                self.worker_summary_tree.insert('', tk.END, values=values)
+                if detached:
+                    detached['worker_tree'].insert('', tk.END, values=values)
+
+            # Add overall summary row to Worker Summary
+            if not worker_summary.empty:
+                self.worker_summary_tree.tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
+                total_worker_vals = (
+                    '--- 전체 누계 ---',
+                    f"{worker_summary['Count'].sum():.1f}" if is_active(worker_summary['Count'].sum()) else "",
+                    f"{worker_summary['H_Day'].sum():.1f}" if is_active(worker_summary['H_Day'].sum()) else "",
+                    f"{worker_summary['H_Night'].sum():.1f}" if is_active(worker_summary['H_Night'].sum()) else "",
+                    f"{worker_summary['H_Holiday'].sum():.1f}" if is_active(worker_summary['H_Holiday'].sum()) else "",
+                    f"{worker_summary['OT_H'].sum():.1f}" if is_active(worker_summary['OT_H'].sum()) else "",
+                    f"{worker_summary['A_Day'].sum():,.0f}" if is_active(worker_summary['A_Day'].sum()) else "",
+                    f"{worker_summary['A_Night'].sum():,.0f}" if is_active(worker_summary['A_Night'].sum()) else "",
+                    f"{worker_summary['A_Holiday'].sum():,.0f}" if is_active(worker_summary['A_Holiday'].sum()) else "",
+                    f"{worker_summary['OT_A'].sum():,.0f}" if is_active(worker_summary['OT_A'].sum()) else ""
+                )
+                self.worker_summary_tree.insert('', tk.END, values=total_worker_vals, tags=('total',))
+                if detached:
+                    detached['worker_tree'].tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
+                    detached['worker_tree'].insert('', tk.END, values=total_worker_vals, tags=('total',))
+
+            # Apply dynamic column hiding to Worker Summary
+            visible_worker_cols = [col for col in worker_sum_cols if col in active_worker_cols]
+            self.worker_summary_tree['displaycolumns'] = visible_worker_cols
+            if detached:
+                detached['worker_tree']['displaycolumns'] = visible_worker_cols
+
+
+def export_monthly_usage_history_impl(self):
+    """Export monthly usage data, site summaries, and worker summaries to a multi-sheet Excel file"""
+    try:
+        # 1. Collect Main Monthly Usage Data
+        columns = self.monthly_usage_tree['columns']
+        monthly_data = []
+        for item in self.monthly_usage_tree.get_children():
+            monthly_data.append(self.monthly_usage_tree.item(item, 'values'))
+
+        if not monthly_data:
+            messagebox.showinfo("알림", "내보낼 데이터가 없습니다.")
+            return
+
+        # 2. Collect Site Summary Data
+        site_columns = self.site_summary_tree['columns']
+        site_data = []
+        for item in self.site_summary_tree.get_children():
+            site_data.append(self.site_summary_tree.item(item, 'values'))
+
+        # 3. Collect Worker Summary Data
+        worker_columns = self.worker_summary_tree['columns']
+        worker_data = []
+        for item in self.worker_summary_tree.get_children():
+            worker_data.append(self.worker_summary_tree.item(item, 'values'))
+
+        # Prepare filename
+        today = datetime.datetime.now().strftime('%Y%m%d')
+        # Using a descriptive filename indicating it's a comprehensive report (종합)
+        filename = f"월별집계_종합_{today}.xlsx"
+
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            initialfile=filename,
+            title="월별 집계(종합) 내역 저장",
+            filetypes=[("Excel files", "*.xlsx")]
+        )
+
+        if not save_path:
+            return
+
+        # --- Process Monthly Usage Tree (Sheet 1) ---
+        columns_to_export = [c for c in columns if c != '(Full작업자)']
+        col_to_idx = {col: i for i, col in enumerate(columns)}
+
+        final_monthly_data = []
+        for row in monthly_data:
+            new_row = list(row)
+            # Swap summarized worker with full list if (Full작업자) exists
+            if '작업자' in col_to_idx and '(Full작업자)' in col_to_idx:
+                full_idx = col_to_idx['(Full작업자)']
+                if full_idx < len(new_row):
+                    full_val = new_row[full_idx]
+                    if full_val:
+                        new_row[col_to_idx['작업자']] = full_val
+
+            # Filter only display columns
+            final_row = [new_row[i] for i, c in enumerate(columns) if c != '(Full작업자)' and i < len(new_row)]
+            final_monthly_data.append(final_row)
+
+        monthly_df = pd.DataFrame(final_monthly_data, columns=columns_to_export)
+        monthly_df = self.clean_df_export(monthly_df)
+
+        # --- Process Site Summary (Sheet 2) ---
+        site_df = pd.DataFrame(site_data, columns=site_columns)
+        site_df = self.clean_df_export(site_df)
+
+        # --- Process Worker Summary (Sheet 3) ---
+        worker_df = pd.DataFrame(worker_data, columns=worker_columns)
+        worker_df = self.clean_df_export(worker_df)
+
+        # --- Save to Excel with Multiple Sheets and AutoFit ---
+        with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
+            # Local helper for autofitting to avoid polluting global namespace
+            def write_sheet(df, sheet_name):
+                df.to_excel(writer, index=False, sheet_name=sheet_name)
+                worksheet = writer.sheets[sheet_name]
+
+                def get_display_width(s):
+                    width = 0
+                    for char in str(s):
+                        if ord(char) > 127: width += 2 # Double width for Korean
+                        else: width += 1
+                    return width
+
+                for idx, col in enumerate(df.columns):
+                    series = df[col].astype(str)
+                    lengths = series.apply(get_display_width)
+                    max_val_len = lengths.max() if not lengths.empty else 0
+                    header_len = get_display_width(col)
+                    # Cap at 40 to allow better horizontal density in summaries
+                    final_width = min(max(max_val_len, header_len) + 2, 40)
+
+                    col_letter = worksheet.cell(row=1, column=idx+1).column_letter
+                    worksheet.column_dimensions[col_letter].width = final_width
+
+            write_sheet(monthly_df, "월별집계_내역")
+            write_sheet(site_df, "현장별_누계")
+            write_sheet(worker_df, "작업자별_누계")
+
+        messagebox.showinfo("완료", "월별 집계 내역(종합)이 저장되었습니다.\n(내역, 현장별, 작업자별 3개 시트 포함)")
+    except Exception as e:
+        messagebox.showerror("오류", f"저장 실패: {e}")
+        traceback.print_exc()
+
+
+def open_detached_monthly_usage_view_impl(self):
+    """월별 집계 조회를 별도의 팝업창(모니터링 창)으로 엽니다. (메인 화면과 100% 동일한 구성)"""
+    # 기존 창이 있으면 포커스만 이동
+    if 'monthly' in self.detached_windows and self.detached_windows['monthly']['window'].winfo_exists():
+        self.detached_windows['monthly']['window'].lift()
+        return
+
+    popup = tk.Toplevel(self.root)
+    popup.title("📊 월별 집계 모니터링 (팝업)")
+    popup.geometry("1600x900")
+
+    main_frame = ttk.Frame(popup, padding=10)
+    main_frame.pack(expand=True, fill='both')
+
+    # 상단 정보/필터 안내
+    info_frame = ttk.Frame(main_frame)
+    info_frame.pack(fill='x', pady=(0, 5))
+
+    # [NEW] Popup Search Filters
+    filter_row = ttk.Frame(info_frame)
+    filter_row.pack(side='left', fill='x', expand=True)
+
+    def sync_and_refresh(event=None):
+        # Mirror popup filters to main window
+        self.cb_filter_year.set(p_cb_year.get())
+        self.cb_filter_month.set(p_cb_month.get())
+        self.cb_filter_site_monthly.set(p_cb_site.get())
+        if hasattr(self, 'cb_filter_method_monthly'):
+            self.cb_filter_method_monthly.set(p_cb_method.get())
+        self.cb_filter_material_monthly.set(p_cb_mat.get())
+        self.update_monthly_usage_view()
+
+    ttk.Label(filter_row, text="🗓️ 연도:").pack(side='left', padx=2)
+    p_cb_year = ttk.Combobox(filter_row, values=self.cb_filter_year['values'], width=8)
+    p_cb_year.pack(side='left', padx=2)
+    p_cb_year.set(self.cb_filter_year.get())
+    p_cb_year.bind("<<ComboboxSelected>>", sync_and_refresh)
+
+    ttk.Label(filter_row, text="📅 월:").pack(side='left', padx=2)
+    p_cb_month = ttk.Combobox(filter_row, values=self.cb_filter_month['values'], width=6)
+    p_cb_month.pack(side='left', padx=2)
+    p_cb_month.set(self.cb_filter_month.get())
+    p_cb_month.bind("<<ComboboxSelected>>", sync_and_refresh)
+
+    ttk.Label(filter_row, text="🏢 현장:").pack(side='left', padx=2)
+    p_cb_site = ttk.Combobox(filter_row, values=self.cb_filter_site_monthly['values'], width=12)
+    p_cb_site.pack(side='left', padx=2)
+    p_cb_site.set(self.cb_filter_site_monthly.get())
+    p_cb_site.bind("<<ComboboxSelected>>", sync_and_refresh)
+
+    ttk.Label(filter_row, text="🔬 방법:").pack(side='left', padx=2)
+    method_vals = getattr(self, 'cb_filter_method_monthly', {}).get('values', ['전체', 'RT', 'PAUT', 'MT', 'PT']) if hasattr(self, 'cb_filter_method_monthly') else ['전체', 'RT', 'PAUT', 'MT', 'PT']
+    p_cb_method = ttk.Combobox(filter_row, values=method_vals, width=8)
+    p_cb_method.pack(side='left', padx=2)
+    p_cb_method.set(self.cb_filter_method_monthly.get() if hasattr(self, 'cb_filter_method_monthly') else '전체')
+    p_cb_method.bind("<<ComboboxSelected>>", sync_and_refresh)
+
+    ttk.Label(filter_row, text="📦 품목:").pack(side='left', padx=2)
+    p_cb_mat = ttk.Combobox(filter_row, values=self.cb_filter_material_monthly['values'], width=18)
+    p_cb_mat.pack(side='left', padx=2)
+    p_cb_mat.set(self.cb_filter_material_monthly.get())
+    p_cb_mat.bind("<<ComboboxSelected>>", sync_and_refresh)
+
+    ttk.Button(filter_row, text="🔍 조회", command=sync_and_refresh, style="Primary.TButton").pack(side='left', padx=5)
+
+    ttk.Button(filter_row, text="🔄 새로고침", command=sync_and_refresh, style="Secondary.TButton").pack(side='right', padx=5)
+
+    paned = ttk.PanedWindow(main_frame, orient="vertical")
+    paned.pack(expand=True, fill='both')
+
+    # 1. 메인 트리뷰 (상단)
+    tree_frame = ttk.Frame(paned)
+    paned.add(tree_frame, weight=3) 
+
+    vsb = ttk.Scrollbar(tree_frame, orient="vertical")
+    hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
+
+    columns = ('연도', '월', '현장', '구분', '작업자', '작업시간', 'OT시간', 'OT금액', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
+               '수량', '단가', '출장비', '일식', '검사비', '품목명', '센터미스', '농도', '마킹미스', '필름마크', 
+               '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '(Full작업자)')
+
+    tree = ttk.Treeview(tree_frame, columns=columns, show='headings', yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+    tree['displaycolumns'] = [c for c in columns if c != '(Full작업자)']
+
+    vsb.config(command=tree.yview); hsb.config(command=tree.xview)
+
+    col_widths = {'연도': 90, '월': 70, '현장': 140, '구분': 100, '작업자': 100, '작업시간': 100, 'OT시간': 100, 'OT금액': 110, '품목명': 200, '비고': 220}
+    for col in columns:
+        tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(tree, c, False))
+        tree.column(col, width=col_widths.get(col, 100), anchor='center', stretch=False)
+
+    tree.grid(row=0, column=0, sticky='nsew')
+    vsb.grid(row=0, column=1, sticky='ns')
+    hsb.grid(row=1, column=0, sticky='ew')
+    tree_frame.grid_rowconfigure(0, weight=1); tree_frame.grid_columnconfigure(0, weight=1)
+
+    # [NEW] 인터랙티브 기능 복제
+    self.enable_tree_column_drag(tree)
+    tree.tag_configure('total', background='#E8F4F8', font=('Arial', 12, 'bold'))
+    tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, tree), add="+")
+    tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+
+    # 2. 현장별 요약 (중단 - 메인 UI는 3단 수직 분할)
+    site_frame = ttk.LabelFrame(paned, text="🏢 현장별 누계")
+    paned.add(site_frame, weight=1)
+    site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '제경비', '기술료', '환산물량', '재료비', '인건비', '형광자분', '흑색자분', '백색페인트', 
+                 '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
+    site_tree = ttk.Treeview(site_frame, columns=site_cols, show='headings')
+    site_vsb = ttk.Scrollbar(site_frame, orient="vertical", command=site_tree.yview)
+    site_tree.configure(yscrollcommand=site_vsb.set)
+    for col in site_cols:
+        site_tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(site_tree, c, False))
+        w = 120 if col in ['현장', '검사방법', '품목명'] else (100 if col in ['검사비', '출장비', '제경비', '기술료', '재료비', '인건비'] else 80)
+        site_tree.column(col, width=w, anchor='center', stretch=False)
+    site_tree.pack(side='left', expand=True, fill='both')
+    site_vsb.pack(side='right', fill='y')
+
+    self.enable_tree_column_drag(site_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, site_tree))
+    site_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+
+    # 3. 작업자별 요약 (하단)
+    worker_frame = ttk.LabelFrame(paned, text="👷 작업자별 누계")
+    paned.add(worker_frame, weight=1)
+    worker_cols = ('작업자', '총공수', '연장(시간)', '야간(시간)', '휴일(시간)', '총OT(시간)', '연장(금액)', '야간(금액)', '휴일(금액)', '총OT(금액)')
+    worker_tree = ttk.Treeview(worker_frame, columns=worker_cols, show='headings')
+    worker_vsb = ttk.Scrollbar(worker_frame, orient="vertical", command=worker_tree.yview)
+    worker_tree.configure(yscrollcommand=worker_vsb.set)
+    worker_widths = {'작업자': 100, '총공수': 70, '총OT(시간)': 80, '총OT(금액)': 100}
+    for col in worker_cols:
+        worker_tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(worker_tree, c, False))
+        worker_tree.column(col, width=worker_widths.get(col, 80), anchor='center', stretch=False)
+    worker_tree.pack(side='left', expand=True, fill='both')
+    worker_vsb.pack(side='right', fill='y')
+
+    self.enable_tree_column_drag(worker_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, worker_tree))
+    worker_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+
+    # [NEW] 메인 UI의 분할 배율 동기화
+    def sync_sash():
+        try:
+            main_h = self.monthly_paned.winfo_height()
+            if main_h > 0:
+                popup_h = paned.winfo_height()
+                if popup_h > 0:
+                    s1 = self.monthly_paned.sashpos(0)
+                    s2 = self.monthly_paned.sashpos(1)
+                    paned.sashpos(0, int(s1 * popup_h / main_h))
+                    paned.sashpos(1, int(s2 * popup_h / main_h))
+        except: pass
+    popup.after(500, sync_sash) # UI 렌더링 후 적용
+
+    # 상태 등록
+    self.detached_windows['monthly'] = {
+        'window': popup,
+        'tree': tree,
+        'site_tree': site_tree,
+        'worker_tree': worker_tree,
+        'filters': {
+            'year': p_cb_year,
+            'month': p_cb_month,
+            'site': p_cb_site,
+            'method': p_cb_method,
+            'mat': p_cb_mat
+        }
+    }
+
+    def on_close():
+        if 'monthly' in self.detached_windows:
+            del self.detached_windows['monthly']
+        popup.destroy()
+    popup.protocol("WM_DELETE_WINDOW", on_close)
+
+    # 데이터 복사
+    self.update_monthly_usage_view()
+
+    # [FIXED] Extraction using standardized indices (Year=0, Month=1, Site=2)
+    def on_popup_select(event):
+        selection = tree.selection()
+        if not selection: return
+        item = selection[0]
+        try:
+            vals = tree.item(item, 'values')
+            if not vals: return
+            tags = tree.item(item, 'tags')
+
+            if not hasattr(self, 'current_monthly_df'): return
+
+            if 'total' in tags:
+                subset = self.current_monthly_df
+            else:
+                # Robust extraction
+                try:
+                    y = int(vals[0]) 
+                    m = int(vals[1])
+                    s = str(vals[2]).strip()
+
+                    # Material name is at index 22 in our formatted tuple
+                    mat_name = str(vals[22]).strip() if len(vals) > 22 else None
+
+                    mask = (self.current_monthly_df['Year'] == y) & \
+                           (self.current_monthly_df['Month'] == m) & \
+                           (self.current_monthly_df['Site'] == s)
+
+                    if mat_name:
+                        ids = self.materials_df[self.materials_df['품목명'] == mat_name]['MaterialID'].tolist()
+                        if ids:
+                            mask = mask & (self.current_monthly_df['MaterialID'].isin(ids))
+
+                    subset = self.current_monthly_df[mask]
+                except:
+                    subset = pd.DataFrame()
+
+            # Update summaries
+            self._populate_monthly_summary_trees(subset)
+        except Exception as e:
+            print(f"DEBUG: Detached selection error: {e}")
+
+    tree.bind("<<TreeviewSelect>>", on_popup_select)
+
+    if hasattr(self, 'current_monthly_df'):
+        self._populate_monthly_summary_trees(self.current_monthly_df)
 

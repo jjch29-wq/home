@@ -16,19 +16,52 @@ logger = logging.getLogger(__name__)
 class NDTReportTab(ttk.Frame):
     """비파괴검사 성적서/보고서 통합 탭 컨테이너."""
 
-    def __init__(self, parent, main_app=None, *args, **kwargs):
+    def __init__(self, parent, main_app=None, lazy=False, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.main_app = main_app
-        self.report_app = None
+        self._report_app = None
+        self._init_failed = False
 
-        self._setup_view()
+        if lazy:
+            self.bind("<Map>", self._on_first_map, add="+")
+            self.after(1200, self._background_warmup)
+        else:
+            self._setup_view()
+
+    def _background_warmup(self):
+        try:
+            if self.winfo_exists() and self._report_app is None and not self._init_failed:
+                self.ensure_initialized()
+        except Exception:
+            pass
+
+    def _on_first_map(self, _event=None):
+        self.ensure_initialized()
+
+    def ensure_initialized(self):
+        if self._report_app is None and not self._init_failed:
+            self._setup_view()
+        return self._report_app
+
+    @property
+    def report_app(self):
+        if self._report_app is None and not self._init_failed:
+            self._setup_view()
+        return self._report_app
+
+    @report_app.setter
+    def report_app(self, value):
+        self._report_app = value
 
     def _setup_view(self):
         """보고서 앱 인스턴스 생성 및 프레임 마운트."""
+        if self._report_app is not None:
+            return
         try:
-            self.report_app = PMIReportApp(self, central_app=self.main_app, is_embedded=True)
+            self._report_app = PMIReportApp(self, central_app=self.main_app, is_embedded=True)
             logger.info("NDTReportTab: PMIReportApp initialized successfully.")
         except Exception as e:
+            self._init_failed = True
             logger.error(f"Failed to initialize PMIReportApp inside NDTReportTab: {e}", exc_info=True)
             err_label = ttk.Label(
                 self,
@@ -40,9 +73,9 @@ class NDTReportTab(ttk.Frame):
 
     def on_closing(self):
         """앱 종료 시 보고서 설정 저장 위임."""
-        if self.report_app and hasattr(self.report_app, 'on_closing'):
+        if self._report_app and hasattr(self._report_app, 'on_closing'):
             try:
-                self.report_app.on_closing()
+                self._report_app.on_closing()
             except Exception as e:
                 logger.warning(f"Error during NDTReportTab closing: {e}")
 

@@ -306,9 +306,9 @@ class DailyWorkLogTab(ttk.Frame):
         btn_weekly_report = ttk.Button(mid_box, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None, style="Secondary.TButton")
         btn_weekly_report.grid(row=1, column=0, columnspan=2, padx=2, pady=(2, 0), sticky="ew")
 
-        # 3. 우측: 비파괴검사결과서 편집 도구 (우측 빈 공간 100% 활용 및 2단 배치)
+        # 3. 중앙 우측: 비파괴검사결과서 편집 도구 (2단 배치)
         right_box = ttk.LabelFrame(top_frame, text="✏️ 비파괴검사결과서 편집", padding=(6, 3))
-        right_box.pack(side="left", fill="both", expand=True)
+        right_box.pack(side="left", fill="y", padx=(0, 6))
 
         # 1단: 행 추가/삭제 및 작업내역 검색
         ttk.Button(right_box, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True), style="Primary.TButton").grid(row=0, column=0, padx=2, pady=1, sticky="w")
@@ -323,6 +323,31 @@ class DailyWorkLogTab(ttk.Frame):
         self.ndt_selection_vars = []
         self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
         ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=0, column=3, rowspan=2, padx=(8, 4), pady=1, sticky="w")
+
+        # 4. 우측: 선택 행 핫태핑 및 공정사진 (2단 배치)
+        extra_box = ttk.LabelFrame(top_frame, text="🔥 선택 행 핫태핑 · 📸 공정사진", padding=(6, 3))
+        extra_box.pack(side="left", fill="both", expand=True)
+
+        hot_bar = ttk.Frame(extra_box)
+        hot_bar.grid(row=0, column=0, sticky="w", pady=1)
+        ttk.Button(
+            hot_bar, text="🔥 선택 행 핫태핑 입력/수정", command=self._edit_hot_tapping, style="Warning.TButton"
+        ).pack(side="left", padx=(2, 6))
+        self.hot_summary_var = tk.StringVar()
+        ttk.Label(hot_bar, textvariable=self.hot_summary_var, foreground="#444444").pack(side="left", padx=2)
+
+        photo_bar = ttk.Frame(extra_box)
+        photo_bar.grid(row=1, column=0, sticky="w", pady=1)
+        ttk.Button(
+            photo_bar, text="📷 사진 추가", command=self.add_process_photo, style="Primary.TButton"
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            photo_bar, text="🖼️ 사진 관리", command=self.manage_process_photos, style="Secondary.TButton"
+        ).pack(side="left", padx=(2, 6))
+        self.photo_selection_var = tk.StringVar(value="NDT 행을 선택하세요.")
+        ttk.Label(photo_bar, textvariable=self.photo_selection_var, foreground="#666666").pack(
+            side="left", padx=2
+        )
 
     def _build_left_pane(self, parent):
         # --- Middle Section: Work Quantities ---
@@ -527,7 +552,7 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Label(title_frame, text="2. 비파괴검사결과서", font=("맑은 고딕", 11, "bold")).pack(side="left", padx=(5, 10))
         ttk.Label(
             title_frame,
-            text="※ 행 추가/삭제/일괄변경 및 보고서 발행 도구는 상단 툴바에 통합되어 있습니다.",
+            text="※ 행 추가/삭제/일괄변경, 핫태핑/공정사진 및 보고서 발행 도구는 상단 툴바에 통합되어 있습니다.",
             foreground="#666666"
         ).pack(side="left", padx=5)
         
@@ -562,24 +587,6 @@ class DailyWorkLogTab(ttk.Frame):
         self._ndt_grid_frame = grid_frame
         self.ndt_grid_entries = []
         self._append_ndt_rows(30)
-
-        hot_bar = ttk.Frame(parent)
-        hot_bar.pack(fill='x', padx=5, pady=4)
-        ttk.Button(hot_bar, text='선택 행 핫태핑 입력/수정', command=self._edit_hot_tapping).pack(side='left')
-        self.hot_summary_var = tk.StringVar()
-        ttk.Label(hot_bar, textvariable=self.hot_summary_var).pack(side='left', padx=10)
-        photo_bar = ttk.LabelFrame(parent, text="선택 행 공정사진")
-        photo_bar.pack(fill='x', padx=5, pady=(8, 0))
-        self.photo_selection_var = tk.StringVar(value="NDT 행을 선택하세요.")
-        ttk.Label(photo_bar, textvariable=self.photo_selection_var).pack(
-            side='left', padx=8, pady=6
-        )
-        ttk.Button(
-            photo_bar, text="사진 추가", command=self.add_process_photo
-        ).pack(side='left', padx=4)
-        ttk.Button(
-            photo_bar, text="사진 관리", command=self.manage_process_photos
-        ).pack(side='left', padx=4)
 
     def _append_ndt_rows(self, count=10, focus=False):
         first = len(self.ndt_grid_entries)
@@ -2639,10 +2646,6 @@ class DailyWorkLogTab(ttk.Frame):
                     row_dict[col] = str(val) if val else ""
             row_dict.update(getattr(row_entries.get('구간정보'), '_rt_retake_meta', {}))
             data['ndt_results'].append(row_dict)
-            
-        with open('debug_save.txt', 'w', encoding='utf-8') as debug_f:
-            import json
-            json.dump(data['ndt_results'], debug_f, ensure_ascii=False, indent=2)
             
         history[current_date] = data
         self.save_history(history)

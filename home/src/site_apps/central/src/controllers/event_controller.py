@@ -402,6 +402,9 @@ def on_tab_changed_impl(self, event=None):
         elif tab_text == '입출고 관리':
             print("In/Out Management tab selected - refreshing history")
             self.refresh_inout_history()
+        elif tab_text == '비파괴검사 성적서/보고서':
+            if hasattr(self, 'tab_ndt_report') and hasattr(self.tab_ndt_report, 'ensure_initialized'):
+                self.tab_ndt_report.ensure_initialized()
     except Exception as e:
         print(f"Error in tab change handler: {e}")
 

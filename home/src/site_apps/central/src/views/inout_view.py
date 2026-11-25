@@ -849,13 +849,41 @@ class InoutViewMixin:
             '모델명': 'model_list'
         }
 
+        # [PERF] Pre-filter active materials and precompute consumable sets in a single pass
+        if not self.materials_df.empty:
+            active_mask = pd.to_numeric(self.materials_df.get('Active', 1), errors='coerce').fillna(1) > 0.5
+            active_df = self.materials_df[active_mask]
+        else:
+            active_df = self.materials_df
+
+        consumable_names = set()
+        non_consumable_names = set()
+        consumable_models = set()
+        consumable_mfrs = set()
+        if not active_df.empty and '품목명' in active_df.columns:
+            p_series = active_df['품목명'].fillna('').astype(str).str.strip()
+            m_series = active_df['모델명'].fillna('').astype(str).str.strip() if '모델명' in active_df.columns else pd.Series([''] * len(active_df), index=active_df.index)
+            mfr_series = active_df['제조사'].fillna('').astype(str).str.strip() if '제조사' in active_df.columns else pd.Series([''] * len(active_df), index=active_df.index)
+            is_cons_cache = {}
+            for p_name, model_val, mfr_val in zip(p_series, m_series, mfr_series):
+                if not p_name:
+                    continue
+                is_c = is_cons_cache.get(p_name)
+                if is_c is None:
+                    is_c = self._is_consumable_material(p_name, '')
+                    is_cons_cache[p_name] = is_c
+                if is_c:
+                    consumable_names.add(p_name)
+                    if model_val and model_val.lower() != 'nan':
+                        consumable_models.add(model_val)
+                    if mfr_val and mfr_val.lower() != 'nan':
+                        consumable_mfrs.add(mfr_val)
+                else:
+                    non_consumable_names.add(p_name)
+
         for col, list_attr in attr_mapping.items():
             vals = []
-            if not self.materials_df.empty and col in self.materials_df.columns:
-                # [STRICT] Robust check for Active status (numeric comparison)
-                # Ensure Active is treated as numeric, defaulting to 1 (Active)
-                active_mask = pd.to_numeric(self.materials_df.get('Active', 1), errors='coerce').fillna(1) > 0.5
-                active_df = self.materials_df[active_mask]
+            if not active_df.empty and col in active_df.columns:
                 unique_vals = active_df[col].dropna().unique()
                 vals = sorted([str(v).strip() for v in unique_vals if v and str(v).strip()])
             
@@ -867,13 +895,7 @@ class InoutViewMixin:
                     self.cb_daily_unit['values'] = self.unit_list
             else:
                 if col == '회사코드':
-                    extra_co = set(getattr(self, 'co_code_list', []) or [])
-                    if not self.materials_df.empty and '제조사' in self.materials_df.columns:
-                        for _, m_r in self.materials_df.iterrows():
-                            p_name = str(m_r.get('품목명', '') or '').strip()
-                            mfr = str(m_r.get('제조사', '') or '').strip()
-                            if mfr and mfr.lower() != 'nan' and self._is_consumable_material(p_name, ''):
-                                extra_co.add(mfr)
+                    extra_co = set(getattr(self, 'co_code_list', []) or []) | consumable_mfrs
                     if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty and '회사코드' in self.daily_usage_df.columns:
                         for h_co in self.daily_usage_df['회사코드'].dropna().unique():
                             h_co_s = str(h_co).strip()
@@ -909,20 +931,12 @@ class InoutViewMixin:
                 combo = filter_map[col]
                 
                 # Filter vals for consumables if it's the item name or model
-                c_vals = vals
-                if col in ['품목명', '모델명', '관리품번']:
-                    c_vals = []
-                    for v in vals:
-                        # Heuristic: Check if any item with this name/model is a consumable
-                        if col == '품목명':
-                            if self._is_consumable_material(v, ''): c_vals.append(v)
-                        elif col == '모델명':
-                            # Check if at least one material with this model is a consumable
-                            m_rows = self.materials_df[self.materials_df['모델명'].astype(str).str.strip() == v]
-                            if not m_rows.empty and self._is_consumable_material(m_rows.iloc[0].get('품목명', ''), ''):
-                                c_vals.append(v)
-                        else:
-                            c_vals.append(v)
+                if col == '품목명':
+                    c_vals = [v for v in vals if v in consumable_names or self._is_consumable_material(v, '')]
+                elif col == '모델명':
+                    c_vals = [v for v in vals if v in consumable_models]
+                else:
+                    c_vals = vals
                 
                 combo['values'] = ["전체"] + c_vals
                 if not combo.get():
@@ -936,19 +950,13 @@ class InoutViewMixin:
             
         # Update cb_eq_name with equipment names
         if hasattr(self, 'cb_eq_name'):
-            eq_vals = []
-            if hasattr(self, 'equipments') and self.equipments:
-                eq_vals.extend(self.equipments)
-            if not self.materials_df.empty and '품목명' in self.materials_df.columns:
-                for _, r in self.materials_df.iterrows():
-                    pname = str(r.get('품목명', '')).strip()
-                    if pname and not self._is_consumable_material(pname, ''):
-                        eq_vals.append(pname)
+            eq_vals = list(getattr(self, 'equipments', []) or [])
+            eq_vals.extend(non_consumable_names)
             self.cb_eq_name['values'] = sorted(list(set(eq_vals)))
             
         # [FIX] Do NOT overwrite cb_filter_name values here; it was already set with consumable filtering above.
-        # Just ensure the autocomplete list is refreshed.
-        if hasattr(self, 'apply_autocomplete_to_all_comboboxes'):
+        # Just ensure the autocomplete list is refreshed when already ready (create_widgets schedules initial pass via after(200)).
+        if getattr(self, 'is_ready', False) and hasattr(self, 'apply_autocomplete_to_all_comboboxes'):
             self.apply_autocomplete_to_all_comboboxes()
         
         # 3. Final view update now that filters are set to "전체"

@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 
 from site_apps.central.src.views.components import (
-    LaborCostDetailWidget, MaterialCostDetailWidget, ExpenseProfitDetailWidget
+    LaborCostDetailWidget, MaterialCostDetailWidget, ExpenseProfitDetailWidget, ColumnSelectionDialog
 )
 from site_apps.central.src.utils.helpers import MARKER_PATTERN
 
@@ -1557,3 +1557,613 @@ def fill_budget_from_actuals_impl(self):
                         f"'{site}' 현장의 실적 데이터를 집계하여 [사후원가(실적)] 칸에 표시하였습니다.\n"
                         f"사전예산은 방어되어 변경되지 않았습니다.\n"
                         f"(기간: {start_ts.strftime('%Y-%m-%d')} ~ {end_ts.strftime('%Y-%m-%d')}){profit_str}")
+
+import json
+import shutil
+import traceback
+from tkinter import simpledialog
+
+
+def export_budget_estimation_impl(self):
+    """Export the estimated budget details (Planned & Actuals) to Excel"""
+    site = self.cb_budget_site.get()
+    if not site:
+        messagebox.showwarning("현장 미선택", "실행예산서를 내보낼 현장을 선택하거나 입력해주세요.")
+        return
+
+    file_path = filedialog.asksaveasfilename(
+        defaultextension=".xlsx",
+        filetypes=[("Excel files", "*.xlsx")],
+        initialfile=f"공사실행예산정산서_{site}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    )
+    if not file_path:
+        return
+
+    # Collect Summary Data (Plan, Actual, Diff)
+    def get_val(attr):
+        return getattr(self, attr).get().strip() if hasattr(self, attr) else ""
+
+    summary_data = {
+        'site': site,
+        'period': get_val('ent_budget_period'),
+        'actual_period': get_val('ent_budget_actual_period'),
+        'diff_period': get_val('ent_budget_diff_period'),
+
+        'revenue': get_val('ent_budget_revenue'),
+        'actual_revenue': get_val('ent_budget_actual_revenue'),
+        'diff_revenue': get_val('ent_budget_diff_revenue'),
+
+        'unitprice': get_val('ent_budget_unit_price'),
+        'actual_unitprice': get_val('ent_budget_actual_unit_price'),
+        'diff_unitprice': get_val('ent_budget_diff_unit_price'),
+
+        'labor': get_val('ent_budget_labor'),
+        'actual_labor': get_val('ent_budget_actual_labor'),
+        'diff_labor': get_val('ent_budget_diff_labor'),
+
+        'material': get_val('ent_budget_material'),
+        'actual_material': get_val('ent_budget_actual_material'),
+        'diff_material': get_val('ent_budget_diff_material'),
+
+        'expense': get_val('ent_budget_expense'),
+        'actual_expense': get_val('ent_budget_actual_expense'),
+        'diff_expense': get_val('ent_budget_diff_expense'),
+
+        'outsource': get_val('ent_budget_outsource'),
+        'actual_outsource': get_val('ent_budget_actual_outsource'),
+        'diff_outsource': get_val('ent_budget_diff_outsource'),
+
+        'profit': get_val('ent_budget_profit'),
+        'actual_profit': get_val('ent_budget_actual_profit'),
+        'diff_profit': get_val('ent_budget_diff_profit'),
+
+        'margin': get_val('ent_budget_margin'),
+        'actual_margin': get_val('ent_budget_actual_margin'),
+        'diff_margin': get_val('ent_budget_diff_margin')
+    }
+
+    # Details - Planned
+    labor_data = self.labor_detail_widget.get_data() if hasattr(self, 'labor_detail_widget') else {}
+
+    raw_mat = self.material_detail_widget.get_data() if hasattr(self, 'material_detail_widget') else []
+    material_data = []
+    defaults = self.material_detail_widget.default_items if hasattr(self, 'material_detail_widget') else []
+    for i, row in enumerate(raw_mat):
+        if i < len(defaults):
+            name, spec, unit, _ = defaults[i]
+            row['name'] = name
+            row['spec'] = spec
+            row['unit'] = unit
+            material_data.append(row)
+
+    expense_data = self.expense_detail_widget.get_data() if hasattr(self, 'expense_detail_widget') else {}
+
+    # Details - Actuals
+    actual_labor_data = self.actual_labor_detail_widget.get_data() if hasattr(self, 'actual_labor_detail_widget') else {}
+
+    raw_act_mat = self.actual_material_detail_widget.get_data() if hasattr(self, 'actual_material_detail_widget') else []
+    actual_material_data = []
+    act_defaults = getattr(self.actual_material_detail_widget, 'default_items', defaults)
+    for i, row in enumerate(raw_act_mat):
+        if i < len(act_defaults):
+            name, spec, unit, _ = act_defaults[i]
+            row['name'] = name
+            row['spec'] = spec
+            row['unit'] = unit
+            actual_material_data.append(row)
+
+    actual_expense_data = self.actual_expense_detail_widget.get_data() if hasattr(self, 'actual_expense_detail_widget') else {}
+
+    # Base salaries for reference
+    base_salaries = self.get_base_salaries() if hasattr(self, 'get_base_salaries') else getattr(self.labor_detail_widget, 'base_salaries', {})
+
+    try:
+        from site_apps.central.src.utils.export_helper import export_budget_estimation_to_excel
+        if export_budget_estimation_to_excel(
+            file_path,
+            summary_data,
+            labor_data,
+            material_data,
+            expense_data,
+            actual_labor_data=actual_labor_data,
+            actual_material_data=actual_material_data,
+            actual_expense_data=actual_expense_data,
+            base_salaries=base_salaries
+        ):
+            messagebox.showinfo("내보내기 완료", f"공사실행예산 및 정산서가 성공적으로 저장되었습니다.\n{file_path}")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다.\n{e}")
+
+
+def export_budget_sales_status_impl(self):
+    """Export the currently filtered budget sales status to Excel"""
+    if not hasattr(self, 'budget_view_tree') or not self.budget_view_tree.get_children():
+        messagebox.showwarning("데이터 없음", "내보낼 데이터가 없습니다. 먼저 조회를 해주세요.")
+        return
+
+    file_path = filedialog.asksaveasfilename(
+        defaultextension=".xlsx",
+        filetypes=[("Excel files", "*.xlsx")],
+        initialfile=f"매출현황_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    )
+
+    if not file_path:
+        return
+
+    # Collect data from treeview
+    data = []
+    columns = [self.budget_view_tree.heading(col)['text'] for col in self.budget_view_tree['columns']]
+    for item in self.budget_view_tree.get_children():
+        data.append(self.budget_view_tree.item(item)['values'])
+
+    df = pd.DataFrame(data, columns=columns)
+
+    # Add summary row at the bottom
+    summary_row = {col: '' for col in columns}
+    summary_row['날짜'] = '합계'
+    if hasattr(self, 'lbl_bv_actual_income'):
+        summary_row['검사단가'] = self.lbl_bv_actual_income.cget('text').replace(' 원', '').replace(',', '').strip()
+
+    # Compute OT/Total directly from columns since Budget KPIs might show differently
+    ot_idx = columns.index('OT합계') if 'OT합계' in columns else -1
+    total_idx = columns.index('합계') if '합계' in columns else -1
+
+    sum_ot = 0
+    sum_tot = 0
+    for _d in data:
+        if ot_idx >= 0:
+            try: sum_ot += float(str(_d[ot_idx]).replace(',', ''))
+            except: pass
+        if total_idx >= 0:
+            try: sum_tot += float(str(_d[total_idx]).replace(',', ''))
+            except: pass
+
+    summary_row['OT합계'] = f"{sum_ot:g}"
+    summary_row['합계'] = f"{sum_tot:g}"
+
+    # Add the summary row to the data list for the DataFrame
+    data.append([summary_row.get(col, '') for col in columns])
+
+    df = pd.DataFrame(data, columns=columns)
+
+    try:
+        from openpyxl.utils import get_column_letter
+        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='SalesStatus', index=False)
+            # Auto-adjust columns
+            worksheet = writer.sheets['SalesStatus']
+            for i, col in enumerate(df.columns):
+                max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                col_letter = get_column_letter(i + 1)
+                worksheet.column_dimensions[col_letter].width = max_len
+
+        messagebox.showinfo("내보내기 완료", "매출현황이 엑셀로 저장되었습니다.")
+    except Exception as e:
+        messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다: {e}")
+
+
+def _refresh_budget_view_tree_columns_impl(self, reload_data=False):
+    """Rebuild budget site performance tree column structure."""
+    if not hasattr(self, 'budget_view_tree'):
+        return
+
+    custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
+    # [FIX] built-in 컬럼과 이름/키가 중복되는 사용자 컬럼 정리
+    builtin_keys = set(getattr(self, 'budget_view_builtin_cols', []) or [])
+    builtin_headings = set((getattr(self, 'budget_view_builtin_head_map', {}) or {}).values())
+    sanitized_custom_cols = []
+    seen_custom_keys = set()
+    seen_custom_names = set()
+    for c in custom_cols:
+        key = str(c.get('key', '')).strip()
+        name = str(c.get('name', key)).strip()
+        if not key:
+            continue
+        # built-in 과 키 충돌/이름 충돌이면 제거
+        if key in builtin_keys or name in builtin_headings:
+            continue
+        # custom 내부 중복도 제거
+        if key in seen_custom_keys or name in seen_custom_names:
+            continue
+        seen_custom_keys.add(key)
+        seen_custom_names.add(name)
+        sanitized_custom_cols.append(c)
+    if len(sanitized_custom_cols) != len(custom_cols):
+        self.budget_view_custom_columns = sanitized_custom_cols
+        custom_cols = sanitized_custom_cols
+
+    custom_keys = [c.get('key') for c in custom_cols if c.get('key')]
+    self.budget_view_cols = tuple(list(self.budget_view_builtin_cols) + custom_keys)
+
+    head_map = dict(getattr(self, 'budget_view_builtin_head_map', {}))
+    width_map = dict(getattr(self, 'budget_view_builtin_width_map', {}))
+    for col in custom_cols:
+        key = col.get('key')
+        if not key:
+            continue
+        head_map[key] = col.get('name', key)
+        width_map[key] = int(col.get('width', 120) or 120)
+
+    alias_map = getattr(self, 'budget_view_heading_aliases', {}) or {}
+    self.budget_view_tree.configure(columns=self.budget_view_cols)
+    for col in self.budget_view_cols:
+        heading_text = alias_map.get(col, head_map.get(col, col))
+        self.budget_view_tree.heading(col, text=heading_text,
+                                      command=lambda c=col: self.treeview_sort_column(self.budget_view_tree, c, False))
+        self.budget_view_tree.column(col, width=width_map.get(col, 100), minwidth=40, anchor='center', stretch=False)
+
+    visible_source = getattr(self, 'budget_view_visible_cols', []) or list(self.budget_view_default_cols)
+    visible = [c for c in visible_source if c in self.budget_view_cols]
+    self.budget_view_tree['displaycolumns'] = visible if visible else self.budget_view_default_cols
+    self.budget_view_visible_cols = list(self.budget_view_tree['displaycolumns'])
+
+    if reload_data:
+        self.update_budget_site_view()
+
+
+def add_budget_view_custom_column_impl(self):
+    """Add a custom column to budget site performance view."""
+    name = simpledialog.askstring("컬럼 추가", "새 컬럼 이름을 입력하세요:", parent=self.root)
+    if not name or not str(name).strip():
+        return
+    name = str(name).strip()
+
+    # [FIX] built-in/기존 사용자 컬럼과 이름 중복 방지
+    builtin_names = set((getattr(self, 'budget_view_builtin_head_map', {}) or {}).values())
+    existing_custom_names = {str(c.get('name', '')).strip() for c in (getattr(self, 'budget_view_custom_columns', []) or [])}
+    if name in builtin_names or name in existing_custom_names:
+        messagebox.showwarning("중복 컬럼", f"'{name}' 컬럼은 이미 존재합니다.")
+        return
+
+    default_value = simpledialog.askstring("컬럼 내용", f"'{name}' 컬럼의 기본 내용을 입력하세요(선택):", parent=self.root)
+
+    existing = set(getattr(self, 'budget_view_cols', []))
+    key_base = re.sub(r'[^0-9A-Za-z가-힣_]+', '_', name).strip('_') or '사용자컬럼'
+    key = key_base
+    idx = 1
+    while key in existing:
+        idx += 1
+        key = f"{key_base}_{idx}"
+
+    custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
+    custom_cols.append({'key': key, 'name': name, 'default': default_value or '', 'width': 120})
+    self.budget_view_custom_columns = custom_cols
+
+    visible = list(getattr(self, 'budget_view_visible_cols', []) or list(self.budget_view_default_cols))
+    if key not in visible:
+        visible.append(key)
+    self.budget_view_visible_cols = visible
+
+    self._refresh_budget_view_tree_columns(reload_data=True)
+    self.save_tab_config()
+
+
+def rename_budget_view_column_impl(self, col_key):
+    """Rename a budget site performance column heading."""
+    if not col_key:
+        return
+    current_name = self.budget_view_tree.heading(col_key)['text'] if hasattr(self, 'budget_view_tree') else col_key
+    new_name = simpledialog.askstring("컬럼 이름 변경", "새 컬럼 이름을 입력하세요:", initialvalue=current_name, parent=self.root)
+    if not new_name or not str(new_name).strip():
+        return
+    new_name = str(new_name).strip()
+
+    # Custom column: rename the stored name itself
+    updated = False
+    for col in getattr(self, 'budget_view_custom_columns', []) or []:
+        if col.get('key') == col_key:
+            col['name'] = new_name
+            updated = True
+            break
+    if not updated:
+        aliases = getattr(self, 'budget_view_heading_aliases', {}) or {}
+        default_name = getattr(self, 'budget_view_builtin_head_map', {}).get(col_key, col_key)
+        if new_name == default_name:
+            aliases.pop(col_key, None)
+        else:
+            aliases[col_key] = new_name
+        self.budget_view_heading_aliases = aliases
+
+    self._refresh_budget_view_tree_columns(reload_data=False)
+    self.save_tab_config()
+
+
+def set_budget_view_custom_column_content_impl(self, col_key):
+    """Change default content for a custom column."""
+    custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
+    target = next((c for c in custom_cols if c.get('key') == col_key), None)
+    if not target:
+        return
+    new_value = simpledialog.askstring("컬럼 내용 설정", f"'{target.get('name', col_key)}' 컬럼의 기본 내용을 입력하세요:",
+                                       initialvalue=target.get('default', ''), parent=self.root)
+    if new_value is None:
+        return
+    target['default'] = new_value
+    self._refresh_budget_view_tree_columns(reload_data=True)
+    self.save_tab_config()
+
+
+def delete_budget_view_custom_column_impl(self, col_key):
+    """Delete a custom budget column."""
+    custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
+    target = next((c for c in custom_cols if c.get('key') == col_key), None)
+    if not target:
+        return
+    if not messagebox.askyesno("컬럼 삭제", f"'{target.get('name', col_key)}' 컬럼을 삭제하시겠습니까?", parent=self.root):
+        return
+
+    self.budget_view_custom_columns = [c for c in custom_cols if c.get('key') != col_key]
+    self.budget_view_visible_cols = [c for c in getattr(self, 'budget_view_visible_cols', []) if c != col_key]
+    aliases = getattr(self, 'budget_view_heading_aliases', {}) or {}
+    aliases.pop(col_key, None)
+    self.budget_view_heading_aliases = aliases
+    self._refresh_budget_view_tree_columns(reload_data=True)
+    self.save_tab_config()
+
+
+def show_budget_view_column_dialog_impl(self):
+    """Open dialog to show/hide columns in budget site performance view"""
+    if not hasattr(self, 'budget_view_tree'):
+        return
+
+    all_cols = list(self.budget_view_tree['columns'])
+    active_cols = self.budget_view_tree['displaycolumns']
+    if not active_cols or active_cols == ('#all'):
+        active_cols = all_cols
+
+    dialog_cols = [(col, self.budget_view_tree.heading(col)['text']) for col in all_cols]
+    dialog = ColumnSelectionDialog(self.root, dialog_cols, title="현장별 실적 표시 컬럼 관리")
+    for col, var in dialog.vars.items():
+        var.set(col in active_cols)
+
+    dialog.wait_window()
+
+    if dialog.result is not None:
+        # 필수 컬럼 보정: 날짜/현장은 항상 유지
+        final_selection = list(dialog.result)
+        for mandatory in ('Date', 'Site'):
+            if mandatory in all_cols and mandatory not in final_selection:
+                final_selection.append(mandatory)
+
+        sorted_selection = [c for c in all_cols if c in final_selection]
+        self.budget_view_tree['displaycolumns'] = sorted_selection if sorted_selection else all_cols
+        self.budget_view_visible_cols = list(self.budget_view_tree['displaycolumns'])
+        self.save_tab_config()
+
+
+def _show_budget_view_heading_context_menu_impl(self, event):
+    """공사탭 현장별 실적 Treeview 헤더 우클릭 메뉴"""
+    if not hasattr(self, 'budget_view_tree'):
+        return
+    tree = self.budget_view_tree
+    try:
+        if tree.identify_region(event.x, event.y) != 'heading':
+            return
+    except Exception:
+        return
+
+    column_id = tree.identify_column(event.x)
+    col_key = self._get_column_name_from_id(tree, column_id)
+    if not col_key:
+        return
+    col_text = tree.heading(col_key)['text']
+    custom_keys = {c.get('key') for c in (getattr(self, 'budget_view_custom_columns', []) or [])}
+
+    menu = tk.Menu(self.root, tearoff=0)
+    menu.add_command(label=f"⬅️ '{col_text}' 왼쪽으로 이동", command=lambda: self._move_column_visual(tree, column_id, -1))
+    menu.add_command(label=f"➡️ '{col_text}' 오른쪽으로 이동", command=lambda: self._move_column_visual(tree, column_id, 1))
+    menu.add_separator()
+    menu.add_command(label=f"✏️ '{col_text}' 이름 변경...", command=lambda: self.rename_budget_view_column(col_key))
+    menu.add_command(label="➕ 사용자 컬럼 추가...", command=self.add_budget_view_custom_column)
+    if col_key in custom_keys:
+        menu.add_command(label=f"📝 '{col_text}' 내용 설정...", command=lambda: self.set_budget_view_custom_column_content(col_key))
+        menu.add_command(label=f"🗑️ '{col_text}' 사용자 컬럼 삭제", command=lambda: self.delete_budget_view_custom_column(col_key))
+    menu.add_separator()
+    menu.add_command(label="⚙️ 컬럼 관리(추가/삭제)...", command=self.show_budget_view_column_dialog)
+    try:
+        menu.tk_popup(event.x_root, event.y_root)
+    finally:
+        menu.grab_release()
+
+
+def _update_budget_kpis_impl(self):
+    """Update the top KPI summary labels based on current budget form values"""
+    try:
+        def _get_val(widget_name):
+            try: 
+                w = getattr(self, widget_name, None)
+                if w:
+                    v = str(w.get()).replace(',', '').split(' ')[0]
+                    return float(v or 0)
+                return 0.0
+            except: return 0.0
+
+        def _set_val(widget_name, val, is_percent=False):
+            w = getattr(self, widget_name, None)
+            if w:
+                st = w.cget('state')
+                if st == 'readonly': w.config(state='normal')
+                w.delete(0, 'end')
+                w.insert(0, f"{val:,.1f}" if is_percent else f"{val:,.0f}")
+                if st == 'readonly': w.config(state='readonly')
+
+        def _calc_profit(prefix):
+            rev = _get_val(f'{prefix}revenue')
+            if rev == 0: rev = _get_val(f'{prefix}unit_price')
+            lab = _get_val(f'{prefix}labor')
+            mat = _get_val(f'{prefix}material')
+            exp = _get_val(f'{prefix}expense')
+            out = _get_val(f'{prefix}outsource')
+
+            if prefix == 'ent_budget_' and hasattr(self, 'expense_detail_widget') and hasattr(self.expense_detail_widget, 'lbl_grand_total_cost'):
+                try:
+                    raw_t = self.expense_detail_widget.lbl_grand_total_cost.cget('text')
+                    tc = float("".join(c for c in raw_t if c.isdigit() or c == '.') or 0)
+                except: tc = lab + mat + exp + out
+            else:
+                tc = lab + mat + exp + out
+
+            prof = rev - tc
+            mar = (prof / rev * 100) if rev > 0 else 0.0
+            _set_val(f'{prefix}profit', prof)
+            _set_val(f'{prefix}margin', mar, True)
+            return rev, lab, mat, exp, out, prof, mar
+
+        p_r, p_l, p_m, p_e, p_o, p_p, p_mg = _calc_profit('ent_budget_')
+        a_r, a_l, a_m, a_e, a_o, a_p, a_mg = _calc_profit('ent_budget_actual_')
+
+        _set_val('ent_budget_diff_revenue', p_r - a_r)
+        _set_val('ent_budget_diff_unit_price', _get_val('ent_budget_unit_price') - _get_val('ent_budget_actual_unit_price'))
+        _set_val('ent_budget_diff_labor', p_l - a_l)
+        _set_val('ent_budget_diff_material', p_m - a_m)
+        _set_val('ent_budget_diff_expense', p_e - a_e)
+        _set_val('ent_budget_diff_outsource', p_o - a_o)
+        _set_val('ent_budget_diff_profit', p_p - a_p)
+        _set_val('ent_budget_diff_margin', p_mg - a_mg, True)
+
+        if hasattr(self, 'lbl_kpi_rev'):
+            self.lbl_kpi_rev.config(text=f"{p_r:,.0f}원")
+            self.lbl_kpi_cost.config(text=f"{p_l+p_m+p_e+p_o:,.0f}원")
+            self.lbl_kpi_profit.config(text=f"{p_p:,.0f}원", foreground="#ef4444" if p_p < 0 else "#10b981")
+            self.lbl_kpi_margin.config(text=f"{p_mg:.1f}%", foreground="#ef4444" if p_mg < 0 else "#10b981")
+        self.root.update_idletasks()
+    except Exception as e:
+        print(f"DEBUG: Budget KPI sync error: {e}")
+
+
+def open_detached_budget_view_impl(self):
+    """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
+    if 'budget' in self.detached_windows and self.detached_windows['budget']['window'].winfo_exists():
+        self.detached_windows['budget']['window'].lift()
+        return
+
+    popup = tk.Toplevel(self.root)
+    popup.title("📋 공사 실행예산서 모니터링 (팝업)")
+    popup.geometry("1400x800")
+
+    main_frame = ttk.Frame(popup, padding=10)
+    main_frame.pack(expand=True, fill='both')
+
+    # 1. KPI Panel (메인 UI 그대로 재현)
+    kpi_frame = tk.Frame(main_frame, bg='#f8fafc', height=80)
+    kpi_frame.pack(fill='x', pady=(0, 10))
+    kpi_frame.pack_propagate(False)
+
+    def create_kpi_card(parent, title, color):
+        frame = tk.Frame(parent, bg='white', highlightbackground='#e2e8f0', highlightthickness=1)
+        frame.pack(side='left', expand=True, fill='both', padx=5, pady=5)
+        tk.Label(frame, text=title, font=('Malgun Gothic', 9), fg='#64748b', bg='white').pack(pady=(5, 2))
+        lbl = tk.Label(frame, text="0", font=('Malgun Gothic', 16, 'bold'), fg=color, bg='white')
+        lbl.pack(pady=(0, 5))
+        return lbl
+
+    lbl_rev = create_kpi_card(kpi_frame, "총 매출액", "#2563eb")
+    lbl_cost = create_kpi_card(kpi_frame, "총 실행원가", "#dc2626")
+    lbl_profit = create_kpi_card(kpi_frame, "총 기대이익", "#059669")
+    lbl_margin = create_kpi_card(kpi_frame, "평균 이익률", "#7c3aed")
+
+    # 2. 예산 목록 트리뷰
+    tree_frame = ttk.Frame(main_frame)
+    tree_frame.pack(expand=True, fill='both')
+
+    vsb = ttk.Scrollbar(tree_frame, orient='vertical')
+    hsb = ttk.Scrollbar(tree_frame, orient='horizontal')
+
+    columns = ('Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'TargetMargin', 'ActualMargin', 'Note')
+    tree = ttk.Treeview(tree_frame, columns=columns, show='headings', yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+    col_map = {
+        'Site': ('현장명', 150), 'Revenue': ('매출액(목표)', 120), 'UnitPrice': ('단가', 100),
+        'LaborCost': ('노무비', 120), 'MaterialCost': ('자재비', 120), 'Expense': ('경비', 120),
+        'OutsourceCost': ('외주비', 120), 'Profit': ('기대이익(목표)', 120), 'TargetMargin': ('목표이익률', 100), 'ActualMargin': ('현재이익률', 100), 'Note': ('비고', 200)
+    }
+    for col in columns:
+        head, width = col_map[col]
+        tree.heading(col, text=head, command=lambda c=col: self.treeview_sort_column(tree, c, False))
+        tree.column(col, width=width, anchor='center', stretch=False)
+
+    tree.grid(row=0, column=0, sticky='nsew')
+    vsb.grid(row=0, column=1, sticky='ns')
+    hsb.grid(row=1, column=0, sticky='ew')
+    tree_frame.grid_rowconfigure(0, weight=1); tree_frame.grid_columnconfigure(0, weight=1)
+
+    vsb.config(command=tree.yview); hsb.config(command=tree.xview)
+
+    # [NEW] 인터랙티브 기능 추가
+    self.enable_tree_column_drag(tree)
+
+    self.detached_windows['budget'] = {
+        'window': popup,
+        'tree': tree,
+        'lbl_rev': lbl_rev,
+        'lbl_cost': lbl_cost,
+        'lbl_profit': lbl_profit,
+        'lbl_margin': lbl_margin
+    }
+
+    def on_close():
+        if 'budget' in self.detached_windows:
+            del self.detached_windows['budget']
+        popup.destroy()
+    popup.protocol("WM_DELETE_WINDOW", on_close)
+
+    self._refresh_detached_budget()
+
+
+def _refresh_detached_budget_impl(self):
+    """팝업창의 예산 리스트와 KPI를 최신 데이터로 갱신"""
+    if 'budget' not in self.detached_windows: return
+    detached = self.detached_windows['budget']
+    tree = detached['tree']
+
+    for item in tree.get_children(): tree.delete(item)
+
+    if self.budget_df.empty:
+        for lbl in [detached['lbl_rev'], detached['lbl_cost'], detached['lbl_profit']]: lbl.config(text="0")
+        detached['lbl_margin'].config(text="0.0%")
+        return
+
+    total_rev = total_cost = total_profit = 0
+
+    for _, row in self.budget_df.iterrows():
+        rev = pd.to_numeric(row.get('Revenue', 0), errors='coerce') or 0
+        unit_p = pd.to_numeric(row.get('UnitPrice', 0), errors='coerce') or 0
+        lab = pd.to_numeric(row.get('LaborCost', 0), errors='coerce') or 0
+        mat = pd.to_numeric(row.get('MaterialCost', 0), errors='coerce') or 0
+        exp = pd.to_numeric(row.get('Expense', 0), errors='coerce') or 0
+        out = pd.to_numeric(row.get('OutsourceCost', 0), errors='coerce') or 0
+        prof = pd.to_numeric(row.get('Profit', 0), errors='coerce') or 0
+
+        a_rev = pd.to_numeric(row.get('Actual_Revenue', 0), errors='coerce') or 0
+        a_prof = pd.to_numeric(row.get('Actual_Profit', 0), errors='coerce') or 0
+
+        total_rev += rev
+        total_cost += (lab + mat + exp + out)
+        total_profit += prof
+
+        target_margin = (prof / rev * 100) if rev > 0 else 0
+        actual_margin = (a_prof / a_rev * 100) if a_rev > 0 else 0
+
+        tree.insert('', 'end', values=(
+            row.get('Site', ''),
+            f"{rev:,.0f}",
+            f"{unit_p:,.0f}",
+            f"{lab:,.0f}",
+            f"{mat:,.0f}",
+            f"{exp:,.0f}",
+            f"{out:,.0f}",
+            f"{prof:,.0f}",
+            f"{target_margin:.1f}%",
+            f"{actual_margin:.1f}%",
+            row.get('Note', '')
+        ))
+
+    # KPI Update
+    detached['lbl_rev'].config(text=f"{total_rev:,.0f}")
+    detached['lbl_cost'].config(text=f"{total_cost:,.0f}")
+    detached['lbl_profit'].config(text=f"{total_profit:,.0f}")
+    total_margin = (total_profit / total_rev * 100) if total_rev > 0 else 0
+    detached['lbl_margin'].config(text=f"{total_margin:.1f}%")
+

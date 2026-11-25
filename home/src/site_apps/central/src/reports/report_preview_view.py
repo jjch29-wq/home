@@ -182,7 +182,7 @@ class ReportPreviewViewMixin:
 
         # Adaptive Resizing Bindings
         self.paut_pane_ratio = self.config.get('PAUT_SASH_RATIO', 0.5)
-        self.paut_paned.bind("<Configure>", lambda e: [self._on_paut_paned_configure(e), self.root.update_idletasks()])
+        self.paut_paned.bind("<Configure>", self._on_paut_paned_configure)
         self.paut_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_paut_ratio))
         self.root.after(500, lambda: self._on_paut_paned_configure(None))
 

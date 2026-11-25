@@ -641,8 +641,9 @@ def two_way_reconcile_with_web_app(
                     "pushed_count": pushed_cnt,
                 }
 
-        cfg["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        save_sync_config(cfg)
+        if target_path.resolve() == DEFAULT_INVENTORY_PATH.resolve():
+            cfg["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            save_sync_config(cfg)
         _save_sync_state(target_path, current_cloud_times)
 
         return {

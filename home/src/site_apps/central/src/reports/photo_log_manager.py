@@ -265,7 +265,7 @@ class PhotoLogMixin:
         list_vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self.photo_listbox.yview)
         # [SYNC] Sash persistence bindings (Match PAUT)
         self.photo_pane_ratio = self.config.get('PHOTO_SASH_RATIO', 0.45)
-        self.photo_paned.bind("<Configure>", lambda e: [self._on_photo_paned_configure(e), self.root.update_idletasks()])
+        self.photo_paned.bind("<Configure>", self._on_photo_paned_configure)
         self.photo_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_photo_ratio))
 
         # [RESTORED] Sync listbox if any files were loaded from settings

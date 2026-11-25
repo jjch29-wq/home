@@ -220,6 +220,7 @@ DEFAULT_SITCO_LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAAE4AAAAxCAYAAAB03p8JAAAAAXNSR0
 
 class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin, ReportPreviewViewMixin, ReportTableControllerMixin):
     def __init__(self, root, central_app=None, is_embedded=False):
+        self._is_ready = False
         self.root = root
         self.central_app = central_app
         self.is_embedded = is_embedded
@@ -539,6 +540,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
             try: self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
             except Exception: pass
         
+        self._is_ready = True
         self.log("[INFO] 통합 버전을 시작했습니다.")
         
     def _safe_update_scrollregion(self):
@@ -556,7 +558,6 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
             self.status_log.insert(tk.END, f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}\n")
             self.status_log.see(tk.END)
             self.status_log.config(state='disabled')
-            self.root.update_idletasks()
         else:
             print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}")
 
@@ -762,7 +763,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                     try: self.root.state(saved_data['WINDOW_STATE'])
                     except: pass
                 if 'ACTIVE_TAB' in saved_data:
-                    self.root.after(200, lambda: self.mode_notebook.select(saved_data['ACTIVE_TAB']))
+                    self._initial_active_tab = saved_data['ACTIVE_TAB']
             except Exception as e:
                 print(f"WARNING: 사용자 설정 불러오기 실패: {e}")
 
@@ -779,26 +780,28 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
     def capture_ui_state(self):
         """UI 요소들의 현재 상태(컬럼 너비, 분할선 위치 등)를 config에 반영"""
         try:
+            d = self.__dict__
             trees = [
-                ('PMI', getattr(self, 'preview_tree', None)), 
-                ('RT', getattr(self, 'rt_preview_tree', None)), 
-                ('PT', getattr(self, 'pt_preview_tree', None)), 
-                ('MT', getattr(self, 'mt_preview_tree', None)),
-                ('PAUT', getattr(self, 'paut_preview_tree', None)),
-                ('KOGAS', getattr(self, 'kogas_preview_tree', None))
+                ('PMI', d.get('preview_tree')), 
+                ('RT', d.get('rt_preview_tree')), 
+                ('PT', d.get('pt_preview_tree')), 
+                ('MT', d.get('mt_preview_tree')),
+                ('PAUT', d.get('paut_preview_tree')),
+                ('KOGAS', d.get('kogas_preview_tree'))
             ]
             for mode, tree in trees:
                 if tree:
                     try:
-                        self.config[f"{mode}_COL_WIDTHS"] = {col: tree.column(col, "width") for col in tree["columns"]}
+                        if tree.winfo_ismapped() and tree.winfo_width() > 100:
+                            self.config[f"{mode}_COL_WIDTHS"] = {col: tree.column(col, "width") for col in tree["columns"]}
                     except: pass
 
             # 2. 패널 분할선(Sash) 비율 캡처
             paned_windows = [
-                ('PMI', getattr(self, 'pmi_paned', None)),
-                ('RT', getattr(self, 'rt_paned', None)),
-                ('PT', getattr(self, 'pt_paned', None)),
-                ('PAUT', getattr(self, 'paut_paned', None))
+                ('PMI', d.get('pmi_paned')),
+                ('RT', d.get('rt_paned')),
+                ('PT', d.get('pt_paned')),
+                ('PAUT', d.get('paut_paned'))
             ]
             for mode, pw in paned_windows:
                 if pw:
@@ -814,7 +817,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                     self.config['WINDOW_GEOMETRY'] = self.root.geometry()
                 if not getattr(self, 'is_embedded', False) and hasattr(self.root, 'state'):
                     self.config['WINDOW_STATE'] = self.root.state()
-                if hasattr(self, 'mode_notebook'):
+                if 'mode_notebook' in d:
                     self.config['ACTIVE_TAB'] = self.mode_notebook.index("current")
                 
                 # 4. 파일 경로 관성 저장
@@ -830,22 +833,23 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 self.config['PAUT_TEMPLATE_PATH'] = self.paut_template_file_path.get()
                 self.config['KOGAS_TARGET_PATH'] = self.kogas_target_file_path.get()
                 self.config['KOGAS_TEMPLATE_PATH'] = self.kogas_template_file_path.get()
-                if hasattr(self, 'pmi_layout_mode'):
+                if 'pmi_layout_mode' in d:
                     self.config['PMI_LAYOUT_MODE'] = self.pmi_layout_mode.get()
                 
-                if hasattr(self, 'paut_equip_vars'):
+                if 'paut_equip_vars' in d:
                     for k, var in self.paut_equip_vars.items():
                         self.config[f'PAUT_EQUIP_{k.upper()}'] = var.get()
                 
-                if hasattr(self, 'paut_photo_pages_var'):
+                if 'paut_photo_pages_var' in d:
                     self.config['PAUT_PHOTO_PAGES'] = str(self.paut_photo_pages_var.get())
                 # 5. Photo Log Settings Capture
+                prev_photo_cfg = self.config.get('PHOTO_LOG_SETTINGS', {}) if isinstance(self.config.get('PHOTO_LOG_SETTINGS'), dict) else {}
                 self.config['PHOTO_LOG_SETTINGS'] = {
                     'orderer': self.photo_orderer.get(), 'inspect_date': self.photo_inspect_date.get(),
                     'inspect_type': self.photo_inspect_type.get(), 'report_title': self.photo_report_title.get(),
                     'report_no': self.photo_report_no.get(),
-                    'start_page': getattr(self, 'photo_start_page', tk.StringVar()).get(),
-                    'total_pages': getattr(self, 'photo_total_pages', tk.StringVar()).get(),
+                    'start_page': d['photo_start_page'].get() if 'photo_start_page' in d else prev_photo_cfg.get('start_page', str(self.config.get('PHOTO_START_PAGE', ''))),
+                    'total_pages': d['photo_total_pages'].get() if 'photo_total_pages' in d else prev_photo_cfg.get('total_pages', str(self.config.get('PHOTO_TOTAL_PAGES', ''))),
                     'cols_per_row': self.photo_cols_per_row.get(), 'rows_per_page': self.photo_rows_per_page.get(), 'keep_aspect': self.photo_keep_aspect.get(),
                     'output_name': self.photo_output_name.get(), 'logo_path': self.photo_logo_path.get(),
                     'logo_width': self.photo_logo_width_var.get(), 'logo_height': self.photo_logo_height_var.get(),
@@ -861,7 +865,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                     'shift_y': self.photo_shift_y_var.get(), 'dpi': self.photo_dpi_var.get(),
                     'selected_files': self.photo_selected_files,
                     'item_metadata': self.photo_item_metadata,
-                    'last_save_dir': getattr(self, 'last_photo_save_dir', "")
+                    'last_save_dir': d.get('last_photo_save_dir', "")
                 }
                 
                 # [NEW] Save custom column list configurations
@@ -902,8 +906,8 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 'orderer': self.photo_orderer, 'inspect_date': self.photo_inspect_date,
                 'inspect_type': self.photo_inspect_type, 'report_title': self.photo_report_title,
                 'report_no': self.photo_report_no,
-                'start_page': getattr(self, 'photo_start_page', None),
-                'total_pages': getattr(self, 'photo_total_pages', None),
+                'start_page': self.__dict__.get('photo_start_page'),
+                'total_pages': self.__dict__.get('photo_total_pages'),
                 'cols_per_row': self.photo_cols_per_row, 'rows_per_page': self.photo_rows_per_page, 'keep_aspect': self.photo_keep_aspect,
                 'output_name': self.photo_output_name, 'logo_path': self.photo_logo_path,
                 'logo_width': self.photo_logo_width_var, 'logo_height': self.photo_logo_height_var,
@@ -919,13 +923,13 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 'shift_y': self.photo_shift_y_var, 'dpi': self.photo_dpi_var
             }
             for pk, pvar in photo_vars.items():
-                if pk in plist:
+                if pk in plist and pvar is not None:
                     if isinstance(pvar, tk.BooleanVar): pvar.set(bool(plist[pk]))
                     else: pvar.set(str(plist[pk]))
             
             if 'selected_files' in plist:
                 self.photo_selected_files = plist['selected_files']
-                if hasattr(self, 'photo_listbox'):
+                if 'photo_listbox' in self.__dict__:
                     self.photo_listbox.delete(0, tk.END)
                     for f_path in self.photo_selected_files:
                         self.photo_listbox.insert(tk.END, f_path)
@@ -1113,6 +1117,8 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
 
     def save_settings(self, silent=True):
         """현재 설정을 파일(JSON)에 저장"""
+        if not getattr(self, '_is_ready', True):
+            return True, "초기화 중 저장 생략"
         self._store_report_info_for_mode(getattr(self, 'current_mode', ''))
         self.capture_ui_state()
         try:
@@ -1135,14 +1141,6 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                             self.config[key] = str(val)
                     except Exception as e:
                         self.config[key] = str(val)
-
-            # [NEW] 즉시 파일로 기록하여 리셋 방지
-            config_path = SETTINGS_FILE
-            os.makedirs(os.path.dirname(config_path), exist_ok=True)
-            try:
-                with open(config_path, 'w', encoding='utf-8') as f:
-                    json.dump(self.config, f, indent=4, ensure_ascii=False)
-            except: pass
 
             # [NEW] 필터 설정 저장 (PMI)
             if hasattr(self, 'element_filters'):
@@ -1434,13 +1432,48 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         if actual_a_t <= allowed_a_t: return f"Accept (a/t: {actual_a_t:.3f} <= {allowed_a_t:.3f})", loc
         return f"Reject ({loc} a/t: {actual_a_t:.3f} > {allowed_a_t:.3f})", loc
 
+    _LAZY_SUBTAB_ATTRS = {
+        'preview_tree': 0, 'pmi_paned': 0, 'pmi_tab_notebook': 0, 'filter_container': 0,
+        'rt_preview_tree': 1, 'kogas_preview_tree': 1, 'rt_paned': 1, 'rt_tab_nb': 1, 'rt_preview_nb': 1, 'rt_sub_mode': 1,
+        'pt_preview_tree': 2, 'pt_paned': 2, 'pt_tab_notebook': 2,
+        'mt_preview_tree': 3, 'mt_paned': 3, 'mt_tab_notebook': 3,
+        'paut_preview_tree': 4, 'paut_paned': 4, 'paut_tab_notebook': 4, 'paut_equip_vars': 4, 'paut_photo_pages_var': 4,
+        'photo_listbox': 5, 'photo_paned': 5, 'photo_preview_canvas': 5, 'photo_start_page': 5, 'photo_total_pages': 5,
+    }
+
+    def __getattr__(self, name):
+        tab_idx = self._LAZY_SUBTAB_ATTRS.get(name)
+        if tab_idx is not None and '_subtab_builders' in self.__dict__:
+            if tab_idx not in self.__dict__.get('_built_subtabs', set()):
+                self._ensure_subtab_built(tab_idx)
+                if name in self.__dict__:
+                    return self.__dict__[name]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+    def _ensure_subtab_built(self, tab_idx):
+        if not hasattr(self, '_subtab_builders') or tab_idx in self._built_subtabs:
+            return
+        builder = self._subtab_builders.get(tab_idx)
+        if not builder:
+            return
+        self._built_subtabs.add(tab_idx)
+        prev_ready = getattr(self, '_is_ready', False)
+        self._is_ready = False
+        try:
+            builder()
+        finally:
+            self._is_ready = prev_ready
+
     def _on_main_tab_changed(self, event):
         try:
-            # [NEW] 탭 전환 전 기존 설정 내용을 안전하게 자동 저장
-            self.save_settings()
+            # 탭 전환 시 메모리 내 모드별 리포트 정보만 즉시 동기화 (불필요한 8개 JSON 디스크 쓰기 생략)
+            self._store_report_info_for_mode(getattr(self, 'current_mode', ''))
         except: pass
         try:
-            tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+            selected_tab = self.mode_notebook.select()
+            tab_idx = self.mode_notebook.index(selected_tab)
+            self._ensure_subtab_built(tab_idx)
+            tab_text = self.mode_notebook.tab(selected_tab, "text")
             if "PMI" in tab_text: self.current_mode = "PMI"
             elif "RT" in tab_text:
                 # RT 탭 진입 시 현재 설정된 서브 모드(표준/가스공사) 확인
@@ -1579,19 +1612,22 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
 
     def create_widgets(self):
         style = ttk.Style()
-        style.theme_use('clam')
-        style.configure("TFrame", background="#f9fafb")
-        style.configure("TLabel", background="#f9fafb", font=("Malgun Gothic", 10))
-        style.configure("TLabelframe", background="#f9fafb", font=("Malgun Gothic", 10, "bold"))
-        style.configure("TLabelframe.Label", background="#f9fafb", font=("Malgun Gothic", 10, "bold"))
-        style.configure("Action.TButton", font=("Malgun Gothic", 11, "bold"), padding=10)
+        if not getattr(self, 'is_embedded', False):
+            style.theme_use('clam')
+            style.configure("TFrame", background="#f9fafb")
+            style.configure("TLabel", background="#f9fafb", font=("Malgun Gothic", 10))
+            style.configure("TLabelframe", background="#f9fafb", font=("Malgun Gothic", 10, "bold"))
+            style.configure("TLabelframe.Label", background="#f9fafb", font=("Malgun Gothic", 10, "bold"))
+            style.configure("Action.TButton", font=("Malgun Gothic", 11, "bold"), padding=10)
+            style.map("TEntry", 
+                      selectbackground=[('focus', '#3b82f6'), ('!focus', '#3b82f6')],
+                      selectforeground=[('focus', 'white'), ('!focus', 'white')])
+            style.configure("Treeview", rowheight=28, font=("Malgun Gothic", 10))
+            style.map("Treeview", background=[('selected', '#3b82f6')], foreground=[('selected', 'white')])
+            style.configure("Treeview.Heading", font=("Malgun Gothic", 10, "bold"))
         
         # [NEW] 탭 스타일 설정
         style.configure("Main.TNotebook.Tab", font=("Malgun Gothic", 11, "bold"), padding=[10, 3])
-        
-        style.map("TEntry", 
-                  selectbackground=[('focus', '#3b82f6'), ('!focus', '#3b82f6')],
-                  selectforeground=[('focus', 'white'), ('!focus', 'white')])
 
         # --- Main Scrollable Container ---
         self.canvas = tk.Canvas(self.root, background="#f9fafb", highlightthickness=0, yscrollincrement=40)
@@ -1617,11 +1653,6 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         
         self.root.option_add('*selectBackground', '#3b82f6')
         self.root.option_add('*selectForeground', 'white')
-
-        # Treeview Style
-        style.configure("Treeview", rowheight=28, font=("Malgun Gothic", 10))
-        style.map("Treeview", background=[('selected', '#3b82f6')], foreground=[('selected', 'white')])
-        style.configure("Treeview.Heading", font=("Malgun Gothic", 10, "bold"))
 
         self._create_entry_context_menu()
         self._create_tree_context_menu()
@@ -1717,13 +1748,31 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         self.mode_notebook.add(self.paut_mode_frame, text=" 🔬 Phased Array (PAUT) ")
         self.mode_notebook.add(self.photo_mode_frame, text=" 📸 사진대장 (Photo Log) ")
 
-        # Setup each mode (One time only)
-        self._setup_pmi_ui(self.pmi_mode_frame)
-        self._setup_rt_ui(self.rt_mode_frame) # [RE-INTEGRATED]
-        self._setup_pt_ui(self.pt_mode_frame)
-        self._setup_mt_ui(self.mt_mode_frame)
-        self._setup_paut_ui(self.paut_mode_frame)
-        self._setup_photo_log_ui(self.photo_mode_frame)
+        # Setup sub-tabs lazily: only build the initially active tab upfront
+        self._built_subtabs = set()
+        self._subtab_builders = {
+            0: lambda: self._setup_pmi_ui(self.pmi_mode_frame),
+            1: lambda: self._setup_rt_ui(self.rt_mode_frame),
+            2: lambda: self._setup_pt_ui(self.pt_mode_frame),
+            3: lambda: self._setup_mt_ui(self.mt_mode_frame),
+            4: lambda: self._setup_paut_ui(self.paut_mode_frame),
+            5: lambda: self._setup_photo_log_ui(self.photo_mode_frame),
+        }
+        init_tab = getattr(self, '_initial_active_tab', 0)
+        if not isinstance(init_tab, int) or init_tab not in self._subtab_builders:
+            init_tab = 0
+        self._ensure_subtab_built(init_tab)
+        init_mode_map = {0: "PMI", 1: "RT", 2: "PT", 3: "MT", 4: "PAUT", 5: "PHOTO"}
+        self.current_mode = init_mode_map.get(init_tab, "PMI")
+        if self.current_mode in self._report_info_modes():
+            self._load_report_info_for_mode(self.current_mode)
+        elif self.current_mode == "PHOTO":
+            self._sync_photo_report_info()
+        if init_tab != 0:
+            try:
+                self.mode_notebook.select(init_tab)
+            except Exception:
+                pass
 
     def _create_scrollable_sidebar(self, parent):
         """Creates a scrollable canvas/scrollbar container for sidebars."""
@@ -2126,9 +2175,12 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         # Link Preview Tab to Mode Switch
         def _on_rt_preview_tab_changed(event):
             tab_text = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
-            if "가스공사" in tab_text: self.rt_sub_mode.set("KOGAS")
-            elif "표준" in tab_text: self.rt_sub_mode.set("RT")
-            self._on_rt_sub_mode_change(from_tab=True)
+            new_mode = None
+            if "가스공사" in tab_text: new_mode = "KOGAS"
+            elif "표준" in tab_text: new_mode = "RT"
+            if new_mode and new_mode != self.rt_sub_mode.get():
+                self.rt_sub_mode.set(new_mode)
+                self._on_rt_sub_mode_change(from_tab=True)
         self.rt_preview_nb.bind("<<NotebookTabChanged>>", _on_rt_preview_tab_changed)
 
         self._create_rt_preview_ui(t_std, mode="RT")
@@ -2137,7 +2189,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         
         self._apply_sash_ratio("RT")
         self.rt_pane_ratio = self.config.get('RT_SASH_RATIO', 0.5)
-        self.rt_paned.bind("<Configure>", lambda e: [self._on_rt_paned_configure(e), self.root.update_idletasks()])
+        self.rt_paned.bind("<Configure>", self._on_rt_paned_configure)
         self.rt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_rt_ratio))
         self.root.after(500, lambda: self._on_rt_paned_configure(None))
 
@@ -2541,7 +2593,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
 
         # Adaptive Resizing Bindings
         self.pt_pane_ratio = self.config.get('PT_SASH_RATIO', 0.5)
-        self.pt_paned.bind("<Configure>", lambda e: [self._on_pt_paned_configure(e), self.root.update_idletasks()])
+        self.pt_paned.bind("<Configure>", self._on_pt_paned_configure)
         self.pt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_pt_ratio))
         self.root.after(500, lambda: self._on_pt_paned_configure(None))
 
@@ -2676,7 +2728,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
 
         # Adaptive Resizing Bindings
         self.mt_pane_ratio = self.config.get('MT_SASH_RATIO', 0.5)
-        self.mt_paned.bind("<Configure>", lambda e: [self._on_mt_paned_configure(e), self.root.update_idletasks()])
+        self.mt_paned.bind("<Configure>", self._on_mt_paned_configure)
         self.mt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_mt_ratio))
         self.root.after(500, lambda: self._on_mt_paned_configure(None))
 
@@ -3850,10 +3902,11 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
 
     def _sync_paut_photo_page_numbers(self):
         """PAUT 첨부 장수로 사진대장의 시작/전체 페이지를 미리 계산한다."""
-        if not hasattr(self, "photo_start_page") or not hasattr(self, "photo_total_pages"):
+        if "photo_start_page" not in self.__dict__ or "photo_total_pages" not in self.__dict__:
             return
         try:
-            photo_pages = int(self.paut_photo_pages_var.get().strip() or "0")
+            raw_pages = self.__dict__["paut_photo_pages_var"].get() if "paut_photo_pages_var" in self.__dict__ else self.config.get("PAUT_PHOTO_PAGES", "0")
+            photo_pages = int(str(raw_pages).strip() or "0")
         except (TypeError, ValueError):
             return
         if photo_pages <= 0:
