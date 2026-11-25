@@ -11,7 +11,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
+from tkcalendar import DateEntry
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -614,17 +615,20 @@ class AppDialogsMixin:
         # If data_list is None, we assume title_or_key is the config_key
         if data_list is None:
             config_key = title_or_key
+            for attr_name in ('sites', 'users', 'equipments', 'aux_equipments', 'vehicles', 'companies', 'carestream_films', 'daily_units', 'test_items', 'applied_codes'):
+                if not hasattr(self, attr_name) or not isinstance(getattr(self, attr_name), list):
+                    setattr(self, attr_name, [])
             data_map = {
                 'sites': ('현장 목록 관리', self.sites),
-                'users': ('담당자 목록 관리', getattr(self, 'users', [])),
-                'equipments': ('장비 목록 관리', getattr(self, 'equipments', [])),
-                'aux_equipments': ('보조장비 목록 관리', getattr(self, 'aux_equipments', [])),
-                'vehicles': ('차량 목록 관리', getattr(self, 'vehicles', [])),
-                'companies': ('업체 목록 관리', getattr(self, 'companies', [])),
-                'materials': ('품목 목록 관리 (기본)', getattr(self, 'carestream_films', [])),
+                'users': ('담당자 목록 관리', self.users),
+                'equipments': ('장비 목록 관리', self.equipments),
+                'aux_equipments': ('보조장비 목록 관리', self.aux_equipments),
+                'vehicles': ('차량 목록 관리', self.vehicles),
+                'companies': ('업체 목록 관리', self.companies),
+                'materials': ('품목 목록 관리 (기본)', self.carestream_films),
                 'daily_units': ('단위 목록 관리', self.daily_units),
-                'test_items': ('검사품명 목록 관리', getattr(self, 'test_items', [])),
-                'applied_codes': ('적용코드 목록 관리', getattr(self, 'applied_codes', []))
+                'test_items': ('검사품명 목록 관리', self.test_items),
+                'applied_codes': ('적용코드 목록 관리', self.applied_codes)
             }
             if config_key not in data_map: return
             title, data_list = data_map[config_key]
@@ -697,6 +701,7 @@ class AppDialogsMixin:
                 # Manually trigger any search/filter logic if needed
                 if hasattr(self, 'update_daily_usage_view'):
                     self.update_daily_usage_view()
+            self._list_mgmt_dialogs.pop(config_key, None)
             dialog.destroy()
 
         listbox.bind("<Double-1>", lambda e: select_and_close())
@@ -708,23 +713,35 @@ class AppDialogsMixin:
         ttk.Button(btn_frame, text="✅ 선택", command=select_and_close).pack(side='left', padx=2)
 
         def add_item():
-            new_val = simpledialog.askstring("추가", "새 이름을 입력하세요:")
+            typed_val = search_var.get().strip()
+            if typed_val and typed_val not in data_list:
+                new_val = typed_val
+            else:
+                new_val = simpledialog.askstring("추가", "새 이름을 입력하세요:", initialvalue=typed_val, parent=dialog)
             if new_val and new_val.strip():
                 val = new_val.strip()
                 if val not in data_list:
                     data_list.append(val)
                     data_list.sort()
+                    if search_var.get().strip():
+                        search_var.set("")
                     self.save_tab_config()
                     refresh_list()
+                    for idx in range(listbox.size()):
+                        if listbox.get(idx) == val:
+                            listbox.selection_clear(0, 'end')
+                            listbox.selection_set(idx)
+                            listbox.see(idx)
+                            break
                 else:
-                    messagebox.showinfo("정보", "이미 목록에 있는 이름입니다.")
+                    messagebox.showinfo("정보", "이미 목록에 있는 이름입니다.", parent=dialog)
 
         def edit_item():
             sel = listbox.curselection()
             if not sel: return
             idx = sel[0]
             old_val = listbox.get(idx)
-            new_val = simpledialog.askstring("수정", f"[{old_val}] -> 새 이름을 입력하세요:", initialvalue=old_val)
+            new_val = simpledialog.askstring("수정", f"[{old_val}] -> 새 이름을 입력하세요:", initialvalue=old_val, parent=dialog)
             if new_val and new_val.strip() and new_val != old_val:
                 if old_val in data_list: data_list.remove(old_val)
                 data_list.append(new_val.strip())
@@ -737,7 +754,7 @@ class AppDialogsMixin:
             if not sel: return
             idx = sel[0]
             val = listbox.get(idx)
-            if messagebox.askyesno("삭제 확인", f"'{val}'을 목록에서 삭제하시겠습니까?"):
+            if messagebox.askyesno("삭제 확인", f"'{val}'을 목록에서 삭제하시겠습니까?", parent=dialog):
                 if val in data_list: data_list.remove(val)
                 # [NEW] If the deleted value is currently selected in the target combobox, clear it
                 if target_cb:
@@ -760,6 +777,7 @@ class AppDialogsMixin:
             if messagebox.askyesno("일괄 등록 확인", "현재 목록에 있는 모든 품목을 '재고 현황' 데이터베이스에 새로 등록하시겠습니까?\n(이미 등록된 품목은 중복 등록되지 않습니다.)"):
                 self.bulk_register_materials_to_stock(data_list)
 
+        search_ent.bind("<Return>", lambda e: add_item())
         ttk.Button(btn_frame, text="추가", command=add_item).pack(side='left', padx=5, expand=True)
         ttk.Button(btn_frame, text="수정", command=edit_item).pack(side='left', padx=5, expand=True)
         ttk.Button(btn_frame, text="삭제", command=delete_item).pack(side='left', padx=5, expand=True)
@@ -1460,8 +1478,15 @@ class AppDialogsMixin:
         ndt_frame = ttk.LabelFrame(material_frame, text="NDT 약품 사용량", padding=10)
         ndt_frame.pack(side='left', fill='both', expand=True, padx=(5, 0))
         
+        ttk.Label(ndt_frame, text="회사코드:").grid(row=0, column=0, padx=5, pady=2, sticky='w')
+        cb_edit_co = ttk.Combobox(ndt_frame, width=10, values=getattr(self, 'co_code_list', []))
+        raw_edit_co = self.clean_nan(entry_data.get('회사코드', ''))
+        cb_edit_co.set('' if raw_edit_co in ('한국지역난방공사', '한국지역난방공사 중앙지사') else raw_edit_co)
+        cb_edit_co.grid(row=0, column=1, padx=5, pady=2, sticky='w')
+        fields['회사코드'] = cb_edit_co
+
         ndt_cats = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
-        for i, cat in enumerate(ndt_cats):
+        for i, cat in enumerate(ndt_cats, start=1):
             ttk.Label(ndt_frame, text=f"{cat}:").grid(row=i, column=0, padx=5, pady=2, sticky='w')
             ent = ttk.Entry(ndt_frame, width=10)
             m_key = "".join(cat.split())
@@ -1469,8 +1494,6 @@ class AppDialogsMixin:
             if pd.isna(val): val = 0
             ent.insert(0, str(val))
             ent.grid(row=i, column=1, padx=5, pady=2, sticky='w')
-            fields[f'NDT_{m_key}'] = ent
-
             fields[f'NDT_{m_key}'] = ent
             
         # 4. NDT 상세 조건
@@ -1659,7 +1682,7 @@ class AppDialogsMixin:
                 except: new_data[f'NDT_{m_key}'] = 0.0
                 
             # String fields
-            for key in ['차량번호', '주행거리', '차량점검', '차량비고', '작업형태', '조건1', '조건2', 'Note']:
+            for key in ['회사코드', '차량번호', '주행거리', '차량점검', '차량비고', '작업형태', '조건1', '조건2', 'Note']:
                 if key in fields:
                     new_data[key] = fields[key].get().strip()
             

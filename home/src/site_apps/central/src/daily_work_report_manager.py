@@ -608,8 +608,20 @@ class DailyWorkReportManager:
             'PT Penetrant': '침투액', 'PT Cleaner': '세척액', 'PT Developer': '현상액'
         }
         
+        def _chem_display_name(m_key):
+            base_name = display_names.get(m_key, m_key)
+            m_d = {}
+            for syn in synonyms.get(m_key, []):
+                m_d = data.get('materials', {}).get(syn)
+                if m_d:
+                    break
+            co_str = str(m_d.get('company', '') or '').strip() if isinstance(m_d, dict) else ''
+            if m_d and numeric(m_d.get('used', 0)) > 0 and co_str:
+                return f"{base_name} ({co_str})"
+            return base_name
+
         for m_key, r in mat_map.items():
-            display_name = display_names.get(m_key, m_key)
+            display_name = _chem_display_name(m_key)
             safe_write(f'D{r}', display_name)
             try:
                 for m_range in list(sheet.merged_cells.ranges):
@@ -638,7 +650,7 @@ class DailyWorkReportManager:
             sheet.cell(row=52 + total_offset, column=col).border = Border()
 
         for m_key, r in mat_map.items():
-            display_name = display_names.get(m_key, m_key)
+            display_name = _chem_display_name(m_key)
             cell = sheet.cell(row=r, column=4); cell.value = display_name
             cell.font = Font(name='맑은 고딕', size=9)
             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=False)
@@ -792,7 +804,7 @@ class DailyWorkReportManager:
                     sheet._cells[key].border = thin_border
         
         for m_key, r in mat_map.items():
-            write_cell(sheet, r, 4, display_names.get(m_key, m_key), black_font, center_align)
+            write_cell(sheet, r, 4, _chem_display_name(m_key), black_font, center_align)
 
         def apply_section_style(sheet, s_row, s_col, e_row, e_col, b_style='thin', inner_style='hair'):
             main_s = Side(style=b_style); inner_side = Side(style=inner_style) if inner_style else Side(style=None)

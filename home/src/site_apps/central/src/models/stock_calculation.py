@@ -152,8 +152,17 @@ def build_stock_lookups(self):
                     else:
                         for field in ('창고', '회사코드'):
                             selected = self.clean_nan(row.get(field, ''))
-                            if selected:
-                                candidates = [m for m in candidates if self.clean_nan(m.get(field, '')) == selected]
+                            if selected and selected not in ('한국지역난방공사', '한국지역난방공사 중앙지사'):
+                                if field == '회사코드':
+                                    sel_up = selected.upper()
+                                    matched_co = [
+                                        m for m in candidates
+                                        if self.clean_nan(m.get('회사코드', '')).upper() == sel_up
+                                        or self.clean_nan(m.get('제조사', '')).upper() == sel_up
+                                    ]
+                                    candidates = matched_co
+                                else:
+                                    candidates = [m for m in candidates if self.clean_nan(m.get(field, '')) == selected]
                     if len(candidates) == 1:
                         target = self.normalize_id(candidates[0].get('MaterialID'))
                         if target:

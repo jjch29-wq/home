@@ -9,6 +9,7 @@ import tempfile
 import datetime
 import traceback
 from pathlib import Path
+import pandas as pd
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 import openpyxl
@@ -17,6 +18,57 @@ from openpyxl.styles import Alignment, Font, Border, Side
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.utils.units import pixels_to_EMU
+
+SRC_ROOT = str(Path(__file__).resolve().parents[4])
+
+
+def format_thickness_range(items):
+    """Format the minimum and maximum numeric PT thickness values."""
+    thicknesses = []
+    for item in items:
+        raw_value = item.get("Thk.", "") if isinstance(item, dict) else ""
+        if isinstance(raw_value, (int, float)) and not pd.isna(raw_value):
+            thicknesses.append(float(raw_value))
+            continue
+        match = re.fullmatch(
+            r'\s*(\d+(?:\.\d+)?)\s*(?:mm|t)?\s*',
+            str(raw_value),
+            re.IGNORECASE,
+        )
+        if match:
+            thicknesses.append(float(match.group(1)))
+    if not thicknesses:
+        return ""
+    def _display(value):
+        return f"{value:.10f}".rstrip("0").rstrip(".")
+    return f"{_display(min(thicknesses))} ~ {_display(max(thicknesses))}mm"
+
+
+def first_report_date(items):
+    """Return the first valid extracted report date as a date value."""
+    for item in items:
+        raw_value = item.get("Date", "") if isinstance(item, dict) else ""
+        if isinstance(raw_value, pd.Timestamp):
+            return raw_value.to_pydatetime()
+        if isinstance(raw_value, datetime.datetime):
+            return raw_value
+        if isinstance(raw_value, datetime.date):
+            return datetime.datetime.combine(raw_value, datetime.time.min)
+        text = str(raw_value).strip()
+        for date_format in ("%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d", "%Y%m%d"):
+            try:
+                return datetime.datetime.strptime(text[:10], date_format)
+            except ValueError:
+                continue
+    return None
+
+
+def remove_unused_report_sheets(workbook, used_sheets):
+    """Remove template sheets that were not used by the generated report."""
+    used_ids = {id(sheet) for sheet in used_sheets}
+    for sheet in list(workbook.worksheets):
+        if id(sheet) not in used_ids:
+            workbook.remove(sheet)
 
 thin_side = Side(style='thin')
 medium_side = Side(style='medium')

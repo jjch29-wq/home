@@ -211,6 +211,7 @@ else:
     RESOURCE_DIR = os.path.join(BASE_DIR, "resources")
 
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "logo_settings_unified.json")
+SRC_ROOT = str(Path(__file__).resolve().parents[4]) if 'Path' in globals() else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
 
 

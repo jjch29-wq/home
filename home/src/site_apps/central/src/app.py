@@ -854,10 +854,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         return _sync_dataframe_schema_impl(self, *args, **kwargs)
 
     def load_data(self, *args, **kwargs):
-        if "export" in "load_data" or "excel" in "load_data":
-            from site_apps.central.src.services.excel_exporter import load_data_impl
-        else:
-            from site_apps.central.src.services.data_loader import load_data_impl
+        from site_apps.central.src.services.data_loader import load_data_impl
         return load_data_impl(self, *args, **kwargs)
 
 
@@ -1082,10 +1079,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         return s
 
     def save_data(self, *args, **kwargs):
-        if "export" in "save_data" or "excel" in "save_data":
-            from site_apps.central.src.services.excel_exporter import save_data_impl
-        else:
-            from site_apps.central.src.services.data_loader import save_data_impl
+        from site_apps.central.src.services.data_loader import save_data_impl
         return save_data_impl(self, *args, **kwargs)
             
     def get_base_salaries(self, *args, **kwargs):
@@ -1552,10 +1546,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         return df[final_cols]
 
     def save_df_to_excel_autofit(self, *args, **kwargs):
-        if "export" in "save_df_to_excel_autofit" or "excel" in "save_df_to_excel_autofit":
-            from site_apps.central.src.services.excel_exporter import save_df_to_excel_autofit_impl
-        else:
-            from site_apps.central.src.services.data_loader import save_df_to_excel_autofit_impl
+        from site_apps.central.src.services.excel_exporter import save_df_to_excel_autofit_impl
         return save_df_to_excel_autofit_impl(self, *args, **kwargs)
 
 
@@ -1789,10 +1780,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             messagebox.showerror("오류", f"파일을 가져오는데 실패했습니다: {e}")
     
     def export_materials(self, *args, **kwargs):
-        if "export" in "export_materials" or "excel" in "export_materials":
-            from site_apps.central.src.services.excel_exporter import export_materials_impl
-        else:
-            from site_apps.central.src.services.data_loader import export_materials_impl
+        from site_apps.central.src.services.excel_exporter import export_materials_impl
         return export_materials_impl(self, *args, **kwargs)
     
     def export_transactions(self):
@@ -2413,7 +2401,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                     if not s: return 1.0
                     try:
                         # Extract first float/int found in string
-                        match = _re.search(r'([0-9\.]+)', s)
+                        match = re.search(r'([0-9\.]+)', s)
                         if match: return float(match.group(1))
                     except: pass
                     return 1.0
@@ -2857,10 +2845,16 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             'users': self.users,
             'warehouses': self.warehouses,
             'equipments': self.equipments,
+            'aux_equipments': getattr(self, 'aux_equipments', []),
             'worktimes': self.worktimes,
             'vehicles': self.vehicles,
             'companies': getattr(self, 'companies', []),
-            'daily_units': getattr(self, 'daily_units', [])
+            'materials': getattr(self, 'carestream_films', []),
+            'daily_units': getattr(self, 'daily_units', []),
+            'test_items': getattr(self, 'test_items', []),
+            'applied_codes': getattr(self, 'applied_codes', []),
+            'co_code': getattr(self, 'co_code_list', []),
+            '회사코드': getattr(self, 'co_code_list', [])
         }
         
         if config_key not in list_map:
@@ -2949,6 +2943,13 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         elif config_key == 'co_code' or config_key == '회사코드':
             # [NEW] Update company code combobox in daily usage
             if hasattr(self, 'cb_daily_co_code'): self.cb_daily_co_code['values'] = sorted_vals
+            if hasattr(self, 'cb_co_code'): self.cb_co_code['values'] = sorted_vals
+            if hasattr(self, 'ndt_company_entries'):
+                for entries in self.ndt_company_entries:
+                    cb_ndt_co = entries.get('_company')
+                    if cb_ndt_co is not None:
+                        try: cb_ndt_co['values'] = sorted_vals
+                        except Exception: pass
 
         # Always save configuration after any list change
         self.save_tab_config()
@@ -5845,8 +5846,8 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         if hasattr(self, 'ndt_company_entries'):
             for company_entries in self.ndt_company_entries:
                 is_first = (company_entries == self.ndt_company_entries[0])
-                # [FIX] 첫 번째(주요) 레코드의 회사코드는 항상 발주처(client_code)를 유지하여 자재 협력사 코드로 오염 방지
-                company_code = client_code if is_first else (company_entries['_company'].get().strip() or client_code)
+                # NDT 자재 소모량의 회사코드(사용자재 제조사, 예: Nawoo)를 우선 저장
+                company_code = company_entries['_company'].get().strip() or client_code
                 ndt_data = {name: to_f(company_entries.get(name)) for name in self.ndt_materials_all}
                 
                 # [REFINEMENT] Create record if there is NDT data OR it is the first entry (guaranteed row)
@@ -6104,6 +6105,19 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         if new_site and not any(s.strip() == new_site for s in self.sites):
             self.sites.append(new_site)
             self.refresh_ui_for_list_change('sites')
+
+        if not hasattr(self, 'co_code_list') or not isinstance(self.co_code_list, list):
+            self.co_code_list = []
+        co_changed = False
+        for cd in company_data_list:
+            co_val = str(cd.get('회사코드', '') or '').strip()
+            if co_val and co_val not in ('한국지역난방공사', '한국지역난방공사 중앙지사'):
+                if not any(c.strip() == co_val for c in self.co_code_list):
+                    self.co_code_list.append(co_val)
+                    co_changed = True
+        if co_changed:
+            self.co_code_list.sort()
+            self.refresh_ui_for_list_change('co_code')
 
         # 7. 재고 트랜잭션 처리 (원본 로직 유지 - 출고는 실제 물량만큼 한 번만 발생)
         # [NEW] PAUT 및 장비류는 재고 차감에서 제외 (사용자 요청)
@@ -6586,27 +6600,41 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                         if hasattr(v_widget, 'set_data'):
                             v_widget.set_data(v_parsed)
             
-            # 7. NDT Chemicals
+            # 7. NDT Chemicals (다중 회사코드 형제 행 포함 전체 복원)
             if hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
-                # [STABILITY] Clear first if multiple companies, but for now focus on the primary/first entry
-                first = self.ndt_company_entries[0]
+                while len(self.ndt_company_entries) > 1:
+                    self.remove_last_ndt_company()
                 ndt_names = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
-                for name in ndt_names:
-                    col_name = f"NDT_{name}"
-                    if col_name in record:
-                        val = record[col_name]
-                        if name in first:
-                            first[name].delete(0, tk.END)
-                            if abs(to_f_local(val)) > 0.001:
-                                first[name].insert(0, str(val))
-                
-                # Also load company if available
-                if '회사코드' in record:
-                    raw_co = self.clean_nan(record.get('회사코드', '')).strip()
+                sibling_records = [record]
+                rec_entry_time = record.get('EntryTime')
+                if (rec_entry_time is not None and not pd.isna(rec_entry_time)
+                        and str(rec_entry_time).strip() and hasattr(self, 'daily_usage_df')
+                        and not self.daily_usage_df.empty and 'EntryTime' in self.daily_usage_df.columns):
+                    matched_siblings = self.daily_usage_df[
+                        (self.daily_usage_df.get('Date') == record.get('Date')) &
+                        (self.daily_usage_df['EntryTime'] == rec_entry_time) &
+                        (self.daily_usage_df.get('검사구분', '') != 'REP')
+                    ]
+                    if len(matched_siblings) > 1:
+                        sibling_records = [row for _, row in matched_siblings.iterrows()]
+
+                for idx_co, co_rec in enumerate(sibling_records):
+                    if idx_co >= len(self.ndt_company_entries):
+                        self.add_ndt_company_section()
+                    target_entries = self.ndt_company_entries[idx_co]
+                    for name in ndt_names:
+                        col_name = f"NDT_{name}"
+                        if name in target_entries:
+                            target_entries[name].delete(0, tk.END)
+                            if col_name in co_rec:
+                                val = co_rec[col_name]
+                                if abs(to_f_local(val)) > 0.001:
+                                    target_entries[name].insert(0, str(val))
+                    raw_co = self.clean_nan(co_rec.get('회사코드', '')).strip()
                     if raw_co and raw_co not in ('한국지역난방공사', '한국지역난방공사 중앙지사'):
-                        first['_company'].set(raw_co)
+                        target_entries['_company'].set(raw_co)
                     else:
-                        first['_company'].set('')
+                        target_entries['_company'].set('')
 
             # 8. Note
             note_val = self.clean_nan(record.get('Note', ''))
@@ -7100,10 +7128,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         ttk.Button(btn_frame, text="❌ 취소", command=dialog.destroy).pack(side='right', padx=5)
 
     def export_daily_work_report(self, *args, **kwargs):
-        if "export" in "export_daily_work_report" or "excel" in "export_daily_work_report":
-            from site_apps.central.src.services.excel_exporter import export_daily_work_report_impl
-        else:
-            from site_apps.central.src.services.data_loader import export_daily_work_report_impl
+        from site_apps.central.src.services.excel_exporter import export_daily_work_report_impl
         return export_daily_work_report_impl(self, *args, **kwargs)
 
     def export_central_daily_work_report(self, *args, **kwargs):

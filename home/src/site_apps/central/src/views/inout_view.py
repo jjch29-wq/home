@@ -866,7 +866,29 @@ class InoutViewMixin:
                 if hasattr(self, 'cb_daily_unit'):
                     self.cb_daily_unit['values'] = self.unit_list
             else:
+                if col == '회사코드':
+                    extra_co = set(getattr(self, 'co_code_list', []) or [])
+                    if not self.materials_df.empty and '제조사' in self.materials_df.columns:
+                        for _, m_r in self.materials_df.iterrows():
+                            p_name = str(m_r.get('품목명', '') or '').strip()
+                            mfr = str(m_r.get('제조사', '') or '').strip()
+                            if mfr and mfr.lower() != 'nan' and self._is_consumable_material(p_name, ''):
+                                extra_co.add(mfr)
+                    if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty and '회사코드' in self.daily_usage_df.columns:
+                        for h_co in self.daily_usage_df['회사코드'].dropna().unique():
+                            h_co_s = str(h_co).strip()
+                            if h_co_s and h_co_s.lower() != 'nan' and h_co_s not in ('한국지역난방공사', '한국지역난방공사 중앙지사'):
+                                extra_co.add(h_co_s)
+                    vals = sorted(set(vals) | extra_co)
                 setattr(self, list_attr, vals)
+                if col == '회사코드' and hasattr(self, 'ndt_company_entries'):
+                    for entries in self.ndt_company_entries:
+                        cb_ndt_co = entries.get('_company')
+                        if cb_ndt_co is not None:
+                            try:
+                                cb_ndt_co['values'] = vals
+                            except Exception:
+                                pass
             
             # 1. Update registration fields (without "전체")
             if col in fields:

@@ -1,13 +1,13 @@
 from site_apps.central.src.tagged_ndt_writer import write_all_tagged_sections
-from site_apps.central.src.ndt_section_writer import write_ndt_sheet_openpyxl
 from openpyxl import Workbook
 from tkcalendar import DateEntry
 import pandas as pd
 import os
 import traceback
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
+from site_apps.central.src.data_sync import get_history_path
 import openpyxl
 from openpyxl.styles import Alignment, Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
@@ -59,9 +59,7 @@ def export_daily_work_report_impl(self):
             'materials': {}
         }
 
-        if hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
-            company = self.ndt_company_entries[0].get('_company', tk.Variable()).get().strip()
-            if company: data['company'] = company
+        # data['company']는 시공사(cb_daily_company)를 유지하며 NDT 자재 제조사(_company)로 덮어쓰지 않음
 
         # DB 데이터 집합 (Option 1: 전체 합산 버전)
         site_records = pd.DataFrame()

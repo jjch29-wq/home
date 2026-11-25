@@ -14,6 +14,9 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 from PIL import Image as PILImage, ImageChops, ImageOps
 import xlsxwriter
 
+SRC_ROOT = str(Path(__file__).resolve().parents[4])
+DEFAULT_SITCO_LOGO_B64 = ""
+
 
 class PhotoLogMixin:
     # --- PHOTO LOG UI & LOGIC ---

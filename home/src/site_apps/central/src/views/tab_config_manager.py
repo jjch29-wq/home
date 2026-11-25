@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import sys
+import traceback
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -207,6 +208,7 @@ class TabConfigMixin:
                 'aux_equipments': getattr(self, 'aux_equipments', ['JIREH MICROBE BTG006', 'COBRA Manual Scanner']),
                 'test_items': getattr(self, 'test_items', []),
                 'applied_codes': getattr(self, 'applied_codes', []),
+                'co_code_list': getattr(self, 'co_code_list', []),
                 'vehicles': getattr(self, 'vehicles', []),
                 'materials': getattr(self, 'carestream_films', []),
                 'worktimes': getattr(self, 'worktimes', []),
@@ -520,6 +522,10 @@ class TabConfigMixin:
                 self.aux_equipments = list(dict.fromkeys(loaded_aux))
                 self.test_items[:] = config.get('test_items', [])
                 self.applied_codes[:] = config.get('applied_codes', [])
+                if 'co_code_list' in config and isinstance(config.get('co_code_list'), list):
+                    if not hasattr(self, 'co_code_list') or not isinstance(self.co_code_list, list):
+                        self.co_code_list = []
+                    self.co_code_list[:] = sorted(set(self.co_code_list) | {str(v).strip() for v in config.get('co_code_list', []) if v and str(v).strip()})
                 if 'materials' in config:
                     self.carestream_films[:] = config['materials']
                 
