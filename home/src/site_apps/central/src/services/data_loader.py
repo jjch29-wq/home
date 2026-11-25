@@ -546,6 +546,7 @@ def load_data_impl(self):
             self._last_loaded_db_mtime = os.path.getmtime(self.db_path)
         except Exception:
             pass
+    self._monthly_view_dirty = True
 
 
 def save_data_impl(self, require_primary=True):
@@ -603,6 +604,7 @@ def save_data_impl(self, require_primary=True):
                     self._last_loaded_db_mtime = os.path.getmtime(target)
                 except Exception:
                     pass
+                self._monthly_view_dirty = True
                 return True
             except PermissionError:
                 if attempt < 2:

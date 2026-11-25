@@ -57,7 +57,7 @@ def setup_monthly_usage_tab_impl(self):
         cb.bind("<<ComboboxSelected>>", lambda e: self.update_monthly_usage_view())
         cb.bind("<Return>", lambda e: self.update_monthly_usage_view())
 
-    btn_filter = ttk.Button(filter_frame, text="🔍 조회", command=self.update_monthly_usage_view, style="Primary.TButton")
+    btn_filter = ttk.Button(filter_frame, text="🔍 조회", command=lambda: self.update_monthly_usage_view(force=True), style="Primary.TButton")
     btn_filter.pack(side='left', padx=6)
     
     btn_export = ttk.Button(filter_frame, text="📊 엑셀 내보내기", command=self.export_monthly_usage_history, style="Action.TButton")
@@ -124,7 +124,7 @@ def setup_monthly_usage_tab_impl(self):
             menu = tk.Menu(self.root, tearoff=0)
             menu.add_command(label="👤 작업자 상세 내역 보기", command=lambda: self.show_worker_popup(event, self.monthly_usage_tree, is_menu=True))
             menu.add_separator()
-            menu.add_command(label="🔍 조회 (새로고침)", command=self.update_monthly_usage_view)
+            menu.add_command(label="🔍 조회 (새로고침)", command=lambda: self.update_monthly_usage_view(force=True))
             menu.add_command(label="📊 엑셀 내보내기", command=self.export_monthly_usage_history)
             menu.add_command(label="🔍 팝업창으로 열기", command=self.open_detached_monthly_usage_view)
             menu.add_separator()
@@ -241,8 +241,40 @@ def setup_monthly_usage_tab_impl(self):
     self.root.after(400, self._ensure_monthly_sash_visibility)
 
 
-def update_monthly_usage_view_impl(self):
+def update_monthly_usage_view_impl(self, force=False):
     """Update the monthly usage treeview with aggregated data from daily usage"""
+    # Get filter values
+    filter_year = self.cb_filter_year.get() if hasattr(self, 'cb_filter_year') else ''
+    filter_month = self.cb_filter_month.get() if hasattr(self, 'cb_filter_month') else ''
+    filter_site = self.cb_filter_site_monthly.get() if hasattr(self, 'cb_filter_site_monthly') else '전체'
+    filter_method = self.cb_filter_method_monthly.get() if hasattr(self, 'cb_filter_method_monthly') else '전체'
+    filter_material = self.cb_filter_material_monthly.get() if hasattr(self, 'cb_filter_material_monthly') else '전체'
+    
+    # Return if daily usage data is empty
+    if not hasattr(self, 'daily_usage_df') or self.daily_usage_df is None or self.daily_usage_df.empty:
+        for item in self.monthly_usage_tree.get_children():
+            self.monthly_usage_tree.delete(item)
+        for item in self.site_summary_tree.get_children():
+            self.site_summary_tree.delete(item)
+        for item in self.worker_summary_tree.get_children():
+            self.worker_summary_tree.delete(item)
+        return
+
+    # [PERF] Tab switch and filter caching: Skip recalculation if filters and data haven't changed
+    current_cache_key = (
+        filter_year,
+        filter_month,
+        filter_site,
+        filter_method,
+        filter_material,
+        id(self.daily_usage_df),
+        len(self.daily_usage_df),
+        getattr(self, '_monthly_data_version', 0),
+        'monthly' in getattr(self, 'detached_windows', {})
+    )
+    if not force and not getattr(self, '_monthly_view_dirty', True) and getattr(self, '_last_monthly_cache_key', None) == current_cache_key:
+        return
+
     # Clear current views
     for item in self.monthly_usage_tree.get_children():
         self.monthly_usage_tree.delete(item)
@@ -258,17 +290,6 @@ def update_monthly_usage_view_impl(self):
             p_tree = detached[key]
             for item in p_tree.get_children():
                 p_tree.delete(item)
-    
-    # Get filter values
-    filter_year = self.cb_filter_year.get()
-    filter_month = self.cb_filter_month.get()
-    filter_site = self.cb_filter_site_monthly.get() if hasattr(self, 'cb_filter_site_monthly') else '전체'
-    filter_method = self.cb_filter_method_monthly.get() if hasattr(self, 'cb_filter_method_monthly') else '전체'
-    filter_material = self.cb_filter_material_monthly.get() if hasattr(self, 'cb_filter_material_monthly') else '전체'
-    
-    # Return if daily usage data is empty
-    if self.daily_usage_df.empty:
-        return
     
     # Create a copy of daily usage data and extract year/month from Date column
     df = self.daily_usage_df.copy()
@@ -311,10 +332,14 @@ def update_monthly_usage_view_impl(self):
             df = df[df['MaterialID'].apply(self.normalize_id).isin(matching_ids)]
         else:
             # If no material found in master list, clear and return (though this shouldn't happen with sync)
+            self._last_monthly_cache_key = current_cache_key
+            self._monthly_view_dirty = False
             return
     
     # [NEW] Return early if filtered df is empty to avoid ValueError during assignment
     if df.empty:
+        self._last_monthly_cache_key = current_cache_key
+        self._monthly_view_dirty = False
         return
     # Populate site filter options from data
     if hasattr(self, 'cb_filter_site_monthly'):
@@ -461,25 +486,28 @@ def update_monthly_usage_view_impl(self):
     # Robust mapping for worker columns in Monthly Tab
     matched_pairs = find_paired_cols(df.columns)
 
+    # Pre-import ot_breakdown to avoid repetitive import overhead
+    from site_apps.central.src.services.ot_calculator import ot_breakdown
+
     def sync_dedup_and_calc_ot(row):
         # 1. Calculate Activity-based OT (Max of all workers in this row)
         h_max = 0.0
         a_sum = 0
         w_count = 0
         raw_workers = []
+        indiv_amounts = [0] * 10
         
-        for u_c, w_c, o_c in matched_pairs:
+        for idx, (u_c, w_c, o_c) in enumerate(matched_pairs):
             u_v = self.clean_nan(row.get(u_c, ''))
             if u_v:
                 raw_workers.append(u_v)
                 w_count += 1
-            
-            if u_v:
-                from site_apps.central.src.services.ot_calculator import ot_breakdown
                 result = ot_breakdown(row.get(w_c, '') if w_c else '', row.get('Date'),
                                       row.get(o_c, '') if o_c else '')
                 h_max += result['hours']
                 a_sum += result['amount']
+                if idx < 10:
+                    indiv_amounts[idx] = result['amount']
 
         # Split rows share labor only when the participating crew and shifts match.
         n_date = self._safe_format_datetime(row.get('Date', ''), '%Y-%m-%d')
@@ -508,15 +536,16 @@ def update_monthly_usage_view_impl(self):
             if t_key: seen_m_times.add(time_key)
             seen_m_contents.add(content_key)
             
-            # Primary row: return full values
-            return pd.Series([h_max, a_sum, w_count, False])
+            # Primary row: return full values and per-slot OT amounts
+            return pd.Series([h_max, a_sum, w_count, False] + indiv_amounts)
         else:
             # Duplicate row: Zero out quantitative impact for aggregation
-            return pd.Series([0.0, 0, 0, True])
+            return pd.Series([0.0, 0, 0, True] + [0] * 10)
 
     # Apply calculation and marking
+    ot_cols = [f'_indiv_ot_{i}' for i in range(1, 11)]
     calc_results = df.apply(sync_dedup_and_calc_ot, axis=1)
-    df[['OT시간', 'OT금액', 'WorkerCount', '_is_m_dup']] = calc_results
+    df[['OT시간', 'OT금액', 'WorkerCount', '_is_m_dup'] + ot_cols] = calc_results
 
     # Group by Year, Month, Site, 검사방법, and separate film materials for RT
     def get_mat_group_m(r):
@@ -530,6 +559,8 @@ def update_monthly_usage_view_impl(self):
     agg_dict['OT시간'] = 'sum'
     agg_dict['OT금액'] = 'sum'
     agg_dict['WorkerCount'] = 'sum'
+    for c in ot_cols:
+        agg_dict[c] = 'sum'
     
     if '검사방법' in df.columns:
         df['검사방법'] = df['검사방법'].fillna('미지정').astype(str)
@@ -703,12 +734,10 @@ def update_monthly_usage_view_impl(self):
                 has_worker = user_val and user_val != 'nan'
                 
                 if has_worker:
-                    from site_apps.central.src.services.ot_calculator import ot_breakdown
-                    originals = df[(df['Year'] == entry['Year']) & (df['Month'] == entry['Month']) &
-                                   (df['Site'] == entry['Site']) & (df['검사방법'] == entry['검사방법']) &
-                                   (df['_MatGroup'] == entry['_MatGroup'])]
-                    amount = sum(ot_breakdown(r.get(matched_pairs[i-1][1], ''), r.get('Date'), r.get(o_c, ''))['amount']
-                                 for _, r in originals.iterrows() if not r.get('_is_m_dup', False))
+                    try:
+                        amount = int(round(float(entry.get(f'_indiv_ot_{i}', 0) or 0)))
+                    except (ValueError, TypeError):
+                        amount = 0
                     ot_values.append(f'{amount:,}' if amount else '')
                     total_indiv_ot_amounts[i-1] += amount
                 else:
@@ -859,6 +888,10 @@ def update_monthly_usage_view_impl(self):
         # Ensure Total Row stays at bottom
         self.monthly_usage_tree.detach(self.monthly_usage_tree.get_children()[-1])
         self.monthly_usage_tree.insert('', tk.END, values=total_values, tags=('total',))
+        
+        # Save cache state
+        self._last_monthly_cache_key = current_cache_key
+        self._monthly_view_dirty = False
     else:
         # If empty data
         visible_cols = ['연도', '월', '현장', '검사방법', '품목명', '수량', '단가', '금액', '작업자']
@@ -866,5 +899,7 @@ def update_monthly_usage_view_impl(self):
         for col in visible_cols:
             if col in self.monthly_usage_tree['columns']:
                 self.monthly_usage_tree.column(col, stretch=False, minwidth=20)
+        self._last_monthly_cache_key = current_cache_key
+        self._monthly_view_dirty = False
 
 
