@@ -13,6 +13,27 @@ DEFAULT_PATH = Path(__file__).resolve().parents[2] / 'data' / 'report_issue_hist
 SYNC_CONFIG = Path(__file__).resolve().parents[1] / 'sync_config.json'
 
 
+def _prune_history_backups(directory: Path, max_keep: int = 5) -> int:
+    if not directory.is_dir() or max_keep < 1:
+        return 0
+    try:
+        backups = sorted(
+            directory.glob('report_issue_history.backup-*.json'),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError:
+        return 0
+    removed = 0
+    for old_file in backups[max_keep:]:
+        try:
+            old_file.unlink()
+            removed += 1
+        except OSError:
+            pass
+    return removed
+
+
 def resolve_history_path(path=None):
     if path is not None:
         return Path(path)
@@ -64,9 +85,10 @@ def resolve_history_path(path=None):
                     shared.append(entry)
                     by_id[entry['id']] = entry
                     changed = True
-            backup = DEFAULT_PATH.with_name(f'report_issue_history.backup-{uuid.uuid4().hex}.json')
-            backup.write_bytes(DEFAULT_PATH.read_bytes())
             if changed:
+                backup = DEFAULT_PATH.with_name(f'report_issue_history.backup-{uuid.uuid4().hex}.json')
+                backup.write_bytes(DEFAULT_PATH.read_bytes())
+                _prune_history_backups(DEFAULT_PATH.parent, max_keep=5)
                 shared.sort(key=lambda entry: entry.get('issued_at', ''))
                 save_history(shared, target)
         return target

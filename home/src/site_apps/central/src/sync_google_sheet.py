@@ -215,6 +215,32 @@ def _sync_content_key(row):
                  text('장비명'), number(row.get('단가', 0))))
 
 
+def _prune_old_backups(backup_dir: Path, max_keep: int = 30) -> int:
+    """백업 폴더 내 오래된 Material_Inventory_*.xlsx 백업을 정리하여 최근 max_keep개만 유지"""
+    if not backup_dir.is_dir() or max_keep < 1:
+        return 0
+    try:
+        backups = sorted(
+            backup_dir.glob("Material_Inventory_*.xlsx"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError as error:
+        logger.warning("Inventory sync backup scan failed (%s)", type(error).__name__)
+        return 0
+    removed = 0
+    failed = 0
+    for old_file in backups[max_keep:]:
+        try:
+            old_file.unlink()
+            removed += 1
+        except OSError:
+            failed += 1
+    if failed:
+        logger.warning("Inventory sync could not prune %d backup(s)", failed)
+    return removed
+
+
 def sync_records_to_excel(
     rows: List[Dict[str, Any]],
     inventory_path: Optional[Path] = None
@@ -223,13 +249,6 @@ def sync_records_to_excel(
     target_path = Path(inventory_path) if inventory_path else get_sync_inventory_path()
     if not target_path.exists():
         raise FileNotFoundError(f"재고 파일이 존재하지 않습니다: {target_path}")
-
-    # 백업 생성
-    backup_dir = target_path.parent / "backups"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = backup_dir / f"Material_Inventory_pre_sync_{timestamp}.xlsx"
-    shutil.copy2(target_path, backup_path)
 
     # 엑셀 파일 읽기
     inventory_version = _inventory_version(target_path)
@@ -315,6 +334,14 @@ def sync_records_to_excel(
     updated_daily_df = pd.concat([daily_df, aligned_new_df], ignore_index=True)
 
     all_sheets["DailyUsage"] = updated_daily_df
+
+    # 실제 변경 사항이 있을 때만 백업 생성 및 오래된 백업 자동 정리
+    backup_dir = target_path.parent / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = backup_dir / f"Material_Inventory_pre_sync_{timestamp}.xlsx"
+    shutil.copy2(target_path, backup_path)
+    _prune_old_backups(backup_dir, max_keep=30)
 
     with _atomic_output(target_path, expected_version=inventory_version) as temporary, pd.ExcelWriter(temporary, engine="openpyxl") as writer:
         for sheet_name, df in all_sheets.items():
@@ -598,6 +625,7 @@ def two_way_reconcile_with_web_app(
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 shutil.copy2(target_path, backup_dir / f"Material_Inventory_pre_mobile_delete_{timestamp}.xlsx")
+                _prune_old_backups(backup_dir, max_keep=30)
                 with _atomic_output(target_path, expected_version=inventory_version) as temporary, pd.ExcelWriter(temporary, engine="openpyxl") as writer:
                     for sheet_name, frame in all_sheets.items():
                         frame.to_excel(writer, sheet_name=sheet_name, index=False)
