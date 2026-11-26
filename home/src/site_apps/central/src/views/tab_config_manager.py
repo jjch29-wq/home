@@ -235,8 +235,8 @@ class TabConfigMixin:
             })
             
             # Save current stock column widths
-            self.tab_config['stock_col_widths'] = {}
             if hasattr(self, 'stock_tree'):
+                self.tab_config['stock_col_widths'] = {}
                 for col in self.stock_tree['columns']:
                     self.tab_config['stock_col_widths'][col] = self.stock_tree.column(col, 'width')
 

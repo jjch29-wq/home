@@ -118,7 +118,8 @@ class NDTCalculatorTab(ttk.Frame):
         # self.geometry("1150x800")  
         self.configure(padding=10)
         self.style = ttk.Style()
-        self.style.theme_use("clam")
+        if self.style.theme_use() != "clam":
+            self.style.theme_use("clam")
         
         self.records = [] # 저장된 기록 목록
         

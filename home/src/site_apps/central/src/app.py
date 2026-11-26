@@ -758,6 +758,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             if os.path.exists(self.config_path):
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
+                    self.tab_config = config
                     self.layout_locked = config.get('layout_locked', False)
                     self.daily_usage_sash_locked = config.get('daily_usage_sash_locked', False)
                     print(f"DEBUG: Pre-loaded locks - Layout: {self.layout_locked}, Sash: {self.daily_usage_sash_locked}")
@@ -1190,7 +1191,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         # Tab 1: Current Stock (현재 재고 현황)
         self.tab_stock = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_stock, text='현재 재고 현황')
-        self.setup_stock_tab()
+        self._load_tab_on_first_map(self.tab_stock, self._initialize_stock_tab)
 
         # Tab 2: Import/Export (데이터 가져오기/내보내기)
         self.tab_import = ttk.Frame(self.notebook)
@@ -1220,12 +1221,12 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         # Tab 7: Daily Work Log (작업/감독일보)
         work_log_page = ttk.Frame(self.notebook)
         self.notebook.add(work_log_page, text='작업/감독일보')
-        self._load_tab_on_first_map(work_log_page, lambda: self.setup_daily_work_log_tab(work_log_page))
+        self._load_tab_on_first_map(work_log_page, lambda: self.setup_daily_work_log_tab(work_log_page), show_loading=True)
 
         # Tab 8: NDT Billing Calculator (기성 정산 (NDT))
         self.tab_ndt_billing = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
-        self._load_tab_on_first_map(self.tab_ndt_billing, self.setup_ndt_billing_tab)
+        self._load_tab_on_first_map(self.tab_ndt_billing, self.setup_ndt_billing_tab, show_loading=True)
 
         # Tab 9: Project Execution Budget (공사실행예산서)
         self.tab_budget = ttk.Frame(self.notebook)
@@ -1250,6 +1251,13 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                     if self.notebook.tab(tid, "text") == saved_tab_name:
                         init_tab = tid
                         break
+                else:
+                    saved_tab_name = None
+            if not saved_tab_name:
+                saved_index = self.tab_config.get('selected_tab')
+                tabs = self.notebook.tabs()
+                if isinstance(saved_index, int) and 0 <= saved_index < len(tabs):
+                    init_tab = tabs[saved_index]
         try:
             self.notebook.select(init_tab)
         except:
@@ -1275,17 +1283,32 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         # Save tab config on window close
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def _load_tab_on_first_map(self, page, setup):
-        def initialize(event):
-            if event.widget is not page:
-                return
-            page.unbind("<Map>", binding)
+    def _load_tab_on_first_map(self, page, setup, *, show_loading=False):
+        def build():
             try:
                 setup()
             except Exception as error:
                 ttk.Label(page, text=f"탭을 불러오지 못했습니다.\n{error}", foreground="red").pack(
                     anchor="w", padx=10, pady=10
                 )
+
+        def initialize(event):
+            if event.widget is not page:
+                return
+            page.unbind("<Map>", binding)
+            if not show_loading:
+                build()
+                return
+            loading = ttk.Label(page, text="화면을 불러오는 중…")
+            loading.pack(anchor="w", padx=10, pady=10)
+
+            def build_after_display():
+                try:
+                    build()
+                finally:
+                    loading.destroy()
+
+            page.after(50, build_after_display)
         binding = page.bind("<Map>", initialize, add="+")
 
     def setup_daily_work_log_tab(self, page):
@@ -1298,6 +1321,20 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
     def setup_stock_tab(self, *args, **kwargs):
         from site_apps.central.src.views.stock_management_view import setup_stock_tab_impl
         return setup_stock_tab_impl(self, *args, **kwargs)
+
+    def _initialize_stock_tab(self):
+        if hasattr(self, 'stock_tree'):
+            return
+        self.setup_stock_tab()
+        widths = getattr(self, 'tab_config', {}).get('stock_col_widths', {})
+        for column in self.stock_tree['columns']:
+            try:
+                width = int(widths.get(column, 0))
+            except (TypeError, ValueError):
+                continue
+            if width > 0:
+                self.stock_tree.column(column, width=width, minwidth=20, stretch=False)
+        self.update_stock_view()
     
     def show_low_stock(self):
         """Show items with low stock (less than their specific reorder point)"""
@@ -1370,6 +1407,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
 
     def open_detached_stock_view(self):
         """현재 재고 현황을 별도의 팝업창(모니터링 창)으로 엽니다."""
+        self._initialize_stock_tab()
         if hasattr(self, 'detached_windows') and 'stock' in self.detached_windows and self.detached_windows['stock']['window'].winfo_exists():
             self.detached_windows['stock']['window'].lift()
             return

@@ -11,41 +11,19 @@ from site_apps.central.src.runtime_profile import is_development
 
 class CentralMaterialManager(MaterialManager):
     def __init__(self, root):
+        super().__init__(root)
         if is_development():
-            super().__init__(root)
             self.root.title('[개발용 · 운영 동기화 차단] 중앙지사 자재관리')
             return
-        # 1. 앱 실행 시 모바일 및 구글 클라우드 내역 선제 자동 동기화
-        init_res = {}
-        sync_started = perf_counter()
-        try:
-            from site_apps.central.src.sync_google_sheet import load_sync_config, sync_all_central_sources
-            config = load_sync_config()
-            self._last_sync_success_at = config.get("last_sync_time", "")
-            if config.get("auto_sync_on_startup", True):
-                init_res = sync_all_central_sources()
-            if init_res.get("status") == "error":
-                print(f"[중앙지사 모바일] 시작 동기화 오류: {init_res.get('message', '')}")
-            elif init_res.get("added_count", 0) > 0:
-                print(f"[중앙지사 모바일] 시작 시 신규 {init_res['added_count']}건 자동 동기화 완료")
-        except Exception as e:
-            init_res = {"status": "error", "message": str(e)}
-            print(f"[중앙지사 모바일] 시작 동기화 건너뜀: {e}")
-        finally:
-            if init_res:
-                print(f"[중앙지사 모바일] 시작 동기화 소요: {perf_counter() - sync_started:.2f}초")
-
-        super().__init__(root)
         self.root.title("한국지역난방공사 중앙지사 - 자재 및 소모품 관리 시스템")
-        if init_res.get("status") == "success":
-            self._apply_sync_result({"last_success_at": init_res.get("last_success_at")})
-        elif init_res.get("status") == "error":
-            self._on_periodic_sync_error(init_res.get("message", ""))
-        elif getattr(self, "_last_sync_success_at", "") and self.daily_save_status:
-            self.daily_save_status.config(text=f"📱 마지막 성공 {self._last_sync_success_at}")
+        self.root.after_idle(self._start_periodic_sync, True)
 
-        # 2. 주기적 백그라운드 자동 동기화 (앱 켜둔 상태에서도 30초마다 신규 모바일 입력 자동 감지)
-        self.root.after(15000, self._start_periodic_sync)
+    def _restore_last_sync_status(self, last_success):
+        if not last_success:
+            return
+        self._last_sync_success_at = last_success
+        if getattr(self, "daily_save_status", None):
+            self.daily_save_status.config(text=f"📱 마지막 성공 {last_success}")
 
     def open_google_sync_dialog(self):
         """구글 웹 앱 URL 설정 대화상자"""
@@ -114,13 +92,22 @@ class CentralMaterialManager(MaterialManager):
                 from tkinter import messagebox
                 messagebox.showerror("동기화 오류", f"동기화 중 오류가 발생했습니다:\n{ex}")
 
-    def _start_periodic_sync(self):
+    def _start_periodic_sync(self, startup=False):
         """백그라운드 스레드에서 모바일 신규 저장 내역 감지"""
         if is_development():
             return
         def worker():
+            next_delay = 30000
+            started = perf_counter()
             try:
                 from site_apps.central.src.sync_google_sheet import sync_all_central_sources
+                if startup:
+                    from site_apps.central.src.sync_google_sheet import load_sync_config
+                    config = load_sync_config()
+                    self.root.after(0, self._restore_last_sync_status, config.get("last_sync_time", ""))
+                    if not config.get("auto_sync_on_startup", True):
+                        next_delay = 15000
+                        return
                 res = sync_all_central_sources()
                 if res.get("status") == "busy":
                     return
@@ -128,8 +115,10 @@ class CentralMaterialManager(MaterialManager):
             except Exception as exc:
                 self.root.after(0, self._on_periodic_sync_error, str(exc))
             finally:
+                if startup:
+                    print(f"[중앙지사 모바일] 시작 동기화 처리: {perf_counter() - started:.2f}초")
                 try:
-                    self.root.after(30000, self._start_periodic_sync)
+                    self.root.after(next_delay, self._start_periodic_sync)
                 except Exception:
                     pass
 
