@@ -31,6 +31,7 @@ class PhotoLogMixin:
         left_container = tk.Frame(self.photo_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         # Add with minwidth to prevent content from being completely hidden
         self.photo_paned.add(left_container, width=425, minsize=200)
+        self._add_sidebar_toggle(self.photo_paned, left_container)
 
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)

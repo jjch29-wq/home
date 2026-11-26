@@ -3,6 +3,7 @@
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 import tkinter as tk
 from tkinter import ttk
 
@@ -46,6 +47,38 @@ class TestCentralNDTReportTab(unittest.TestCase):
         # 모드 탭들 정상 생성 확인
         tabs = tab.report_app.mode_notebook.tabs()
         self.assertGreaterEqual(len(tabs), 4)
+
+    def test_sidebar_toggle_restores_width_and_preserves_widgets(self):
+        if not self.has_tk:
+            self.skipTest("Tkinter display not available in current environment")
+        window = tk.Toplevel(self.root)
+        self.addCleanup(window.destroy)
+        window.geometry("850x400")
+        paned = tk.PanedWindow(window, orient="horizontal")
+        paned.pack(fill="both", expand=True)
+        sidebar = tk.Frame(paned)
+        preview = tk.Frame(paned)
+        paned.add(sidebar, width=300)
+        paned.add(preview)
+        entry = ttk.Entry(sidebar)
+        entry.pack()
+        entry.insert(0, "작성 중")
+        PMIReportApp._add_sidebar_toggle(SimpleNamespace(is_embedded=True), paned, sidebar)
+        window.update_idletasks()
+        paned.sash_place(0, 280, 0)
+        window.update_idletasks()
+        width = paned.sash_coord(0)[0]
+        button = window.pack_slaves()[0].winfo_children()[0]
+        button.invoke()
+        window.update_idletasks()
+        self.assertFalse(sidebar.winfo_ismapped())
+        self.assertTrue(preview.winfo_ismapped())
+        self.assertTrue(button.winfo_ismapped())
+        button.invoke()
+        window.update_idletasks()
+        self.assertTrue(sidebar.winfo_ismapped())
+        self.assertEqual(paned.sash_coord(0)[0], width)
+        self.assertEqual(entry.get(), "작성 중")
 
 
 if __name__ == '__main__':

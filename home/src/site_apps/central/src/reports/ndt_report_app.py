@@ -806,6 +806,8 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
             for mode, pw in paned_windows:
                 if pw:
                     try:
+                        if pw.tk.getboolean(pw.panecget(pw.panes()[0], 'hide')):
+                            continue
                         total_w = pw.winfo_width()
                         if total_w > 100:
                             self.config[f'{mode}_SASH_RATIO'] = pw.sash_coord(0)[0] / total_w
@@ -1811,6 +1813,31 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         
         return scrollable_frame
 
+    def _add_sidebar_toggle(self, paned, sidebar):
+        if not self.is_embedded:
+            return
+        previous_width = 425
+        toolbar = ttk.Frame(paned.master)
+        toolbar.pack(fill='x', before=paned)
+
+        def restore_width():
+            if not paned.tk.getboolean(paned.panecget(sidebar, 'hide')):
+                paned.sash_place(0, previous_width, 0)
+
+        def toggle():
+            nonlocal previous_width
+            if paned.tk.getboolean(paned.panecget(sidebar, 'hide')):
+                paned.paneconfigure(sidebar, hide=False)
+                button.configure(text='◀ 왼쪽 패널 접기')
+                paned.after_idle(restore_width)
+            else:
+                previous_width = paned.sash_coord(0)[0]
+                paned.paneconfigure(sidebar, hide=True)
+                button.configure(text='▶ 왼쪽 패널 펼치기')
+
+        button = ttk.Button(toolbar, text='◀ 왼쪽 패널 접기', command=toggle)
+        button.pack(side='left', padx=6, pady=3)
+
     def _setup_pmi_ui(self, parent):
         # [FORCE] Ensure parent (pmi_mode_frame) allows expansion
         container = tk.Frame(parent, background="#f9fafb")
@@ -1824,6 +1851,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         # [LEFT] Filter/Settings Sidebar
         left_container = tk.Frame(self.pmi_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.pmi_paned.add(left_container, width=425)
+        self._add_sidebar_toggle(self.pmi_paned, left_container)
 
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
@@ -2080,6 +2108,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         # [LEFT] Settings Sidebar
         left_container = tk.Frame(self.rt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.rt_paned.add(left_container, width=425)
+        self._add_sidebar_toggle(self.rt_paned, left_container)
         left_pane = self._create_scrollable_sidebar(left_container)
 
         # FIXED Header
@@ -2476,6 +2505,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         # [LEFT] Settings Sidebar
         left_container = tk.Frame(self.pt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.pt_paned.add(left_container, width=425)
+        self._add_sidebar_toggle(self.pt_paned, left_container)
         
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
@@ -2611,6 +2641,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         # [LEFT] Settings Sidebar
         left_container = tk.Frame(self.mt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.mt_paned.add(left_container, width=425)
+        self._add_sidebar_toggle(self.mt_paned, left_container)
         
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
@@ -2785,6 +2816,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         # [LEFT] Settings & Manual Eval Pane
         left_container = tk.Frame(self.paut_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.paut_paned.add(left_container, width=425)
+        self._add_sidebar_toggle(self.paut_paned, left_container)
         
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
