@@ -216,13 +216,15 @@ def _sync_content_key(row):
 
 
 def _prune_old_backups(backup_dir: Path, max_keep: int = 30) -> int:
-    """백업 폴더 내 오래된 Material_Inventory_*.xlsx 백업을 정리하여 최근 max_keep개만 유지"""
+    """파일명에 기록된 생성 시각 기준으로 일반 동기화 백업을 보존한다."""
     if not backup_dir.is_dir() or max_keep < 1:
         return 0
     try:
+        timestamp_pattern = "[0-9]" * 8 + "_" + "[0-9]" * 6
         backups = sorted(
-            backup_dir.glob("Material_Inventory_*.xlsx"),
-            key=lambda p: p.stat().st_mtime,
+            (path for path in backup_dir.glob(f"Material_Inventory_pre_sync_{timestamp_pattern}.xlsx")
+             if path.is_file()),
+            key=lambda path: path.name,
             reverse=True,
         )
     except OSError as error:
@@ -335,17 +337,17 @@ def sync_records_to_excel(
 
     all_sheets["DailyUsage"] = updated_daily_df
 
-    # 실제 변경 사항이 있을 때만 백업 생성 및 오래된 백업 자동 정리
+    # 원본 교체 전에 백업하고, 교체가 성공한 뒤 오래된 동기화 백업을 정리한다.
     backup_dir = target_path.parent / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = backup_dir / f"Material_Inventory_pre_sync_{timestamp}.xlsx"
     shutil.copy2(target_path, backup_path)
-    _prune_old_backups(backup_dir, max_keep=30)
-
     with _atomic_output(target_path, expected_version=inventory_version) as temporary, pd.ExcelWriter(temporary, engine="openpyxl") as writer:
         for sheet_name, df in all_sheets.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+    _prune_old_backups(backup_dir, max_keep=30)
 
     return {
         "status": "success",
@@ -625,7 +627,6 @@ def two_way_reconcile_with_web_app(
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 shutil.copy2(target_path, backup_dir / f"Material_Inventory_pre_mobile_delete_{timestamp}.xlsx")
-                _prune_old_backups(backup_dir, max_keep=30)
                 with _atomic_output(target_path, expected_version=inventory_version) as temporary, pd.ExcelWriter(temporary, engine="openpyxl") as writer:
                     for sheet_name, frame in all_sheets.items():
                         frame.to_excel(writer, sheet_name=sheet_name, index=False)
