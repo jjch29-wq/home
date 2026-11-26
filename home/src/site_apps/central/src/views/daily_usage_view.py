@@ -1430,6 +1430,7 @@ def refresh_method_details(self):
 
 def update_daily_usage_view_impl(self):
     """Update the daily usage treeview with smarter filters and shift classification"""
+    getattr(self, "_history_tab_cache", {}).pop("daily", None)
     import re
     marker_pattern = MARKER_PATTERN
     
@@ -1461,8 +1462,7 @@ def update_daily_usage_view_impl(self):
     #     self.daily_usage_tree.focus_set()
 
     # Clear current view
-    for item in self.daily_usage_tree.get_children():
-        self.daily_usage_tree.delete(item)
+    self.daily_usage_tree.delete(*self.daily_usage_tree.get_children())
     
     # Get filter values
     start_date_str = self.ent_daily_start_date.get().strip()

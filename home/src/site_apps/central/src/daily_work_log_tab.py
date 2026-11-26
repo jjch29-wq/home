@@ -4,6 +4,8 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 from tkcalendar import DateEntry
 from datetime import datetime
 import os
+from queue import Empty, Queue
+from threading import Thread
 from site_apps.central.src.data_sync import (
     SharedDataUnavailableError,
     get_data_connection_error,
@@ -300,7 +302,6 @@ class DailyWorkLogTab(ttk.Frame):
         
         # 1. 좌측: 기본 정보 입력 및 저장
         left_box = ttk.LabelFrame(top_frame, text="📌 기본 정보", padding=(6, 3))
-        left_box.pack(side="left", fill="y", padx=(0, 6))
         
         ttk.Label(left_box, text="검사일자:").grid(row=0, column=0, padx=(0, 4), pady=2, sticky="e")
         self.date_entry = DateEntry(left_box, width=12, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
@@ -332,7 +333,6 @@ class DailyWorkLogTab(ttk.Frame):
         
         # 2. 중앙: 보고서 발행
         mid_box = ttk.LabelFrame(top_frame, text="📑 보고서 발행", padding=(6, 3))
-        mid_box.pack(side="left", fill="y", padx=(0, 6))
         
         btn_export_ndt = ttk.Button(mid_box, text="📗 NDT 누계대장", command=self.export_ndt_summary, style="Primary.TButton")
         btn_export_ndt.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
@@ -345,7 +345,6 @@ class DailyWorkLogTab(ttk.Frame):
 
         # 3. 중앙 우측: 비파괴검사결과서 편집 도구 (2단 배치)
         right_box = ttk.LabelFrame(top_frame, text="✏️ 비파괴검사결과서 편집", padding=(6, 3))
-        right_box.pack(side="left", fill="y", padx=(0, 6))
 
         # 1단: 행 추가/삭제 및 작업내역 검색
         ttk.Button(right_box, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True), style="Primary.TButton").grid(row=0, column=0, padx=2, pady=1, sticky="w")
@@ -358,12 +357,17 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(right_box, text="🏷️ 공사구분 일괄", command=self._edit_ndt_work_categories, style="Warning.TButton").grid(row=1, column=2, padx=2, pady=1, sticky="w")
 
         self.ndt_selection_vars = []
-        self.ndt_selection_text = tk.StringVar(value='체크박스로 선택 · Shift+클릭으로 범위 선택')
-        ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=0, column=3, rowspan=2, padx=(8, 4), pady=1, sticky="w")
+        self.ndt_selection_text = tk.StringVar(master=right_box, value="")
+        self.ndt_selection_label = ttk.Label(
+            right_box, textvariable=self.ndt_selection_text, foreground="#666666", wraplength=300
+        )
+        self.ndt_selection_label.grid(
+            row=2, column=0, columnspan=3, padx=2, pady=1, sticky="w"
+        )
+        self.ndt_selection_label.grid_remove()
 
         # 4. 우측: 선택 행 핫태핑 및 공정사진 (2단 배치)
         extra_box = ttk.LabelFrame(top_frame, text="🔥 선택 행 핫태핑 · 📸 공정사진", padding=(6, 3))
-        extra_box.pack(side="left", fill="both", expand=True)
 
         hot_bar = ttk.Frame(extra_box)
         hot_bar.grid(row=0, column=0, sticky="w", pady=1)
@@ -371,7 +375,8 @@ class DailyWorkLogTab(ttk.Frame):
             hot_bar, text="🔥 선택 행 핫태핑 입력/수정", command=self._edit_hot_tapping, style="Warning.TButton"
         ).pack(side="left", padx=(2, 6))
         self.hot_summary_var = tk.StringVar()
-        ttk.Label(hot_bar, textvariable=self.hot_summary_var, foreground="#444444").pack(side="left", padx=2)
+        hot_summary = ttk.Label(extra_box, textvariable=self.hot_summary_var, foreground="#444444", wraplength=260)
+        hot_summary.grid(row=2, column=0, sticky="w", padx=2)
 
         photo_bar = ttk.Frame(extra_box)
         photo_bar.grid(row=1, column=0, sticky="w", pady=1)
@@ -381,10 +386,49 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(
             photo_bar, text="🖼️ 사진 관리", command=self.manage_process_photos, style="Secondary.TButton"
         ).pack(side="left", padx=(2, 6))
-        self.photo_selection_var = tk.StringVar(value="NDT 행을 선택하세요.")
-        ttk.Label(photo_bar, textvariable=self.photo_selection_var, foreground="#666666").pack(
-            side="left", padx=2
-        )
+        self.photo_selection_var = tk.StringVar(value="")
+        photo_selection = ttk.Label(extra_box, textvariable=self.photo_selection_var, foreground="#666666", wraplength=260)
+        photo_selection.grid(row=3, column=0, sticky="w", padx=2)
+
+        def refresh_extra_labels(*_):
+            has_selection = bool(self.photo_selection_var.get())
+            if has_selection:
+                photo_selection.grid()
+            else:
+                photo_selection.grid_remove()
+            if has_selection and self.hot_summary_var.get():
+                hot_summary.grid()
+            else:
+                hot_summary.grid_remove()
+
+        self.photo_selection_var.trace_add("write", refresh_extra_labels)
+        self.hot_summary_var.trace_add("write", refresh_extra_labels)
+        refresh_extra_labels()
+
+        groups = (left_box, mid_box, right_box, extra_box)
+        columns = None
+
+        def arrange_toolbar(event):
+            nonlocal columns
+            widths = [box.winfo_reqwidth() + 6 for box in groups]
+            available = event.width - 16  # Label frame border and padding
+            if sum(widths) <= available:
+                new_columns = 4
+            elif max(widths[0], widths[2]) + max(widths[1], widths[3]) <= available:
+                new_columns = 2
+            else:
+                new_columns = 1
+            if new_columns == columns:
+                return
+            columns = new_columns
+            for index, box in enumerate(groups):
+                row, column = divmod(index, columns)
+                box.grid(row=row, column=column, sticky="nsew", padx=(0, 6), pady=(0, 3))
+
+        # Keep the initial requested size small so the window can resize freely.
+        for index, box in enumerate(groups):
+            box.grid(row=index, column=0, sticky="nsew", padx=(0, 6), pady=(0, 3))
+        top_frame.bind("<Configure>", arrange_toolbar)
 
     def _build_left_pane(self, parent):
         # --- Middle Section: Work Quantities ---
@@ -1984,7 +2028,10 @@ class DailyWorkLogTab(ttk.Frame):
                     totals[method] += float(row[method].get() or 0)
                 except ValueError:
                     pass
-        self.hot_summary_var.set(f"핫태핑: {len(locations - {''})}개소명 / MT {totals['MT']:.4f} m / PT {totals['PT']:.4f} m")
+        location_count = len(locations - {''})
+        parts = [f"{location_count}개소명"] if location_count else []
+        parts.extend(f"{method} {total:.4f} m" for method, total in totals.items() if round(total, 4))
+        self.hot_summary_var.set("핫태핑: " + " / ".join(parts) if parts else "")
 
     def _validate_hot_rows(self):
         from site_apps.central.src.hot_tapping import inspection_length
@@ -2022,7 +2069,11 @@ class DailyWorkLogTab(ttk.Frame):
 
     def _refresh_ndt_selection_text(self):
         count = sum(bool(var.get()) for var in self.ndt_selection_vars)
-        self.ndt_selection_text.set(f'{count}개 행 선택됨' if count else '체크박스로 선택 · Shift+클릭으로 범위 선택')
+        self.ndt_selection_text.set(f'{count}개 행 선택됨' if count else '')
+        if count:
+            self.ndt_selection_label.grid()
+        else:
+            self.ndt_selection_label.grid_remove()
 
     def _select_filled_ndt_rows(self):
         self._clear_ndt_selection()
@@ -2055,7 +2106,7 @@ class DailyWorkLogTab(ttk.Frame):
         else:
             if self.selected_ndt_row is row:
                 self.selected_ndt_row = None
-                self.photo_selection_var.set('NDT 행을 선택하세요.')
+                self.photo_selection_var.set('')
         self._refresh_ndt_selection_text()
 
     def _clear_ndt_selection(self, event=None):
@@ -2064,7 +2115,7 @@ class DailyWorkLogTab(ttk.Frame):
         for var in self.ndt_selection_vars:
             var.set(False)
         self._refresh_ndt_selection_text()
-        self.photo_selection_var.set("NDT 행을 선택하세요.")
+        self.photo_selection_var.set("")
 
     def _default_photo_description(self, method):
         return {
@@ -2159,13 +2210,6 @@ class DailyWorkLogTab(ttk.Frame):
             messagebox.showwarning('RT 매수 확인', str(exc))
             return False
 
-    def save_current_history(self):
-        date_str = self.date_entry.get()
-        if not date_str: return
-        history = self.load_history()
-        history[date_str] = self.get_current_data()
-        self.save_history(history)
-        
     def delete_current_date_data(self):
         """현재 선택된 날짜의 데이터를 삭제하고 화면을 초기화합니다."""
         date_str = self.date_entry.get()
@@ -2461,8 +2505,8 @@ class DailyWorkLogTab(ttk.Frame):
         top = tk.Toplevel(self)
         top.title("월간진도보고서 엑셀 출력")
         # Allow enough vertical space for all fields and the generate button.
-        top.geometry("620x430")
-        top.minsize(620, 430)
+        top.geometry("620x470")
+        top.minsize(620, 470)
         top.transient(self)
         top.grab_set()
         
@@ -2542,10 +2586,30 @@ class DailyWorkLogTab(ttk.Frame):
             f_owner, text="...", width=3, command=browse_owner_report
         ).pack(side=tk.LEFT)
         
+        messages = Queue()
+        generation_status = tk.StringVar(master=top, value="생성 대기")
+        ttk.Label(top, textvariable=generation_status).pack(anchor="w", padx=14, pady=8)
+
+        def set_generation_stage(stage):
+            self.monthly_report_active_stage = stage
+            generation_status.set(stage)
+
+        def close_dialog():
+            if not getattr(self, "monthly_report_active_stage", None):
+                top.destroy()
+
+        top.protocol("WM_DELETE_WINDOW", close_dialog)
+
         def do_generate():
+            if getattr(self, "monthly_report_active_stage", None):
+                return
             ym = f"{year_var.get()}-{month_var.get().zfill(2)}"
             tmpl_path = tmpl_var.get()
             owner_report_path = owner_report_var.get().strip()
+            scope = scope_var.get()
+            doc_num = doc_var.get().strip()
+            create_date = create_date_var.get().strip()
+            history_path = self.history_path
             
             if not os.path.exists(tmpl_path):
                 messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다.\n{tmpl_path}")
@@ -2561,43 +2625,64 @@ class DailyWorkLogTab(ttk.Frame):
                 defaultextension=".xlsx",
                 initialfile=(
                     f"월간진도보고서_{ym.replace('-', '')}_"
-                    f"{'월간' if scope_var.get() == 'month' else '전체누적'}.xlsx"
+                    f"{'월간' if scope == 'month' else '전체누적'}.xlsx"
                 ),
                 title="저장 위치 선택",
                 filetypes=[("Excel", "*.xlsx")]
             )
             if not save_path: return
             
-            try:
-                # Assuming MonthlyReportManager is in the python path
-                manager = MonthlyReportManager(tmpl_path)
-                result_path = manager.generate_report(
-                    self.history_path,
-                    ym,
-                    save_path,
-                    doc_num=doc_var.get().strip(),
-                    create_date=create_date_var.get().strip(),
-                    owner_report_path=owner_report_path or None,
-                    report_scope=scope_var.get(),
-                )
-                if result_path:
-                    messagebox.showinfo("성공", f"월간진도보고서가 생성되었습니다.\n{result_path}")
-                    os.startfile(result_path)
-                    top.destroy()
-                else:
-                    period_text = (
-                        f"{ym}의" if scope_var.get() == "month"
-                        else f"{ym}까지의"
+            def generate():
+                try:
+                    result = MonthlyReportManager(tmpl_path).generate_report(
+                        history_path, ym, save_path, doc_num=doc_num,
+                        create_date=create_date, owner_report_path=owner_report_path or None,
+                        report_scope=scope,
+                        progress=lambda stage: messages.put(("stage", stage)),
                     )
-                    messagebox.showwarning("알림", f"{period_text} 작업일보 데이터가 없습니다.")
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                messagebox.showerror("오류", f"생성 중 오류 발생:\n{e}")
+                    messages.put(("result", result))
+                except Exception as error:
+                    messages.put(("error", str(error)))
+
+            def poll_progress():
+                while True:
+                    try:
+                        kind, value = messages.get_nowait()
+                    except Empty:
+                        top.after(50, poll_progress)
+                        return
+                    if kind == "stage":
+                        set_generation_stage(value)
+                        continue
+                    self.monthly_report_active_stage = None
+                    generate_button.config(state="normal")
+                    if kind == "error":
+                        generation_status.set("생성 실패")
+                        messagebox.showerror("오류", f"생성 중 오류 발생:\n{value}", parent=top)
+                    elif value:
+                        generation_status.set("저장 완료")
+                        messagebox.showinfo("성공", f"월간진도보고서가 생성되었습니다.\n{value}", parent=top)
+                        try:
+                            os.startfile(value)
+                        except OSError as error:
+                            messagebox.showwarning("파일 열기", f"저장은 완료됐지만 파일을 열지 못했습니다.\n{error}", parent=top)
+                        top.destroy()
+                    else:
+                        generation_status.set("대상 작업일보 없음")
+                        period_text = f"{ym}의" if scope == "month" else f"{ym}까지의"
+                        messagebox.showwarning("알림", f"{period_text} 작업일보 데이터가 없습니다.", parent=top)
+                    return
+
+            generate_button.config(state="disabled")
+            set_generation_stage("생성 준비 중…")
+            try:
+                Thread(target=generate, name="central-monthly-report", daemon=False).start()
+            except RuntimeError as error:
+                messages.put(("error", str(error)))
+            top.after(50, poll_progress)
                 
-        ttk.Button(top, text="보고서 생성", command=do_generate).pack(
-            side=tk.BOTTOM, pady=18, ipadx=24, ipady=6
-        )
+        generate_button = ttk.Button(top, text="보고서 생성", command=do_generate)
+        generate_button.pack(side=tk.BOTTOM, pady=18, ipadx=24, ipady=6)
 
     def load_history(self):
         try:

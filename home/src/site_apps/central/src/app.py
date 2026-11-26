@@ -61,8 +61,6 @@ finally:
     builtins.open = _orig_open
 
 from site_apps.central.src.daily_work_report_manager import DailyWorkReportManager
-from site_apps.central.src.ndt_billing_tab import NDTCalculatorTab
-from site_apps.central.src.daily_work_log_tab import DailyWorkLogTab
 import site_apps.central.src.daily_work_report_manager as daily_work_report_manager
 print(f"DEBUG: daily_work_report_manager path: {daily_work_report_manager.__file__}")
 
@@ -867,7 +865,9 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
 
     def load_data(self, *args, **kwargs):
         from site_apps.central.src.services.data_loader import load_data_impl
-        return load_data_impl(self, *args, **kwargs)
+        result = load_data_impl(self, *args, **kwargs)
+        self.refresh_operating_data_status()
+        return result
 
 
     
@@ -1092,7 +1092,25 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
 
     def save_data(self, *args, **kwargs):
         from site_apps.central.src.services.data_loader import save_data_impl
-        return save_data_impl(self, *args, **kwargs)
+        result = save_data_impl(self, *args, **kwargs)
+        self._inventory_save_status = (
+            f"완료 {time.strftime('%Y-%m-%d %H:%M:%S')}" if result else "실패 (재고 원본 저장 미완료)"
+        )
+        self.refresh_operating_data_status()
+        return result
+
+    def refresh_operating_data_status(self):
+        if not hasattr(self, "_inventory_path_status"):
+            return
+        path = os.path.abspath(self.db_path)
+        if getattr(self, "_inventory_load_failed", False):
+            path += " (불러오기 실패)"
+        elif not os.path.isfile(path):
+            path += " (파일 없음)"
+        self._inventory_path_status.set(path)
+        sync = getattr(self, "_last_sync_success_at", "") or "기록 없음"
+        save = getattr(self, "_inventory_save_status", "이번 실행에서 저장 기록 없음")
+        self._operating_data_status.set(f"마지막 동기화 성공  {sync}    |    재고 저장  {save}")
             
     def get_base_salaries(self, *args, **kwargs):
         from site_apps.central.src.models.worker_model import get_base_salaries_impl
@@ -1154,6 +1172,17 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         return [tuple(x) for x in df[['Name', 'Spec', 'Unit', 'Rate']].values]
 
     def create_widgets(self):
+        status = ttk.Frame(self.root, padding=(10, 3))
+        status.pack(side='bottom', fill='x')
+        self._inventory_path_status = tk.StringVar(master=status)
+        self._operating_data_status = tk.StringVar(master=status)
+        path_row = ttk.Frame(status)
+        path_row.pack(fill='x')
+        ttk.Label(path_row, text="재고 경로").pack(side='left', padx=(0, 8))
+        ttk.Entry(path_row, textvariable=self._inventory_path_status, state='readonly').pack(side='left', fill='x', expand=True)
+        ttk.Label(status, textvariable=self._operating_data_status).pack(anchor='w', pady=(3, 0))
+        self.refresh_operating_data_status()
+
         # Notebook for Tabs
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
@@ -1189,14 +1218,14 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         self.setup_monthly_usage_tab()
 
         # Tab 7: Daily Work Log (작업/감독일보)
-        self.tab_daily_work_log = DailyWorkLogTab(self.notebook)
-        self.tab_daily_work_log.main_app = self
-        self.notebook.add(self.tab_daily_work_log, text='작업/감독일보')
+        work_log_page = ttk.Frame(self.notebook)
+        self.notebook.add(work_log_page, text='작업/감독일보')
+        self._load_tab_on_first_map(work_log_page, lambda: self.setup_daily_work_log_tab(work_log_page))
 
         # Tab 8: NDT Billing Calculator (기성 정산 (NDT))
         self.tab_ndt_billing = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
-        self.setup_ndt_billing_tab()
+        self._load_tab_on_first_map(self.tab_ndt_billing, self.setup_ndt_billing_tab)
 
         # Tab 9: Project Execution Budget (공사실행예산서)
         self.tab_budget = ttk.Frame(self.notebook)
@@ -1245,6 +1274,27 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         
         # Save tab config on window close
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def _load_tab_on_first_map(self, page, setup):
+        def initialize(event):
+            if event.widget is not page:
+                return
+            page.unbind("<Map>", binding)
+            try:
+                setup()
+            except Exception as error:
+                ttk.Label(page, text=f"탭을 불러오지 못했습니다.\n{error}", foreground="red").pack(
+                    anchor="w", padx=10, pady=10
+                )
+        binding = page.bind("<Map>", initialize, add="+")
+
+    def setup_daily_work_log_tab(self, page):
+        from site_apps.central.src.daily_work_log_tab import DailyWorkLogTab
+
+        self.tab_daily_work_log = DailyWorkLogTab(page)
+        self.tab_daily_work_log.main_app = self
+        self.tab_daily_work_log.pack(fill="both", expand=True)
+
     def setup_stock_tab(self, *args, **kwargs):
         from site_apps.central.src.views.stock_management_view import setup_stock_tab_impl
         return setup_stock_tab_impl(self, *args, **kwargs)
@@ -2084,6 +2134,8 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         return export_budget_sales_status_impl(self, *args, **kwargs)
 
     def setup_ndt_billing_tab(self):
+        from site_apps.central.src.ndt_billing_tab import NDTCalculatorTab
+
         # [NEW] Popout Control Frame
         ctrl_frame = ttk.Frame(self.tab_ndt_billing)
         ctrl_frame.pack(fill='x', padx=5, pady=5)
@@ -2096,6 +2148,8 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
 
     def open_detached_ndt_billing_view(self):
         """기성 정산(NDT) 탭을 별도의 팝업창으로 엽니다."""
+        from site_apps.central.src.ndt_billing_tab import NDTCalculatorTab
+
         if hasattr(self, 'detached_windows') and 'ndt_billing' in self.detached_windows and self.detached_windows['ndt_billing']['window'].winfo_exists():
             self.detached_windows['ndt_billing']['window'].lift()
             return

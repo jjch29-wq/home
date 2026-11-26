@@ -1200,6 +1200,7 @@ class InoutViewMixin:
 
     def update_transaction_view(self):
         """Unified transaction view that combines manual stock transactions and site usage."""
+        getattr(self, "_history_tab_cache", {}).pop("inout", None)
         try:
             # 0. Helper Functions (Global normalize_id is now used)
             def _f(val):
@@ -1216,8 +1217,7 @@ class InoutViewMixin:
                 except: return ""
 
             # 1. Clear existing view
-            for item in self.inout_tree.get_children():
-                self.inout_tree.delete(item)
+            self.inout_tree.delete(*self.inout_tree.get_children())
             
             # 2. Prepare Transaction Records
             df_trans = pd.DataFrame()
@@ -1534,6 +1534,7 @@ class InoutViewMixin:
             import traceback
             error_details = traceback.format_exc()
             print(f"Unified Transaction View Error: {e}\n{error_details}")
+            return False
 
     def refresh_inout_history(self):
         """Refresh In/Out history and related filter source lists."""
@@ -1541,9 +1542,10 @@ class InoutViewMixin:
             # Ensure filter candidates reflect latest data first
             self.update_material_combo()
             # Then redraw history view (skip hidden stock view recalculation on simple tab switch)
-            self.update_transaction_view()
+            return self.update_transaction_view()
         except Exception as e:
             messagebox.showerror("새로고침 오류", f"입출고 내역 새로고침 중 오류가 발생했습니다.\n{e}")
+            return False
 
     def delete_transaction_entry(self):
         """Delete selected transaction from history and refresh"""

@@ -69,6 +69,11 @@ class CentralMaterialManager(MaterialManager):
                 messagebox.showinfo("설정 완료", "구글 클라우드 웹 앱 URL이 성공적으로 저장되었습니다.")
                 if new_url.strip():
                     self.trigger_mobile_sync(show_msg=True)
+            else:
+                messagebox.showerror(
+                    "설정 저장 실패", "동기화 설정을 저장하지 못했습니다. 저장 경로의 접근 권한을 확인해 주세요.",
+                    parent=self.root,
+                )
 
     def trigger_mobile_sync(self, show_msg=True):
         """사용자가 '📱 모바일 동기화' 버튼 클릭 시 즉시 수동 동기화 실행"""
@@ -148,6 +153,7 @@ class CentralMaterialManager(MaterialManager):
         conflicts = result.get('conflict_count', 0)
         if result.get("last_success_at"):
             self._last_sync_success_at = result["last_success_at"]
+            self.refresh_operating_data_status()
         if added or updated or deleted:
             self.load_data()
             for name in ('update_daily_usage_view', 'update_recent_entries_view',

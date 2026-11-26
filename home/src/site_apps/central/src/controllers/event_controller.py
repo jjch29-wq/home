@@ -1,4 +1,6 @@
 import time
+import os
+from copy import deepcopy
 import pandas as pd
 import tkinter as tk
 from tkinter import messagebox, filedialog
@@ -374,6 +376,80 @@ def _schedule_tab_config_save(app):
     app._tab_config_save_after_id = app.root.after(250, save)
 
 
+_HISTORY_TAB_INPUTS = {
+    "daily": (
+        ("daily_usage_df", "materials_df", "budget_df"),
+        ("ent_daily_start_date", "ent_daily_end_date", "cb_daily_filter_site",
+         "cb_daily_filter_company", "cb_daily_filter_material", "cb_daily_filter_equipment",
+         "cb_daily_filter_worker", "cb_daily_filter_vehicle", "cb_daily_filter_shift",
+         "cb_daily_filter_method"),
+    ),
+    "inout": (
+        ("transactions_df", "daily_usage_df", "materials_df"),
+        ("cb_trans_filter_mat", "cb_trans_filter_site", "cb_trans_filter_vehicle"),
+    ),
+}
+
+
+def _history_tab_file_state(app):
+    path = getattr(app, "db_path", None)
+    if not path:
+        return None
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    return (os.path.abspath(path), stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_mtime)
+
+
+def _refresh_history_tab_on_entry(app, tab, refresh):
+    """Reuse a rendered view only when its file, filters and in-memory data agree."""
+    frame_names, filter_names = _HISTORY_TAB_INPUTS[tab]
+    cache = vars(app).setdefault("_history_tab_cache", {})
+    file_state = _history_tab_file_state(app)
+
+    def options():
+        return (
+            tuple(getattr(app, name).get() if hasattr(app, name) else None for name in filter_names),
+            tuple(getattr(app, "sites", ())),
+            tuple(getattr(app, "hidden_sites", ())),
+            datetime.now().date(),
+        )
+
+    previous = cache.get(tab)
+    if file_state and file_state[-1] != getattr(app, "_last_loaded_db_mtime", None):
+        app.load_data()
+        previous = None
+    elif previous and previous[0] != file_state and file_state:
+        # The file may have been replaced even when its modification time was preserved.
+        app.load_data()
+        previous = None
+
+    def matches_frame(name, saved):
+        current = getattr(app, name, None)
+        return current is saved if current is None or saved is None else current.equals(saved)
+
+    if (previous and file_state and not getattr(app, "_inventory_load_failed", False)
+            and previous[:2] == (file_state, options())
+            and all(matches_frame(name, saved) for name, saved in zip(frame_names, previous[2]))):
+        return
+
+    cache.pop(tab, None)
+    if (refresh() is not False and file_state and file_state == _history_tab_file_state(app)
+            and not getattr(app, "_inventory_load_failed", False)):
+        snapshots = []
+        for name in frame_names:
+            frame = getattr(app, name, None)
+            snapshot = None if frame is None else frame.copy(deep=True)
+            if snapshot is not None:
+                for column in snapshot.select_dtypes(include="object"):
+                    for index, value in enumerate(snapshot[column]):
+                        if isinstance(value, (dict, list, set, tuple)):
+                            snapshot.iat[index, snapshot.columns.get_loc(column)] = deepcopy(value)
+            snapshots.append(snapshot)
+        cache[tab] = (file_state, options(), snapshots)
+
+
 def on_tab_changed_impl(self, event=None):
     """Handle tab selection change event"""
     try:
@@ -402,8 +478,11 @@ def on_tab_changed_impl(self, event=None):
            tab_text == '현장별 일일 사용량 기입':
             
             print("Daily usage tab selected - ensuring visibility")
-            self.refresh_inquiry_filters()
-            self.update_daily_usage_view()
+            def refresh_daily():
+                self.refresh_inquiry_filters()
+                return self.update_daily_usage_view()
+
+            _refresh_history_tab_on_entry(self, "daily", refresh_daily)
             self.root.after(80, self._ensure_daily_usage_sash_visibility)
             self.root.after(200, self._ensure_canvas_scroll_region)
             self.root.after(150, self._ensure_sash_visible)
@@ -419,7 +498,7 @@ def on_tab_changed_impl(self, event=None):
             self.update_budget_site_view()
         elif tab_text == '입출고 관리':
             print("In/Out Management tab selected - refreshing history")
-            self.refresh_inout_history()
+            _refresh_history_tab_on_entry(self, "inout", self.refresh_inout_history)
         elif tab_text == '비파괴검사 성적서/보고서':
             if hasattr(self, 'tab_ndt_report') and hasattr(self.tab_ndt_report, 'ensure_initialized'):
                 self.tab_ndt_report.ensure_initialized()
@@ -429,6 +508,15 @@ def on_tab_changed_impl(self, event=None):
 
 def on_closing_impl(self):
     """Handle window closing event"""
+    work_log = getattr(self, "tab_daily_work_log", None)
+    stage = getattr(work_log, "monthly_report_active_stage", None)
+    if stage:
+        messagebox.showinfo(
+            "월간진도보고서 생성 중",
+            f"현재 단계: {stage}\n생성이 끝난 뒤 앱을 종료할 수 있습니다.",
+            parent=self.root,
+        )
+        return
     _cancel_tab_config_save(self)
     self.save_tab_config(force=True)
     if hasattr(self, 'ndt_calculator') and hasattr(self.ndt_calculator, 'save_ui_state'):

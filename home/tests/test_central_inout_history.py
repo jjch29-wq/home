@@ -4,11 +4,56 @@ import datetime
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import pandas as pd
 
 SOURCE = Path(__file__).resolve().parents[1] / 'src/site_apps/central/src/app.py'
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
+
+
+class HistoryTabReuseTests(unittest.TestCase):
+    def setUp(self):
+        from site_apps.central.src.controllers import event_controller
+        self.controller = event_controller
+        self.file_state = ('inventory.xlsx', 1, 1024, 1000000000, 1.0)
+        self.app = SimpleNamespace(
+            daily_usage_df=pd.DataFrame({'Quantity': [1], 'detail': [{'count': 1}]}),
+            transactions_df=pd.DataFrame({'Quantity': [2]}),
+            materials_df=pd.DataFrame({'MaterialID': [7]}),
+            cb_daily_filter_site=Mock(), cb_trans_filter_site=Mock(),
+            _last_loaded_db_mtime=1.0, load_data=Mock(),
+        )
+        self.app.cb_daily_filter_site.get.return_value = '전체'
+        self.app.cb_trans_filter_site.get.return_value = '전체'
+
+    def test_history_reuses_rows_only_while_data_and_filters_match(self):
+        with patch.object(self.controller, '_history_tab_file_state', return_value=self.file_state):
+            for tab, widget in (('daily', self.app.cb_daily_filter_site), ('inout', self.app.cb_trans_filter_site)):
+                refresh = Mock()
+                visit = self.controller._refresh_history_tab_on_entry
+                visit(self.app, tab, refresh)
+                visit(self.app, tab, refresh)
+                self.assertEqual(refresh.call_count, 1)
+                widget.get.return_value = '현장 A'
+                visit(self.app, tab, refresh)
+                self.app.daily_usage_df.at[0, 'detail']['count'] += 1
+                visit(self.app, tab, refresh)
+                self.assertEqual(refresh.call_count, 3)
+                self.app.daily_usage_df.drop(index=0, inplace=True)
+                visit(self.app, tab, refresh)
+                self.assertEqual(refresh.call_count, 4)
+                self.app.daily_usage_df.loc[0] = [1, {'count': 1}]
+
+    def test_external_file_change_reloads_even_with_same_mtime(self):
+        refresh = Mock()
+        visit = self.controller._refresh_history_tab_on_entry
+        with patch.object(self.controller, '_history_tab_file_state', return_value=self.file_state) as state:
+            visit(self.app, 'inout', refresh)
+            state.return_value = ('inventory.xlsx', 2, 1024, 1000000000, 1.0)
+            visit(self.app, 'inout', refresh)
+            visit(self.app, 'inout', refresh)
+        self.app.load_data.assert_called_once_with()
+        self.assertEqual(refresh.call_count, 2)
 
 
 class InoutHistoryTests(unittest.TestCase):

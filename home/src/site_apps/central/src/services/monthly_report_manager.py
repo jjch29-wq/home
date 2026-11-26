@@ -82,7 +82,7 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
 
     def generate_report(self, history_path, target_ym, output_path, doc_num="01",
                         create_date=None, owner_report_path=None,
-                        report_scope="month"):
+                        report_scope="month", progress=None):
 
         self._history_path = history_path
 
@@ -99,6 +99,13 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
         if not os.path.exists(history_path):
             raise FileNotFoundError(f"History file not found at {history_path}")
 
+        if os.path.exists(output_path):
+            for source_path in (self.template_path, history_path, owner_report_path):
+                if source_path and os.path.exists(source_path) and os.path.samefile(output_path, source_path):
+                    raise ValueError("보고서 저장 위치가 입력 파일과 같습니다. 다른 파일 이름을 선택해 주세요.")
+
+        if progress is not None:
+            progress("작업일보 집계 중…")
         with open(history_path, 'r', encoding='utf-8') as f:
             history_data = json.load(f)
 
@@ -311,6 +318,8 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
                     qty_summary[key]['불량률'] = val.get('불량률', '')
 
         # 2. 엑셀 쓰기 준비
+        if progress is not None:
+            progress("엑셀 작성 중…")
         wb = openpyxl.load_workbook(self.template_path)
 
         # 엑셀 열 때 '명명된 범위' 복구 창이 뜨는 것을 방지하기 위해 불필요한 이름 정의 삭제
@@ -1324,4 +1333,6 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
         self._normalize_all_report_header_logos(ws, reference_toc=True)
         self._center_enlarge_report_logos(ws)
         self._ensure_valid_print_area(ws)
+        if progress is not None:
+            progress("파일 저장 중…")
         return self._save_workbook_with_fallback(wb, output_path)

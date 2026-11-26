@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import openpyxl
 from openpyxl.styles import Alignment
@@ -12,6 +13,53 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class OwnerReportTest(unittest.TestCase):
+    def test_monthly_report_rejects_overwriting_its_inputs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            files = [Path(folder) / name for name in ("template.xlsx", "history.json", "owner.xlsx")]
+            for path in files:
+                path.write_bytes(b"input")
+            template, history, owner = files
+            manager = MonthlyReportManager(template)
+            for output in files:
+                with self.subTest(output=output):
+                    with self.assertRaisesRegex(ValueError, "입력 파일과 같습니다"):
+                        manager.generate_report(history, "2026-11", output, owner_report_path=owner)
+                    self.assertEqual(output.read_bytes(), b"input")
+
+    def test_incomplete_report_save_preserves_existing_output(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "report.xlsx"
+            output.write_bytes(b"existing report")
+            workbook = openpyxl.Workbook()
+
+            def fail_after_writing(path):
+                Path(path).write_bytes(b"incomplete report")
+                raise OSError("simulated write failure")
+
+            with patch.object(workbook, "save", side_effect=fail_after_writing):
+                with self.assertRaisesRegex(OSError, "simulated write failure"):
+                    MonthlyReportManager(None)._save_workbook_with_fallback(workbook, output)
+            self.assertEqual(output.read_bytes(), b"existing report")
+            self.assertEqual(list(Path(folder).iterdir()), [output])
+
+    def test_locked_report_saves_complete_fallback(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "report.xlsx"
+            output.write_bytes(b"locked report")
+            workbook = openpyxl.Workbook()
+            workbook.active["A1"] = "new report"
+
+            with patch("site_apps.central.src.services.monthly_report_sections_mixin.os.replace",
+                       side_effect=PermissionError("locked")):
+                fallback = Path(MonthlyReportManager(None)._save_workbook_with_fallback(workbook, output))
+            self.assertEqual(output.read_bytes(), b"locked report")
+            self.assertNotEqual(fallback, output)
+            with fallback.open("rb") as stream:
+                saved = openpyxl.load_workbook(stream)
+                self.assertEqual(saved.active["A1"].value, "new report")
+                saved.close()
+            self.assertCountEqual(Path(folder).iterdir(), [output, fallback])
+
     def test_long_names_paginate_by_height_and_keep_following_photo_aligned(self):
         from PIL import Image as PILImage
         from openpyxl.drawing.image import Image

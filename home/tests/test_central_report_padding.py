@@ -1120,12 +1120,14 @@ class ReportPaddingTest(unittest.TestCase):
             output_path = folder / 'out.xlsx'
             manager = MonthlyReportManager(str(template_path))
             captured_photos = []
+            stages = []
             orig_populate_photos = manager._populate_process_photo_pages
             def spy_populate_photos(ws_arg, photos_arg, *a, **kw):
                 captured_photos.extend(photos_arg)
                 return orig_populate_photos(ws_arg, [], *a, **kw)
             with patch.object(manager, '_populate_safety_training_log'), patch.object(manager, '_populate_process_photo_pages', side_effect=spy_populate_photos):
-                manager.generate_report(str(history_path), '2026-10', str(output_path), doc_num='03')
+                manager.generate_report(str(history_path), '2026-10', str(output_path), doc_num='03', progress=stages.append)
+            self.assertEqual(stages, ['작업일보 집계 중…', '엑셀 작성 중…', '파일 저장 중…'])
             self.assertEqual(len(captured_photos), 1)
             self.assertEqual(captured_photos[0]['section'], 'Sec.15-3')
             self.assertEqual(captured_photos[0]['location'], 'Sec.15-3')

@@ -248,6 +248,7 @@ class SyncResultTests(unittest.TestCase):
         for changes in ({'updated_count':1},{'deleted_count':1},{'conflict_count':2}):
             app=SimpleNamespace(load_data=Mock(),update_daily_usage_view=Mock(),
                 update_recent_entries_view=Mock(),update_stock_view=Mock(),
+                refresh_operating_data_status=Mock(),
                 daily_save_status=Mock(),current_input='unsaved')
             ns['_apply_sync_result'](app,changes)
             if changes.get('conflict_count'):
@@ -259,6 +260,7 @@ class SyncResultTests(unittest.TestCase):
             self.assertEqual(app.current_input,'unsaved')
         timestamp = '2026-11-26 09:30:00'
         ns['_apply_sync_result'](app, {'last_success_at': timestamp})
+        app.refresh_operating_data_status.assert_called_once_with()
         self.assertIn(timestamp, app.daily_save_status.config.call_args.kwargs['text'])
         app._on_periodic_sync_error = Mock()
         app.load_data.reset_mock()

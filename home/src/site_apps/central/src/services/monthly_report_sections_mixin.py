@@ -2,6 +2,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from openpyxl.cell.cell import Cell, MergedCell
 import os
+import tempfile
 
 # [FIX] Patch openpyxl MergedCell to prevent 'read-only' error when assigning to merged cells
 if not hasattr(MergedCell, '_patched_value'):
@@ -2178,7 +2179,7 @@ class MonthlyReportSectionsMixin:
 
         Windows denies overwriting an xlsx that is already open in Excel.  In
         that case keep the user's selected folder and save a timestamped copy.
-        A second PermissionError means the folder itself is not writable.
+        Build the complete workbook beside the destination before replacing it.
         """
         # Continuation photo pages are inserted before the template's existing
         # MT/RT pages, so their new breaks can be appended out of row order.
@@ -2194,27 +2195,36 @@ class MonthlyReportSectionsMixin:
                 breaks_by_row[row] for row in sorted(breaks_by_row)
             ]
         output_path = os.path.abspath(output_path)
+        output_dir = os.path.dirname(output_path)
+        temporary_path = None
         try:
-            wb.save(output_path)
-            return output_path
-        except PermissionError:
-            output_dir = os.path.dirname(output_path)
-            stem, extension = os.path.splitext(os.path.basename(output_path))
-            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-            fallback_path = os.path.join(
-                output_dir,
-                f'{stem}_{timestamp}{extension or ".xlsx"}',
-            )
+            with tempfile.NamedTemporaryFile(
+                dir=output_dir, prefix=".monthly-report-", suffix=".xlsx", delete=False
+            ) as temporary:
+                temporary_path = temporary.name
+            wb.save(temporary_path)
             try:
-                wb.save(fallback_path)
+                os.replace(temporary_path, output_path)
+                return output_path
+            except PermissionError:
+                stem, extension = os.path.splitext(output_path)
+                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                fallback_path = f'{stem}_{timestamp}{extension or ".xlsx"}'
+                os.rename(temporary_path, fallback_path)
                 return fallback_path
-            except PermissionError as second_error:
-                raise PermissionError(
+        except PermissionError as error:
+            raise PermissionError(
                     '\uc120\ud0dd\ud55c \ud3f4\ub354\uc5d0 \ubcf4\uace0\uc11c\ub97c \uc800\uc7a5\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4. '
                     '\uae30\uc874 Excel \ud30c\uc77c\uc744 \ub2eb\uac70\ub098 OneDrive \ub3d9\uae30\ud654\ub97c \ud655\uc778\ud55c \ud6c4, '
                     '\ub2e4\ub978 \ud3f4\ub354\ub97c \uc120\ud0dd\ud574 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.\n'
                     f'\uc800\uc7a5 \uacbd\ub85c: {output_path}'
-                ) from second_error
+            ) from error
+        finally:
+            if temporary_path:
+                try:
+                    os.unlink(temporary_path)
+                except OSError:
+                    pass
 
     def _safe_float(self, val):
         try:
