@@ -529,17 +529,19 @@ def load_daily_usage_to_form_impl(self, record):
             except: pass
         self._last_daily_date = self.ent_daily_date.get_date()
         if hasattr(self, 'cb_daily_client'):
-            client_val = self.clean_nan(record.get('회사코드', '')).strip()
+            # '발주처' 전용 컬럼을 최우선으로 읽고, 구형 레코드에만 '회사코드' 내 발주처명을 폴백으로 사용
+            explicit_client = self.clean_nan(record.get('발주처', '')).strip()
+            legacy_client = self.clean_nan(record.get('회사코드', '')).strip()
+            client_val = explicit_client or legacy_client
             valid_clients = ['한국지역난방공사', '한국지역난방공사 중앙지사']
             if hasattr(self.cb_daily_client, 'cget'):
                 try:
                     vals = list(self.cb_daily_client.cget('values'))
                     if vals:
                         valid_clients = vals
-                except: pass
-            if client_val in valid_clients:
-                self.cb_daily_client.set(client_val)
-            elif '한국지역난방' in client_val:
+                except tk.TclError:
+                    pass
+            if client_val in valid_clients or '한국지역난방' in client_val:
                 self.cb_daily_client.set(client_val)
             else:
                 self.cb_daily_client.set('한국지역난방공사')
@@ -809,23 +811,24 @@ def load_daily_usage_to_form_impl(self, record):
             # [REMOVED] 사용자 요청으로 과거 비고(Note) 내용을 불러오지 않음
             # self.ent_daily_note.insert(0, note_val)
 
-        # 9. DailyMemo
-        # 사용자가 저장한 메모를 불러오도록 복구 (과거 기록 호환성 포함)
+        # 9. DailyMemo — 개별 작업 비고/시스템 태그(Note)와 당일 상시 메모(DailyMemo)를 엄격히 구분
         memo_val = self.clean_nan(record.get('DailyMemo', ''))
-        if not memo_val and note_val:
-            if ' | ' in str(note_val):
-                parts = str(note_val).split(' | ', 1)
-                if len(parts) > 1:
-                    memo_val = parts[1]
-            else:
-                memo_val = note_val
+        if 'DailyMemo' not in record and not memo_val and note_val and ' | ' in str(note_val):
+            # DailyMemo 컬럼 도입 이전 구형 레코드에서 ' | ' 뒤에 병합 저장된 메모만 제한 복원
+            candidate = str(note_val).split(' | ', 1)[1].strip()
+            if not any(tag in candidate for tag in ('[핫태핑', '[PAD 세부내역]', '(재검사 기록)', '[불량(REP)', '[REP ')):
+                memo_val = candidate
+        elif any(memo_val.startswith(tag) for tag in ('[핫태핑', '[PAD 세부내역]', '(재검사 기록)')):
+            # 과거 오염으로 시스템 태그만 DailyMemo에 복사된 경우 상시 메모창 복원에서 제외
+            memo_val = ''
 
         if hasattr(self, 'main_memo_text') and self.main_memo_text:
             try:
                 self.main_memo_text.delete('1.0', tk.END)
                 if memo_val:
                     self.main_memo_text.insert(tk.END, memo_val)
-            except: pass
+            except tk.TclError:
+                pass
 
     except Exception as e:
         print(f"Error loading record to form: {e}")

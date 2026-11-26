@@ -143,6 +143,8 @@ def combine_plans(plans, shared, ot_calculator=None):
         common = plan['common_data']
         for key in ('Date', 'Site', '업체명'):
             common[key] = shared[key]
+        if '발주처' in shared:
+            common['발주처'] = shared['발주처']
         crew = participants(plan)
         names = [str(person.get(worker_fields(i)[0], '') or '').strip() for i, person in enumerate(crew, 1)]
         plan['workers_list'] = [name for name in names if name]
@@ -150,6 +152,8 @@ def combine_plans(plans, shared, ot_calculator=None):
         for row_index, record in enumerate(plan['records_to_save']):
             for key in ('Date', 'Site', '업체명'):
                 record[key] = shared[key]
+            if '발주처' in shared:
+                record['발주처'] = shared['발주처']
             for key in list(record):
                 if re.fullmatch(r'(User|WorkTime|OT|Meal)\d*', key) or key in (
                     '차량번호', '주행거리', '차량점검', '차량비고', 'DailyMemo', 'OT시간', 'OT금액'):
@@ -165,7 +169,7 @@ def combine_plans(plans, shared, ot_calculator=None):
                 labor_records.append(record)
             if first:
                 record.update({key: value for key, value in shared.items()
-                               if key not in ('Date', 'Site', '업체명') and not re.fullmatch(r'(User|WorkTime|OT|Meal)\d*', key)})
+                               if key not in ('Date', 'Site', '업체명', '발주처') and not re.fullmatch(r'(User|WorkTime|OT|Meal)\d*', key)})
                 record['검사비'] += shared['출장비']
                 first = False
     meals = allocate_labor(labor_records, shared['Date'], ot_calculator)
@@ -479,7 +483,9 @@ class InspectionBatch(ttk.LabelFrame):
 
     def shared(self):
         app = self.app
+        client_val = app.cb_daily_client.get().strip() if hasattr(app, 'cb_daily_client') else '한국지역난방공사'
         shared = {'Date': app.ent_daily_date.get_date(), 'Site': app.cb_daily_site.get().strip(),
+                  '발주처': client_val or '한국지역난방공사',
                   '업체명': app.cb_daily_company.get().strip(),
                   '출장비': number(app.ent_daily_travel_cost.get(), '출장비'),
                   '일식': number(app.ent_daily_meal_cost.get(), '일식'),

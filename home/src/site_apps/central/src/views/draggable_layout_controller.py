@@ -121,6 +121,7 @@ def bulk_register_materials_to_stock_impl(self, material_list):
     # Ensure materials_df is loaded
     if self.materials_df is None:
         self.materials_df = pd.DataFrame(columns=['MaterialID', '품목명', 'Active'])
+    old_materials = self.materials_df.copy(deep=True)
 
     if not self.materials_df.empty:
         # Collect existing names and their positions
@@ -190,7 +191,8 @@ def bulk_register_materials_to_stock_impl(self, material_list):
                 self.materials_df = pd.concat([self.materials_df, new_df], ignore_index=True)
 
             # Save and Refresh
-            self.save_data()
+            if not self.save_data(require_primary=True):
+                raise RuntimeError('원본 재고 파일에 일괄 등록 내역을 저장하지 못했습니다.')
             self.update_stock_view()
             self.update_material_combo()
 
@@ -200,8 +202,9 @@ def bulk_register_materials_to_stock_impl(self, material_list):
 
             messagebox.showinfo("등록 완료", msg)
         except Exception as e:
+            self.materials_df = old_materials
             print(f"DEBUG: Error during bulk registration: {e}")
-            messagebox.showerror("오류", f"일괄 등록 중 오류가 발생했습니다:\n{e}")
+            messagebox.showerror("오류", f"일괄 등록 중 오류가 발생해 원본 상태를 복원했습니다:\n{e}")
     else:
         messagebox.showinfo("정보", "이미 모든 품목이 재고 현황에 활성화되어 있습니다.")
 

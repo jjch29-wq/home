@@ -87,7 +87,10 @@ class SiteIsolationTests(unittest.TestCase):
             if helper_imports:
                 sync = importlib.import_module(f'site_apps.{site}.src.data_sync')
                 # Test the default local path regardless of this PC's sync settings.
-                with mock.patch.object(sync.os.path, 'exists', return_value=False):
+                with (
+                    mock.patch.dict(os.environ, {'PMI_CENTRAL_DATA_ROOT': ''}),
+                    mock.patch.object(sync.os.path, 'exists', return_value=False),
+                ):
                     exec(compile(ast.Module(body=[assignment], type_ignores=[]), str(tab), 'exec'), context)
             else:
                 exec(compile(ast.Module(body=[assignment], type_ignores=[]), str(tab), 'exec'), context)

@@ -603,16 +603,18 @@ def export_daily_work_report_impl(self):
                         if not worker_is_selected(group): continue
                         name = group.get_worker().strip()
                         if name and name.lower() != 'nan':
-                            ot_val = ""
-                            if hasattr(group, 'ent_ot'): ot_val = group.ent_ot.get().strip()
-                            elif hasattr(group, 'cb_ot'): ot_val = group.cb_ot.get().strip()
-                                
+                            wt_val = group.get_time().strip() if hasattr(group, 'get_time') else (
+                                group.ent_worktime.get().strip() if hasattr(group, 'ent_worktime') else ''
+                            )
+                            ot_amt_val = group.get_ot().strip() if hasattr(group, 'get_ot') else (
+                                group.ent_ot.get().strip() if hasattr(group, 'ent_ot') else ''
+                            )
                             data['ot_status'].append({
                                 'names': name,
                                 'company': self.cb_daily_company.get().strip(),
                                 'method': self.cb_daily_test_method.get().strip(),
-                                'ot_hours': ot_val,
-                                'ot_amount': '' 
+                                'ot_hours': wt_val,
+                                'ot_amount': ot_amt_val
                             })
                     except: pass
             if data['ot_status']:

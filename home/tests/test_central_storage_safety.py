@@ -119,4 +119,63 @@ class StorageSafetyTests(unittest.TestCase):
         self.assertEqual(app.records,[{'qty':10}])
         app.clear_records.assert_not_called()
 
+    def test_material_and_transaction_writes_rollback_when_save_fails(self):
+        from site_apps.central.src.views.inout_view import InoutViewMixin
+        from site_apps.central.src.views.stock_management_view import (
+            delete_selected_material_impl,
+            save_material_edits_impl,
+        )
+        class Field:
+            def __init__(self, v=''): self.v = v
+            def get(self): return self.v
+            def set(self, v): self.v = v
+            def delete(self, *a): self.v = ''
+            def insert(self, i, v): self.v = v
+
+        base_materials = pd.DataFrame([
+            {'MaterialID': 1, '품목명': '세척제', '모델명': 'M1', 'SN': '', '창고': '본사', '수량': 10.0, 'Active': 1}
+        ])
+        base_trans = pd.DataFrame(columns=['Date', 'MaterialID', 'Type', 'Quantity', 'Note', 'User', 'Site'])
+        app = SimpleNamespace(
+            root=Mock(),
+            materials_df=base_materials.copy(deep=True),
+            transactions_df=base_trans.copy(deep=True),
+            equipments=[], sites=[], users=[],
+            cb_co_code=Field('NAWOO'), cb_item_name=Field('신규약품'), cb_eq_name=Field(''),
+            cb_eq_code=Field(''), ent_sn=Field(''), cb_class=Field(''), cb_spec=Field(''),
+            cb_unit=Field('CAN'), cb_supplier=Field(''), cb_mfr=Field('NAWOO'), cb_origin=Field(''),
+            ent_init=Field('5'), ent_reorder=Field('1'), ent_price=Field('1000'), ent_cost=Field('800'),
+            cb_model=Field('M2'),
+            cb_material=Field('세척제'), cb_type=Field('OUT'), ent_user=Field('작업자'),
+            ent_qty=Field('3'), ent_note=Field('출고메모'), cb_warehouse=Field('현장창고'), cb_trans_site=Field('중앙지사'),
+            extract_sn_from_model=lambda m, s: (m, s),
+            normalize_id=lambda v: str(v).strip(),
+            save_data=Mock(return_value=False),
+            update_material_combo=Mock(), update_registration_combos=Mock(),
+            update_stock_view=Mock(), update_transaction_view=Mock(), show_error_dialog=Mock(),
+            stock_tree=SimpleNamespace(selection=lambda: ['i1'], item=lambda i, k: [1] if k == 'values' else {}),
+        )
+        with (
+            patch('site_apps.central.src.views.inout_view.messagebox') as io_msg,
+            patch('site_apps.central.src.views.stock_management_view.messagebox') as st_msg,
+        ):
+            st_msg.askyesno.return_value = True
+            InoutViewMixin.register_material(app)
+            pd.testing.assert_frame_equal(app.materials_df, base_materials)
+            self.assertEqual(app.cb_item_name.get(), '신규약품')
+            io_msg.showerror.assert_called_once()
+
+            io_msg.reset_mock()
+            InoutViewMixin.add_transaction(app)
+            pd.testing.assert_frame_equal(app.transactions_df, base_trans)
+            pd.testing.assert_frame_equal(app.materials_df, base_materials)
+            self.assertEqual(app.ent_qty.get(), '3')
+            io_msg.showerror.assert_called_once()
+
+            self.assertFalse(save_material_edits_impl(app, 1, {'수량': '99', '모델명': 'CHANGED'}))
+            pd.testing.assert_frame_equal(app.materials_df, base_materials)
+
+            delete_selected_material_impl(app)
+            pd.testing.assert_frame_equal(app.materials_df, base_materials)
+
 if __name__=='__main__': unittest.main()

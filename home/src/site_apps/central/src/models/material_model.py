@@ -37,7 +37,7 @@ def _sync_dataframe_schema_impl(self, df, sheet_name):
             'MaterialID', 'Year', 'Month', 'Site', 'Usage', 'Note', 'EntryDate'
         ],
         'DailyUsage': [
-            'Date', 'Site', '업체명', 'MaterialID', 'Usage', 'Note', 'EntryTime',
+            'Date', 'Site', '발주처', '업체명', 'MaterialID', 'Usage', 'Note', 'EntryTime',
             'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크',
             'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', '장비명', '검사방법', '검사량',
             '검사품명', '적용코드', '성적서번호',

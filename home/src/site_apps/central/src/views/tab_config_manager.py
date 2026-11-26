@@ -363,15 +363,18 @@ class TabConfigMixin:
                     print(f"Skipping save for draggable widget {key}: {e}")
 
             # [DEFINITIVE FIX] Deep merge current_geometries into disk config
-            final_config = {}
+            final_config = dict(getattr(self, 'tab_config', {}) or {})
             if os.path.exists(self.config_path):
                 try:
                     with open(self.config_path, 'r', encoding='utf-8') as f:
-                        final_config = json.load(f)
-                except: pass
+                        loaded_disk = json.load(f)
+                    if isinstance(loaded_disk, dict):
+                        final_config = loaded_disk
+                except (OSError, json.JSONDecodeError) as read_err:
+                    logger.warning("Existing tab config could not be read before save (%s: %s); preserving in-memory config", type(read_err).__name__, read_err)
             
             # Use disk's geometries as base, then update with WHAT WE JUST CAPTURED in memory
-            disk_geos = final_config.get('draggable_geometries', {})
+            disk_geos = dict(final_config.get('draggable_geometries', {}) or {})
 
             # [LAYOUT FIX] 과거에 저장된 핵심 박스 좌표도 제거
             for core_key in getattr(self, 'CORE_DRAGGABLE_KEYS', []):
@@ -386,14 +389,29 @@ class TabConfigMixin:
             # [NEW] Save hidden_sites to config
             final_config['hidden_sites'] = list(getattr(self, 'hidden_sites', []))
             
-            with open(self.config_path, 'w', encoding='utf-8') as f:
-                json.dump(final_config, f, ensure_ascii=False, indent=2)
+            import tempfile
+            cfg_dir = os.path.dirname(os.path.abspath(self.config_path))
+            os.makedirs(cfg_dir, exist_ok=True)
+            temp_cfg = None
+            try:
+                with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=cfg_dir, prefix='.tab_config-', suffix='.json', delete=False) as tf:
+                    temp_cfg = tf.name
+                    json.dump(final_config, tf, ensure_ascii=False, indent=2)
+                os.replace(temp_cfg, self.config_path)
+                temp_cfg = None
+            finally:
+                if temp_cfg and os.path.exists(temp_cfg):
+                    try:
+                        os.remove(temp_cfg)
+                    except OSError:
+                        pass
             
             # Update in-memory copy as well
             self.tab_config = final_config
             
             print(f"Configuration saved. Locked: {self.tab_config.get('layout_locked')}, Tab: {self.tab_config.get('selected_tab')}")
         except Exception as e:
+            logger.error("Failed to save tab config: %s", e, exc_info=True)
             print(f"Failed to save tab config: {e}")
 
     

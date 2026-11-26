@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime
+import datetime
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -992,6 +992,8 @@ class InoutViewMixin:
         final_item_name = eq_name if eq_name else item_name
         is_equipment = bool(eq_name)
         
+        old_materials = self.materials_df.copy(deep=True)
+        old_equipments = list(getattr(self, 'equipments', []))
         if is_equipment and hasattr(self, 'equipments') and eq_name not in self.equipments:
             self.equipments.append(eq_name)
         
@@ -999,7 +1001,8 @@ class InoutViewMixin:
         if self.materials_df.empty:
             mat_id = 1
         else:
-            mat_id = self.materials_df['MaterialID'].max() + 1
+            valid_ids = pd.to_numeric(self.materials_df['MaterialID'], errors='coerce').dropna()
+            mat_id = int(valid_ids.max()) + 1 if not valid_ids.empty else 1
         
         # Extract SN from Model Name (Now using newly added model name combobox)
         model_name = self.cb_model.get().strip() if hasattr(self, 'cb_model') else ''
@@ -1025,8 +1028,16 @@ class InoutViewMixin:
             'Active': 1
         }
         
-        self.materials_df = pd.concat([self.materials_df, pd.DataFrame([new_row])], ignore_index=True)
-        self.save_data()
+        try:
+            self.materials_df = pd.concat([self.materials_df, pd.DataFrame([new_row])], ignore_index=True)
+            if not self.save_data(require_primary=True):
+                raise RuntimeError('원본 재고 파일에 저장하지 못했습니다.')
+        except Exception as error:
+            self.materials_df = old_materials
+            if hasattr(self, 'equipments'):
+                self.equipments[:] = old_equipments
+            messagebox.showerror("등록 저장 실패", f"{error}\n입력 내용은 그대로 유지됩니다.", parent=self.root)
+            return
         self.update_material_combo()
         self.update_registration_combos()
         self.update_stock_view()
@@ -1107,6 +1118,8 @@ class InoutViewMixin:
             else:
                 mat_id = mat_rows['MaterialID'].values[0]
             
+            old_materials = self.materials_df.copy(deep=True)
+            old_transactions = self.transactions_df.copy(deep=True)
             # Update Warehouse in materials_df
             warehouse = str(self.cb_warehouse.get()).strip()
             if warehouse:
@@ -1131,11 +1144,17 @@ class InoutViewMixin:
                 '차량비고': ''
             }
             
-            # Add to dataframe
-            self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
-            
-            # Save all data (force sync)
-            self.save_data()
+            try:
+                # Add to dataframe
+                self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
+                # Save all data (force sync)
+                if not self.save_data(require_primary=True):
+                    raise RuntimeError('원본 재고 파일에 입출고 내역을 저장하지 못했습니다.')
+            except Exception as save_err:
+                self.materials_df = old_materials
+                self.transactions_df = old_transactions
+                messagebox.showerror("입출고 저장 실패", f"{save_err}\n원본 기록을 복원했으며 입력 내용은 유지됩니다.", parent=self.root)
+                return
             
             # Check if it was really added (for debug feedback)
             last_count = len(self.transactions_df)

@@ -38,7 +38,6 @@ class AppDialogsMixin:
         
         if matches.empty:
             messagebox.showerror("오류", f"자재 ID '{mat_id}'를 데이터베이스에서 찾을 수 없습니다.")
-            edit_win.destroy()
             return
             
         mat_data = matches.iloc[0]
@@ -122,8 +121,8 @@ class AppDialogsMixin:
             
         def on_save():
             new_data = {col: ent.get() for col, ent in entries.items()}
-            self.save_material_edits(mat_id, new_data)
-            edit_win.destroy()
+            if self.save_material_edits(mat_id, new_data) is not False:
+                edit_win.destroy()
             
         btn_save = ttk.Button(main_frame, text="변경사항 저장", command=on_save)
         btn_save.grid(row=len(fields), column=0, columnspan=2, pady=20)
@@ -147,7 +146,7 @@ class AppDialogsMixin:
                 try:
                     d_idx = display_cols.index(col)
                     worker_col_id = f"#{d_idx + 1}"
-                except:
+                except ValueError:
                     worker_col_id = f"#{idx + 1}"
                 break
 
@@ -155,7 +154,7 @@ class AppDialogsMixin:
             if not column_id: return
             try:
                 col_name = tree.heading(column_id)['text']
-            except:
+            except tk.TclError:
                 col_name = ''
             if col_name != '작업자' and column_id != worker_col_id: return
         else:
@@ -215,7 +214,8 @@ class AppDialogsMixin:
                             val_float = float(str(raw_val).replace(',', ''))
                             if val_float > 0:
                                 cost_info.append(f"• {label}: {int(val_float):,}")
-                        except: pass
+                        except (ValueError, TypeError):
+                            pass
                     if cost_info:
                         full_info.append(f"\n[비용 상세]")
                         full_info.extend(cost_info)
@@ -381,7 +381,8 @@ class AppDialogsMixin:
                             try:
                                 m = _re.search(r'([0-9\.]+)', s)
                                 if m: return float(m.group(1))
-                            except: pass
+                            except (ValueError, TypeError):
+                                pass
                             return 1.0
 
                         w_dedup['Count'] = w_dedup['WorkTime'].apply(parse_work_count)
@@ -461,7 +462,7 @@ class AppDialogsMixin:
             previous_popup = getattr(self, '_worker_detail_popup', None)
             if previous_popup is not None and previous_popup.winfo_exists():
                 try: previous_popup.destroy()
-                except: pass
+                except tk.TclError: pass
             popup = tk.Toplevel(self.root)
             self._worker_detail_popup = popup
             popup.overrideredirect(True)
@@ -493,7 +494,8 @@ class AppDialogsMixin:
                     final_y = screen_h - popup_height - 30
                 if final_y < 10:
                     final_y = 10
-            except: pass
+            except tk.TclError:
+                pass
             
             # Initial relative offsets from the cell root
             popup._rel_offset_x = final_x - root_x
@@ -521,7 +523,8 @@ class AppDialogsMixin:
                             # Important: Update relative to the CURRENT root position
                             popup._rel_offset_x = new_x - (tree.winfo_rootx() + cx)
                             popup._rel_offset_y = new_y - (tree.winfo_rooty() + cy)
-                    except: pass
+                    except tk.TclError:
+                        pass
             
             popup.bind("<Button-1>", start_drag)
             popup.bind("<B1-Motion>", do_drag)
@@ -589,7 +592,8 @@ class AppDialogsMixin:
                     new_y = croot_y + popup._rel_offset_y
                     
                     popup.geometry(f"+{int(new_x)}+{int(new_y)}")
-                except: pass
+                except tk.TclError:
+                    pass
                 
             # Bind to root move/resize
             bind_id = self.root.bind("<Configure>", reposition_popup, add="+")
@@ -1121,7 +1125,7 @@ class AppDialogsMixin:
                     try:
                         if pd.notna(mid_raw) and str(mid_raw).strip():
                             mid = str(int(float(str(mid_raw).strip())))
-                    except:
+                    except (ValueError, TypeError):
                         mid = str(mid_raw)
                     
                     
@@ -1210,18 +1214,25 @@ class AppDialogsMixin:
                 entries[col] = ent
 
             def save_edit():
+                old_materials = self.materials_df.copy(deep=True)
                 for col, ent in entries.items():
                     val = ent.get().strip()
                     if col in ['수량', '재고하한']:
                         try: val = float(val) if val else 0.0
-                        except: val = 0.0
+                        except (ValueError, TypeError): val = 0.0
                     self.materials_df.at[row_idx, col] = val
                 
-                self.save_data()
+                try:
+                    if not self.save_data(require_primary=True):
+                        raise RuntimeError('원본 재고 파일에 변경사항을 저장하지 못했습니다.')
+                except Exception as error:
+                    self.materials_df = old_materials
+                    messagebox.showerror("수정 저장 실패", f"{error}\n변경 전 상태로 복원했습니다.", parent=edit_win)
+                    return
                 self.update_stock_view()
                 self.update_material_combo()
                 refresh_list()
-                messagebox.showinfo("수정 완료", "자재 정보가 업데이트되었습니다.")
+                messagebox.showinfo("수정 완료", "자재 정보가 업데이트되었습니다.", parent=edit_win)
                 edit_win.destroy()
 
             ttk.Button(edit_win, text="변경사항 저장", command=save_edit).pack(pady=10)
@@ -1277,12 +1288,19 @@ class AppDialogsMixin:
                 for col in self.materials_df.columns:
                     if col not in new_row: new_row[col] = ''
                 
-                self.materials_df = pd.concat([self.materials_df, pd.DataFrame([new_row])], ignore_index=True)
-                self.save_data()
+                old_materials = self.materials_df.copy(deep=True)
+                try:
+                    self.materials_df = pd.concat([self.materials_df, pd.DataFrame([new_row])], ignore_index=True)
+                    if not self.save_data(require_primary=True):
+                        raise RuntimeError('원본 재고 파일에 신규 자재를 저장하지 못했습니다.')
+                except Exception as error:
+                    self.materials_df = old_materials
+                    messagebox.showerror("등록 저장 실패", f"{error}\n입력 내용은 그대로 유지됩니다.", parent=add_win)
+                    return
                 self.update_material_combo()
                 self.update_stock_view()
                 refresh_list()
-                messagebox.showinfo("완료", f"'{data['name']}' 자재가 성공적으로 등록되었습니다.")
+                messagebox.showinfo("완료", f"'{data['name']}' 자재가 성공적으로 등록되었습니다.", parent=add_win)
                 add_win.destroy()
 
             ttk.Button(add_win, text="등록 완료", command=save_new).pack(pady=10)
@@ -1356,9 +1374,9 @@ class AppDialogsMixin:
         # Date
         ttk.Label(basic_frame, text="날짜:").grid(row=0, column=0, padx=5, pady=5, sticky='w')
         ent_date = DateEntry(basic_frame, width=12, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
-        curr_date = entry_data.get('Date', datetime.datetime.now().strftime('%Y-%m-%d'))
+        curr_date = entry_data.get('Date', datetime.now().strftime('%Y-%m-%d'))
         try: ent_date.set_date(pd.to_datetime(curr_date))
-        except: pass
+        except (ValueError, TypeError, tk.TclError): pass
         ent_date.grid(row=0, column=1, padx=5, pady=5, sticky='w')
         fields['Date'] = ent_date
 
@@ -1558,7 +1576,8 @@ class AppDialogsMixin:
                     try:
                         v = str(val).strip().replace(',', '')
                         return float(v) if v else 0.0
-                    except: return 0.0
+                    except (ValueError, TypeError):
+                        return 0.0
 
                 qty = get_f(fields['검사량'].get())
                 price = get_f(fields['단가'].get())
@@ -1568,7 +1587,8 @@ class AppDialogsMixin:
                 calc_fee = (qty * price) + travel + meal
                 fields['검사비'].delete(0, tk.END)
                 fields['검사비'].insert(0, f"{calc_fee:,.0f}")
-            except: pass
+            except tk.TclError:
+                pass
 
         # Bindings for auto-calc
         fields['검사량'].bind('<KeyRelease>', lambda e: update_edit_fee_calc())
@@ -1670,16 +1690,16 @@ class AppDialogsMixin:
                 try: 
                     v_str = fields[key].get().strip().replace(',', '')
                     new_data[key] = float(v_str) if v_str else 0.0
-                except: new_data[key] = 0.0
+                except (ValueError, TypeError): new_data[key] = 0.0
                 
             for cat in rtk_cats:
                 try: new_data[f'RTK_{cat}'] = float(fields[f'RTK_{cat}'].get())
-                except: new_data[f'RTK_{cat}'] = 0.0
+                except (ValueError, TypeError): new_data[f'RTK_{cat}'] = 0.0
                 
             for cat in ndt_cats:
                 m_key = "".join(cat.split())
                 try: new_data[f'NDT_{m_key}'] = float(fields[f'NDT_{m_key}'].get())
-                except: new_data[f'NDT_{m_key}'] = 0.0
+                except (ValueError, TypeError): new_data[f'NDT_{m_key}'] = 0.0
                 
             # String fields
             for key in ['회사코드', '차량번호', '주행거리', '차량점검', '차량비고', '작업형태', '조건1', '조건2', 'Note']:
@@ -1692,7 +1712,7 @@ class AppDialogsMixin:
                     try:
                         v_str = fields[key].get().strip().replace(',', '')
                         new_data[key] = float(v_str) if v_str else 0.0
-                    except: new_data[key] = 0.0
+                    except (ValueError, TypeError): new_data[key] = 0.0
                 
             for i in range(1, 11):
                 name_key = 'User' if i == 1 else f'User{i}'

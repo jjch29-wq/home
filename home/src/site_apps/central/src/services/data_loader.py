@@ -309,7 +309,8 @@ def load_data_impl(self):
                                     # Remove commas and handle currency/unit markers if any
                                     clean_s = str(s).replace(',', '').replace('원', '').strip()
                                     return float(clean_s) if clean_s else 0.0
-                                except: return 0.0
+                                except (ValueError, TypeError):
+                                    return 0.0
                                 
                             self.daily_usage_df[col] = self.daily_usage_df[col].apply(clean_num)
                         
@@ -526,12 +527,19 @@ def load_data_impl(self):
                         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0).astype(float)
                 setattr(self, attr, df)
 
-    # Global header cleanup: remove ALL internal and edge whitespace for permanent stability
+    # Global header cleanup: remove ALL internal and edge whitespace and drop empty Unnamed:* ghost columns
     for df_attr in ['materials_df', 'transactions_df', 'daily_usage_df', 'budget_df']:
         if hasattr(self, df_attr):
             df = getattr(self, df_attr)
             if df is not None and not df.empty:
                 df.columns = [re.sub(r'\s+', '', str(c)) for c in df.columns]
+                ghost_cols = [
+                    c for c in df.columns
+                    if str(c).startswith('Unnamed:')
+                    and df[c].replace('', pd.NA).isna().all()
+                ]
+                if ghost_cols:
+                    df = df.drop(columns=ghost_cols)
                 setattr(self, df_attr, df)
         
     # Refresh all inquiry filters once data is loaded
@@ -544,8 +552,9 @@ def load_data_impl(self):
     if hasattr(self, 'db_path') and os.path.exists(self.db_path):
         try:
             self._last_loaded_db_mtime = os.path.getmtime(self.db_path)
-        except Exception:
-            pass
+        except OSError as error:
+            import logging
+            logging.getLogger(__name__).warning('Failed to read inventory mtime after load (%s)', type(error).__name__)
     self._monthly_view_dirty = True
 
 

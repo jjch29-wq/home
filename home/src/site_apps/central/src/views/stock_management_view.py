@@ -411,6 +411,7 @@ def delete_selected_material_impl(self):
             # [UX IMPROVEMENT] Get hidden MaterialID from the end of values
             mat_ids_to_remove.append(type(self.materials_df['MaterialID'].iloc[0])(values[-1]))
 
+    old_materials = self.materials_df.copy(deep=True)
     # Soft delete: Set Active=0 instead of removing from materials_df
     if 'Active' not in self.materials_df.columns:
         self.materials_df['Active'] = 1
@@ -428,13 +429,15 @@ def delete_selected_material_impl(self):
     removed_count = initial_count - final_count
 
     if removed_count > 0:
-        # Save data and update views
-        self.save_data()
+        try:
+            if not self.save_data(require_primary=True):
+                raise RuntimeError('원본 재고 파일에 삭제 내역을 저장하지 못했습니다.')
+        except Exception as error:
+            self.materials_df = old_materials
+            messagebox.showerror("삭제 저장 실패", f"{error}\n원본 품목 상태를 복원했습니다.", parent=self.root)
+            return
         self.update_stock_view()
         self.update_material_combo()
-
-        # Optional: Clear transactions related to these materials?
-        # For now, let's keep them for history unless explicitly asked.
 
         messagebox.showinfo("완료", f"{removed_count}개의 품목이 삭제되었습니다.")
     else:
@@ -449,8 +452,9 @@ def save_material_edits_impl(self, mat_id, new_data):
     idx = self.materials_df.index[mask].tolist()
     if not idx:
         messagebox.showerror("오류", "자재를 찾을 수 없습니다.")
-        return
+        return False
 
+    old_materials = self.materials_df.copy(deep=True)
     for col, val in new_data.items():
         if col in self.materials_df.columns:
             # Check the actual dtype of the column
@@ -479,8 +483,13 @@ def save_material_edits_impl(self, mat_id, new_data):
     self.materials_df.at[idx[0], '모델명'] = new_model
     self.materials_df.at[idx[0], 'SN'] = new_sn
 
-    # Save to Excel
-    self.save_data()
+    try:
+        if not self.save_data(require_primary=True):
+            raise RuntimeError('원본 재고 파일에 수정 내역을 저장하지 못했습니다.')
+    except Exception as error:
+        self.materials_df = old_materials
+        messagebox.showerror("수정 저장 실패", f"{error}\n원본 품목 정보를 복원했습니다.", parent=self.root)
+        return False
 
     # Refresh everything
     self.update_stock_view()
@@ -488,6 +497,7 @@ def save_material_edits_impl(self, mat_id, new_data):
     self.update_material_combo()
 
     messagebox.showinfo("완료", "자재 정보가 성공적으로 수정되었습니다.")
+    return True
 
 
 def clean_df_export_impl(self, df):
@@ -717,47 +727,55 @@ def import_from_excel_impl(self):
                 return
 
         # 5. Process Import based on Mode summerly
-        # Add new items first
-        new_rows = []
-        for idx in new_items:
-            row_data = final_excel_df.iloc[idx].to_dict()
-            new_mat_id = self.materials_df['MaterialID'].max() + 1 if not self.materials_df.empty else 1
-            row_data['MaterialID'] = new_mat_id
-            row_data['Active'] = 1
-            new_rows.append(row_data)
-            count_new += 1
+        old_materials = self.materials_df.copy(deep=True)
+        try:
+            # Add new items first
+            new_rows = []
+            for idx in new_items:
+                row_data = final_excel_df.iloc[idx].to_dict()
+                valid_ids = pd.to_numeric(self.materials_df['MaterialID'], errors='coerce').dropna() if not self.materials_df.empty else pd.Series(dtype=float)
+                base_max = int(valid_ids.max()) if not valid_ids.empty else 0
+                new_mat_id = base_max + len(new_rows) + 1
+                row_data['MaterialID'] = new_mat_id
+                row_data['Active'] = 1
+                new_rows.append(row_data)
+                count_new += 1
 
-        if new_rows:
-            self.materials_df = pd.concat([self.materials_df, pd.DataFrame(new_rows)], ignore_index=True)
+            if new_rows:
+                self.materials_df = pd.concat([self.materials_df, pd.DataFrame(new_rows)], ignore_index=True)
 
-        # Handle duplicates
-        if mode != "SKIP":
-            for ex_idx, db_idx in duplicate_indices:
-                ex_row = final_excel_df.iloc[ex_idx]
+            # Handle duplicates
+            if mode != "SKIP":
+                for ex_idx, db_idx in duplicate_indices:
+                    ex_row = final_excel_df.iloc[ex_idx]
 
-                if mode == "MERGE":
-                    # Add to existing quantity
-                    current_qty = pd.to_numeric(self.materials_df.at[db_idx, '수량'], errors='coerce')
-                    if pd.isna(current_qty): current_qty = 0
-                    self.materials_df.at[db_idx, '수량'] = current_qty + ex_row['수량']
-                    # Also update Manufacturer/Supplier if empty in DB but present in Excel
-                    for field in ['제조사', '공급업체', '규격', '창고']:
-                        if field in self.materials_df.columns and field in ex_row:
-                            if not self.materials_df.at[db_idx, field] or str(self.materials_df.at[db_idx, field]) == 'nan':
-                                self.materials_df.at[db_idx, field] = ex_row[field]
-                    count_merged += 1
+                    if mode == "MERGE":
+                        # Add to existing quantity
+                        current_qty = pd.to_numeric(self.materials_df.at[db_idx, '수량'], errors='coerce')
+                        if pd.isna(current_qty): current_qty = 0
+                        self.materials_df.at[db_idx, '수량'] = current_qty + ex_row['수량']
+                        # Also update Manufacturer/Supplier if empty in DB but present in Excel
+                        for field in ['제조사', '공급업체', '규격', '창고']:
+                            if field in self.materials_df.columns and field in ex_row:
+                                if not self.materials_df.at[db_idx, field] or str(self.materials_df.at[db_idx, field]) == 'nan':
+                                    self.materials_df.at[db_idx, field] = ex_row[field]
+                        count_merged += 1
 
-                elif mode == "OVERWRITE":
-                    # Full replace (except ID and Active status)
-                    for col in final_excel_df.columns:
-                        if col in self.materials_df.columns:
-                            self.materials_df.at[db_idx, col] = ex_row[col]
-                    count_overwritten += 1
-        else:
-            count_skipped = len(duplicate_indices)
+                    elif mode == "OVERWRITE":
+                        # Full replace (except ID and Active status)
+                        for col in final_excel_df.columns:
+                            if col in self.materials_df.columns:
+                                self.materials_df.at[db_idx, col] = ex_row[col]
+                        count_overwritten += 1
+            else:
+                count_skipped = len(duplicate_indices)
 
-        # 6. Finalize summerly
-        self.save_data()
+            # 6. Finalize summerly
+            if not self.save_data(require_primary=True):
+                raise RuntimeError('원본 재고 파일에 가져온 데이터를 저장하지 못했습니다.')
+        except Exception:
+            self.materials_df = old_materials
+            raise
         self.update_material_combo()
         self.update_stock_view()
         self.update_registration_combos()

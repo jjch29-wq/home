@@ -903,7 +903,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             # Robustly calculate NEW ID even if mixed types or NaNs exist
             valid_ids = pd.to_numeric(self.materials_df['MaterialID'], errors='coerce').dropna()
             new_id = int(valid_ids.max() + 1) if not valid_ids.empty else 10001
-        except:
+        except (ValueError, TypeError):
             new_id = 10001 # Fallback
         
         # Determine defaults
@@ -931,14 +931,14 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         for k, v in kwargs.items():
             if k in new_mat: new_mat[k] = v
             
+        old_materials = self.materials_df.copy(deep=True)
         self.materials_df = pd.concat([self.materials_df, pd.DataFrame([new_mat])], ignore_index=True)
         if persist:
-            self.save_data()
+            if not self.save_data(require_primary=True):
+                self.materials_df = old_materials
+                raise RuntimeError(f"신규 자재('{name}')를 원본 재고 파일에 저장하지 못했습니다.")
             self.update_material_combo()
         return new_id
-        
-        self.save_data()
-        messagebox.showinfo("마이그레이션 완료", "기존 데이터가 새로운 형식으로 변환되었습니다.")
     
     def enable_autocomplete(self, combobox, values_list_attr=None, values_list=None, prefix_list=None):
         """Standardize to Native Dropdown: Filter values smoothly without UI blocking."""
@@ -2410,7 +2410,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                         new_data_sanitized[k] = 0.0
                     else:
                         new_data_sanitized[k] = float(v)
-                except:
+                except (ValueError, TypeError):
                     new_data_sanitized[k] = 0.0
             else:
                 # String columns (Note, Detail JSONs, Site)
@@ -3020,7 +3020,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             if hasattr(b, 'winfo_exists') and b.winfo_exists():
                 living_boxes.append(b)
                 
-        # 4. 업체(Company) 데이터 수집
+        # 4. 업체(Company) 데이터 수집 — 발주처('발주처')와 NDT 사용 자재 제조사('회사코드')를 엄격히 분리
         company_data_list = []
         client_code = self.cb_daily_client.get().strip() if hasattr(self, 'cb_daily_client') else '한국지역난방공사'
         if not client_code:
@@ -3028,8 +3028,9 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         if hasattr(self, 'ndt_company_entries'):
             for company_entries in self.ndt_company_entries:
                 is_first = (company_entries == self.ndt_company_entries[0])
-                # NDT 자재 소모량의 회사코드(사용자재 제조사, 예: Nawoo)를 우선 저장
-                company_code = company_entries['_company'].get().strip() or client_code
+                # '회사코드'에는 오직 NDT 사용 자재 제조사만 기록하며 미입력 시 빈 문자열로 유지(발주처와 혼용 차단)
+                raw_ndt_co = company_entries['_company'].get().strip()
+                company_code = '' if raw_ndt_co in ('한국지역난방공사', '한국지역난방공사 중앙지사') else raw_ndt_co
                 ndt_data = {name: to_f(company_entries.get(name)) for name in self.ndt_materials_all}
                 
                 # [REFINEMENT] Create record if there is NDT data OR it is the first entry (guaranteed row)
@@ -3041,13 +3042,14 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                     })
         
         if not company_data_list: # [FALLBACK] Ensure at least one row exists
-             company_data_list.append({'회사코드': client_code or "한국지역난방공사", 'ndt_data': {}, 'is_primary': True})
+             company_data_list.append({'회사코드': '', 'ndt_data': {}, 'is_primary': True})
 
         # 5. 공통 레코드 데이터 구성 (기본값)
         from site_apps.central.src.aux_equipment import value as auxiliary_equipment_value
         common_data = {
             'Date': date_val,
             'Site': site,
+            '발주처': client_code,
             'MaterialID': mat_id,
             '장비명': self.cb_daily_equip.get().strip(),
             '보조장비': auxiliary_equipment_value(self),
@@ -3908,18 +3910,18 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                     v_to_set = float(val.replace(',', '').strip()) if val.strip() else 0.0
                 else:
                     v_to_set = float(val) if pd.notna(val) else 0.0
-            except:
+            except (ValueError, TypeError):
                 v_to_set = 0.0
 
         try:
             self.daily_usage_df.at[idx, col] = v_to_set
-        except:
+        except (ValueError, TypeError):
             try:
                 # Type conflict (e.g. float into strict string column or vice versa)
                 # Cast the column to object to allow the mixed/new type
                 self.daily_usage_df[col] = self.daily_usage_df[col].astype(object)
                 self.daily_usage_df.at[idx, col] = v_to_set
-            except:
+            except (ValueError, TypeError):
                 # Final fallback
                 self.daily_usage_df.at[idx, col] = str(v_to_set)
 
@@ -3959,9 +3961,9 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                             target_key = ex_col
                             break
                 
-                # Comprehensive list of columns that MUST be numeric
-                numeric_cols = ['Usage', '수량', '검사량', '단가', '출장비', '일식', '검사비', 'FilmCount', 'OT', 'OT금액']
-                is_numeric = k.startswith('NDT_') or k.startswith('RTK_') or k in numeric_cols or any(f"OT{i}" == k or f"OT금액{i}" == k for i in range(1, 11))
+                # Comprehensive list of columns that MUST be numeric (OT~OT10은 원화 문자열/공백 호환을 위해 제외)
+                numeric_cols = ['Usage', '수량', '검사량', '단가', '출장비', '일식', '검사비', 'FilmCount']
+                is_numeric = k.startswith('NDT_') or k.startswith('RTK_') or k in numeric_cols
                 
                 # Use safe setter to avoid all dtype crashes
                 self._safe_set_daily_df(df_idx, target_key, v, is_numeric=(is_numeric or k == 'MaterialID'))
@@ -3970,11 +3972,19 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             for column, value in synchronize_legacy_chemicals(old_entry, new_data).items():
                 self._safe_set_daily_df(df_idx, column, value, is_numeric=False)
 
-            # Ensure Usage is consistently updated from Inspection Amount (검사량)
+            # Ensure Usage, 검사량, 수량 stay synchronized on edits (RT REP rows keep Usage/수량 = 0.0)
+            edited_amount = float(new_data.get('검사량', 0.0) or 0.0)
+            is_rt_rep = (
+                str(new_data.get('검사방법', old_entry.get('검사방법', ''))).strip().upper() == 'RT'
+                and str(old_entry.get('검사구분', '')).strip().upper() == 'REP'
+            )
+            effective_usage = 0.0 if is_rt_rep else edited_amount
             usage_col = 'Usage' if 'Usage' in self.daily_usage_df.columns else '수량'
-            self._safe_set_daily_df(df_idx, usage_col, new_data.get('검사량', 0.0), is_numeric=True)
+            self._safe_set_daily_df(df_idx, usage_col, effective_usage, is_numeric=True)
             if '검사량' in self.daily_usage_df.columns:
-                self._safe_set_daily_df(df_idx, '검사량', new_data.get('검사량', 0.0), is_numeric=True)
+                self._safe_set_daily_df(df_idx, '검사량', effective_usage, is_numeric=True)
+            if '수량' in self.daily_usage_df.columns and usage_col != '수량':
+                self._safe_set_daily_df(df_idx, '수량', effective_usage, is_numeric=True)
             
             # [FIX] Initialize new_mat_display for stock reconciliation logic
             new_mat_display = new_data.get('Material', '')
