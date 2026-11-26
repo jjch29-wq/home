@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import tkinter as tk
 from tkinter import ttk
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from site_apps.central.src.views.ndt_report_tab import NDTReportTab
@@ -47,6 +48,52 @@ class TestCentralNDTReportTab(unittest.TestCase):
         # 모드 탭들 정상 생성 확인
         tabs = tab.report_app.mode_notebook.tabs()
         self.assertGreaterEqual(len(tabs), 4)
+
+    def test_report_generation_can_remain_unissued(self):
+        app = SimpleNamespace(
+            config={}, root=object(), log=Mock(), populate_preview=Mock(),
+            paut_extracted_data=[], mt_extracted_data=[], rt_extracted_data=[],
+            kogas_extracted_data=[],
+        )
+        workbook = SimpleNamespace(
+            worksheets=[{"AA5": SimpleNamespace(value="SIS/PAUT-012")}]
+        )
+        with patch(
+            "site_apps.central.src.reports.ndt_report_app.messagebox.askyesno",
+            return_value=False,
+        ), patch(
+            "site_apps.central.src.reports.report_issue_history.record_issue"
+        ) as record_issue:
+            issued = PMIReportApp._record_report_issue(
+                app, "PAUT", workbook, "report.xlsx", [{"_source_id": "row-1"}]
+            )
+
+        self.assertFalse(issued)
+        record_issue.assert_not_called()
+        app.log.assert_called_once()
+
+    def test_issue_history_change_refreshes_source_linked_numbers(self):
+        sourced = {"_source_id": "row-1", "Report No": "OLD"}
+        manual = {"Report No": "MANUAL"}
+        data = [sourced, manual]
+        app = SimpleNamespace(
+            root=object(),
+            _get_mode_info=Mock(return_value=(None, None, data, None)),
+            populate_preview=Mock(),
+        )
+
+        def invoke_change(_parent, on_change=None, **_kwargs):
+            on_change()
+
+        with patch(
+            "site_apps.central.src.reports.report_issue_history.show_history",
+            side_effect=invoke_change,
+        ):
+            PMIReportApp.show_report_issue_history(app, "PAUT")
+
+        self.assertNotIn("Report No", sourced)
+        self.assertEqual(manual["Report No"], "MANUAL")
+        app.populate_preview.assert_called_once_with(data, switch_tab=False, mode="PAUT")
 
     def test_sidebar_toggle_restores_width_and_preserves_widgets(self):
         if not self.has_tk:
@@ -161,6 +208,76 @@ class TestCentralNDTReportTab(unittest.TestCase):
         app._on_gapji_material_selected('MT')
         self.assertEqual(app.gapji_material.get(), 'SPW400')
         self.assertEqual(app.report_info_by_mode['MT']['material'], 'SPW400')
+
+
+    def test_gapji_material_selection_restores_combobox_cursor(self):
+        callbacks = []
+        root = SimpleNamespace(after_idle=lambda callback: callbacks.append(callback))
+        widget = Mock()
+        widget.winfo_exists.return_value = True
+        app = SimpleNamespace(root=root)
+
+        PMIReportApp._restore_gapji_input_focus(app, widget)
+
+        self.assertEqual(len(callbacks), 1)
+        callbacks[0]()
+        widget.focus_set.assert_called_once_with()
+        widget.icursor.assert_called_once_with(tk.END)
+        widget.selection_clear.assert_called_once_with()
+
+    def test_paut_print_settings_clear_template_scale_for_one_page_width(self):
+        import openpyxl
+        import tempfile
+
+        app = object.__new__(PMIReportApp)
+        app.current_mode = 'PAUT'
+        app.config = {}
+        app.log = lambda _message: None
+        workbook = openpyxl.Workbook()
+        cover = workbook.active
+        cover.title = '갑지'
+        data = workbook.create_sheet('을지')
+
+        for sheet, context, expected_end in (
+            (cover, 'COVER', '$AJ$51'),
+            (data, 'DATA', '$AH$47'),
+        ):
+            sheet.page_setup.scale = 125
+            app.force_print_settings(sheet, context=context)
+            self.assertTrue(sheet.sheet_properties.pageSetUpPr.fitToPage)
+            self.assertEqual(sheet.page_setup.fitToWidth, 1)
+            self.assertEqual(sheet.page_setup.fitToHeight, 1)
+            self.assertIsNone(sheet.page_setup.scale)
+            self.assertEqual(sheet.page_setup.orientation, 'portrait')
+            self.assertTrue(str(sheet.print_area).endswith(expected_end))
+
+        from site_apps.central.src.reports.paut_report_layout import align_report_heights
+        align_report_heights(
+            [cover, data],
+            measured_widths={'갑지': 600.0, '을지': 580.0},
+            measured_heights={'갑지': 800.0, '을지': 760.0},
+        )
+        self.assertIsNotNone(cover.page_setup.scale)
+        self.assertIsNotNone(data.page_setup.scale)
+        app.force_print_settings(cover, context='COVER')
+        app.force_print_settings(data, context='DATA')
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saved_path = Path(temp_dir) / 'paut_print_settings.xlsx'
+            workbook.save(saved_path)
+            reopened = openpyxl.load_workbook(saved_path)
+            try:
+                for sheet, expected_end in (
+                    (reopened['갑지'], '$AJ$51'),
+                    (reopened['을지'], '$AH$47'),
+                ):
+                    self.assertTrue(sheet.sheet_properties.pageSetUpPr.fitToPage)
+                    self.assertEqual(sheet.page_setup.fitToWidth, 1)
+                    self.assertEqual(sheet.page_setup.fitToHeight, 1)
+                    self.assertIsNone(sheet.page_setup.scale)
+                    self.assertTrue(str(sheet.print_area).endswith(expected_end))
+            finally:
+                reopened.close()
 
 
 if __name__ == '__main__':

@@ -348,7 +348,12 @@ class ReportPreviewViewMixin:
                 from site_apps.central.src.reports.pipe_material_spec import KDHC_PIPE_MATERIALS
                 ent = ttk.Combobox(block, textvariable=var, width=15,
                                    values=KDHC_PIPE_MATERIALS)
-                ent.bind('<<ComboboxSelected>>', lambda _event, m=mode: self._on_gapji_material_selected(m))
+                ent.bind(
+                    '<<ComboboxSelected>>',
+                    lambda event, m=mode: self._on_gapji_material_selected(
+                        m, source_widget=event.widget
+                    ),
+                )
                 ent.bind('<FocusOut>', lambda _event, m=mode: self._on_gapji_material_selected(m, from_focus_out=True))
             else:
                 ent = ttk.Entry(
@@ -1376,37 +1381,73 @@ class ReportPreviewViewMixin:
         tree.tag_configure('group_even', font=("Malgun Gothic", 10, "bold"))
         tree.tag_configure('group_odd', font=("Malgun Gothic", 10, "bold"))
 
-
+    def _preview_toolbar_button(self, parent, text, command=None, menu=False):
+        widget_class = tk.Menubutton if menu else tk.Button
+        options = dict(
+            text=text,
+            font=("Malgun Gothic", 9),
+            background="#ffffff",
+            foreground="#334155",
+            activebackground="#e8eef6",
+            activeforeground="#0f172a",
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=1,
+            highlightbackground="#cbd5e1",
+            highlightcolor="#2563eb",
+            cursor="hand2",
+            padx=12,
+            pady=5,
+        )
+        if menu:
+            options['indicatoron'] = True
+        else:
+            options['command'] = command
+        widget = widget_class(parent, **options)
+        widget.bind("<Enter>", lambda _event, w=widget: w.configure(background="#f1f5f9"))
+        widget.bind("<Leave>", lambda _event, w=widget: w.configure(background="#ffffff"))
+        return widget
 
     def _setup_paut_preview_toolbar(self, container):
-        toolbar = ttk.Frame(container, padding=(6, 4))
+        toolbar = tk.Frame(container, background="#f8fafc", padx=8, pady=6)
         toolbar.pack(side='top', fill='x')
         ttk.Checkbutton(
             toolbar, text='체크한 항목만 보기', variable=self.show_selected_only,
             command=lambda: self.populate_preview(self.paut_extracted_data, switch_tab=False, mode='PAUT')
         ).pack(side='left', padx=(0, 12))
-        ttk.Button(toolbar, text='일괄 변경',
-                   command=lambda: self.show_bulk_update_dialog('PAUT')).pack(side='left', padx=3)
-        edit = ttk.Menubutton(toolbar, text='행 편집 ▾')
+        self._preview_toolbar_button(
+            toolbar, '일괄 변경', lambda: self.show_bulk_update_dialog('PAUT')
+        ).pack(side='left', padx=3)
+        edit = self._preview_toolbar_button(toolbar, '행 편집', menu=True)
         edit_menu = tk.Menu(edit, tearoff=False)
         edit_menu.add_command(label='행 추가', command=lambda: self.add_item('PAUT'))
         edit_menu.add_command(label='선택 행 삭제', command=lambda: self.delete_item('PAUT'))
         edit.configure(menu=edit_menu)
         edit.pack(side='left', padx=3)
 
-        ttk.Button(toolbar, text='표 설정', command=lambda: self.manage_columns('PAUT')).pack(side='right', padx=3)
-        more = ttk.Menubutton(toolbar, text='더보기 ▾')
+        self._preview_toolbar_button(
+            toolbar, '표 설정', lambda: self.manage_columns('PAUT')
+        ).pack(side='right', padx=3)
+        more = self._preview_toolbar_button(toolbar, '더보기', menu=True)
         more_menu = tk.Menu(more, tearoff=False)
+        more_menu.add_command(
+            label='발행 이력/취소', command=lambda: self.show_report_issue_history('PAUT')
+        )
+        more_menu.add_separator()
         more_menu.add_command(label='전체 초기화', command=lambda: self.clear_all('PAUT'))
         more.configure(menu=more_menu)
         more.pack(side='right', padx=3)
-        export = ttk.Menubutton(toolbar, text='내보내기 ▾')
+        export = self._preview_toolbar_button(toolbar, '내보내기', menu=True)
         export_menu = tk.Menu(export, tearoff=False)
         export_menu.add_command(label='엑셀 파일로 추출', command=lambda: self.export_to_excel('PAUT'))
         export.configure(menu=export_menu)
         export.pack(side='right', padx=3)
-        ttk.Button(toolbar, text='불러오기', command=lambda: self.load_preview_data('PAUT')).pack(side='right', padx=3)
-        ttk.Button(toolbar, text='저장', command=lambda: self.save_preview_data('PAUT')).pack(side='right', padx=3)
+        self._preview_toolbar_button(
+            toolbar, '불러오기', lambda: self.load_preview_data('PAUT')
+        ).pack(side='right', padx=3)
+        self._preview_toolbar_button(
+            toolbar, '저장', lambda: self.save_preview_data('PAUT')
+        ).pack(side='right', padx=3)
         self.paut_check_menu = tk.Menu(self.paut_preview_tree, tearoff=False)
         self.paut_check_menu.add_command(label='현재 필터 항목 전체 체크', command=lambda: self.select_all('PAUT'))
         self.paut_check_menu.add_command(label='현재 필터 항목 체크 해제', command=lambda: self.deselect_all('PAUT'))
@@ -1414,34 +1455,45 @@ class ReportPreviewViewMixin:
 
 
     def _setup_mt_preview_toolbar(self, container):
-        toolbar = ttk.Frame(container, padding=(6, 4))
+        toolbar = tk.Frame(container, background="#f8fafc", padx=8, pady=6)
         toolbar.pack(side='top', fill='x')
         ttk.Checkbutton(
             toolbar, text='체크한 항목만 보기', variable=self.show_selected_only,
             command=lambda: self.populate_preview(self.mt_extracted_data, switch_tab=False, mode='MT')
         ).pack(side='left', padx=(0, 12))
-        ttk.Button(toolbar, text='일괄 변경',
-                   command=lambda: self.show_bulk_update_dialog('MT')).pack(side='left', padx=3)
-        edit = ttk.Menubutton(toolbar, text='행 편집 ▾')
+        self._preview_toolbar_button(
+            toolbar, '일괄 변경', lambda: self.show_bulk_update_dialog('MT')
+        ).pack(side='left', padx=3)
+        edit = self._preview_toolbar_button(toolbar, '행 편집', menu=True)
         edit_menu = tk.Menu(edit, tearoff=False)
         edit_menu.add_command(label='행 추가', command=lambda: self.add_item('MT'))
         edit_menu.add_command(label='선택 행 삭제', command=lambda: self.delete_item('MT'))
         edit.configure(menu=edit_menu)
         edit.pack(side='left', padx=3)
 
-        ttk.Button(toolbar, text='표 설정', command=lambda: self.manage_columns('MT')).pack(side='right', padx=3)
-        more = ttk.Menubutton(toolbar, text='더보기 ▾')
+        self._preview_toolbar_button(
+            toolbar, '표 설정', lambda: self.manage_columns('MT')
+        ).pack(side='right', padx=3)
+        more = self._preview_toolbar_button(toolbar, '더보기', menu=True)
         more_menu = tk.Menu(more, tearoff=False)
+        more_menu.add_command(
+            label='발행 이력/취소', command=lambda: self.show_report_issue_history('MT')
+        )
+        more_menu.add_separator()
         more_menu.add_command(label='전체 초기화', command=lambda: self.clear_all('MT'))
         more.configure(menu=more_menu)
         more.pack(side='right', padx=3)
-        export = ttk.Menubutton(toolbar, text='내보내기 ▾')
+        export = self._preview_toolbar_button(toolbar, '내보내기', menu=True)
         export_menu = tk.Menu(export, tearoff=False)
         export_menu.add_command(label='엑셀 파일로 추출', command=lambda: self.export_to_excel('MT'))
         export.configure(menu=export_menu)
         export.pack(side='right', padx=3)
-        ttk.Button(toolbar, text='불러오기', command=lambda: self.load_preview_data('MT')).pack(side='right', padx=3)
-        ttk.Button(toolbar, text='저장', command=lambda: self.save_preview_data('MT')).pack(side='right', padx=3)
+        self._preview_toolbar_button(
+            toolbar, '불러오기', lambda: self.load_preview_data('MT')
+        ).pack(side='right', padx=3)
+        self._preview_toolbar_button(
+            toolbar, '저장', lambda: self.save_preview_data('MT')
+        ).pack(side='right', padx=3)
         self.mt_check_menu = tk.Menu(self.mt_preview_tree, tearoff=False)
         self.mt_check_menu.add_command(label='현재 필터 항목 전체 체크', command=lambda: self.select_all('MT'))
         self.mt_check_menu.add_command(label='현재 필터 항목 체크 해제', command=lambda: self.deselect_all('MT'))
@@ -1452,34 +1504,45 @@ class ReportPreviewViewMixin:
     def _setup_rt_preview_toolbar(self, container, mode):
         if not hasattr(self, '_rt_check_menus'):
             self._rt_check_menus = {}
-        toolbar = ttk.Frame(container, padding=(6, 4))
+        toolbar = tk.Frame(container, background="#f8fafc", padx=8, pady=6)
         toolbar.pack(side='top', fill='x')
         ttk.Checkbutton(
             toolbar, text='체크한 항목만 보기', variable=self.show_selected_only,
             command=lambda: self.populate_preview(self._get_mode_info(mode)[2], switch_tab=False, mode=mode)
         ).pack(side='left', padx=(0, 12))
-        ttk.Button(toolbar, text='일괄 변경',
-                   command=lambda: self.show_bulk_update_dialog(mode)).pack(side='left', padx=3)
-        edit = ttk.Menubutton(toolbar, text='행 편집 ▾')
+        self._preview_toolbar_button(
+            toolbar, '일괄 변경', lambda: self.show_bulk_update_dialog(mode)
+        ).pack(side='left', padx=3)
+        edit = self._preview_toolbar_button(toolbar, '행 편집', menu=True)
         edit_menu = tk.Menu(edit, tearoff=False)
         edit_menu.add_command(label='행 추가', command=lambda: self.add_item(mode))
         edit_menu.add_command(label='선택 행 삭제', command=lambda: self.delete_item(mode))
         edit.configure(menu=edit_menu)
         edit.pack(side='left', padx=3)
 
-        ttk.Button(toolbar, text='표 설정', command=lambda: self.manage_columns(mode)).pack(side='right', padx=3)
-        more = ttk.Menubutton(toolbar, text='더보기 ▾')
+        self._preview_toolbar_button(
+            toolbar, '표 설정', lambda: self.manage_columns(mode)
+        ).pack(side='right', padx=3)
+        more = self._preview_toolbar_button(toolbar, '더보기', menu=True)
         more_menu = tk.Menu(more, tearoff=False)
+        more_menu.add_command(
+            label='발행 이력/취소', command=lambda: self.show_report_issue_history(mode)
+        )
+        more_menu.add_separator()
         more_menu.add_command(label='전체 초기화', command=lambda: self.clear_all(mode))
         more.configure(menu=more_menu)
         more.pack(side='right', padx=3)
-        export = ttk.Menubutton(toolbar, text='내보내기 ▾')
+        export = self._preview_toolbar_button(toolbar, '내보내기', menu=True)
         export_menu = tk.Menu(export, tearoff=False)
         export_menu.add_command(label='엑셀 파일로 추출', command=lambda: self.export_to_excel(mode))
         export.configure(menu=export_menu)
         export.pack(side='right', padx=3)
-        ttk.Button(toolbar, text='불러오기', command=lambda: self.load_preview_data(mode)).pack(side='right', padx=3)
-        ttk.Button(toolbar, text='저장', command=lambda: self.save_preview_data(mode)).pack(side='right', padx=3)
+        self._preview_toolbar_button(
+            toolbar, '불러오기', lambda: self.load_preview_data(mode)
+        ).pack(side='right', padx=3)
+        self._preview_toolbar_button(
+            toolbar, '저장', lambda: self.save_preview_data(mode)
+        ).pack(side='right', padx=3)
         self._rt_check_menus[mode] = tk.Menu(self._get_mode_info(mode)[0], tearoff=False)
         self._rt_check_menus[mode].add_command(label='현재 필터 항목 전체 체크', command=lambda: self.select_all(mode))
         self._rt_check_menus[mode].add_command(label='현재 필터 항목 체크 해제', command=lambda: self.deselect_all(mode))

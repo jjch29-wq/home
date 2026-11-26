@@ -1603,7 +1603,27 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
             return str(self.report_info_by_mode[mode].get('item', '')).strip()
         return self.gapji_item.get().strip() if hasattr(self, 'gapji_item') else ''
 
-    def _on_gapji_material_selected(self, mode, from_focus_out=False):
+    def _restore_gapji_input_focus(self, widget):
+        """Keep the insertion cursor visible after a cover combobox selection."""
+        if widget is None:
+            return
+
+        def restore():
+            try:
+                if not widget.winfo_exists():
+                    return
+                widget.focus_set()
+                widget.icursor(tk.END)
+                widget.selection_clear()
+            except (tk.TclError, AttributeError):
+                pass
+
+        try:
+            self.root.after_idle(restore)
+        except (tk.TclError, AttributeError):
+            pass
+
+    def _on_gapji_material_selected(self, mode, from_focus_out=False, source_widget=None):
         mat = self.gapji_material.get().strip()
         if hasattr(self, 'report_info_by_mode') and mode in self.report_info_by_mode:
             self.report_info_by_mode[mode]['material'] = mat
@@ -1627,6 +1647,8 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
             if changed and not from_focus_out:
                 self.populate_preview(self.mt_extracted_data, switch_tab=False, mode='MT')
         self.save_settings()
+        if not from_focus_out:
+            self._restore_gapji_input_focus(source_widget)
 
     def _sync_gapji_material_from_items(self, mode, data_list, force=False):
         """현재 활성 행들의 관경(20A~600A -> SPPS380, 650A~900A -> SPW400)에 맞춰 갑지 재질을 자동 동기화한다."""
@@ -4011,6 +4033,12 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 adjusted_wb = openpyxl.load_workbook(out_path, keep_vba=keep_vba)
                 align_report_heights(adjusted_wb.worksheets, measured_widths=widths,
                                      measured_heights=heights)
+                # Width measurement uses a temporary fixed scale to align page
+                # heights. Restore PAUT's one-page fit after that calculation so
+                # Excel does not leave the last column on a page to the right.
+                for page_index, adjusted_sheet in enumerate(adjusted_wb.worksheets):
+                    adjusted_context = "COVER" if page_index == 0 else "DATA"
+                    self.force_print_settings(adjusted_sheet, adjusted_context)
                 fd, adjusted_path = tempfile.mkstemp(
                     prefix='paut_print_', suffix=output_ext,
                     dir=os.path.dirname(out_path))
@@ -7700,8 +7728,11 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
             # Map NDT data to the tree columns
             source_site = ndt_list[0]['_source_site']
             if data and any(row.get('_source_site') != source_site for row in data):
-                if not messagebox.askyesno('사업장 확인',
-                    f'현재 보고서에 다른 사업장 또는 출처 미확인 자료가 있습니다.\n{source_site} 자료를 함께 추가할까요?'):
+                if not messagebox.askyesno(
+                    '사업장 확인',
+                    f'현재 보고서에 다른 사업장 또는 출처 미확인 자료가 있습니다.\n{source_site} 자료를 함께 추가할까요?',
+                    parent=self.root,
+                ):
                     return
             existing_ids = {row.get('_source_id') for row in data if row.get('_source_id')}
             added_count = 0
@@ -7828,12 +7859,20 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 self.populate_preview(data, switch_tab=False, mode=mode)
             elif mode in ('PT', 'MT', 'RT', 'KOGAS'):
                 self.populate_preview(data, switch_tab=False, mode=mode)
-            messagebox.showinfo("완료", f"{ndt_list[0]['_source_site']} 작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.")
+            messagebox.showinfo(
+                "완료",
+                f"{ndt_list[0]['_source_site']} 작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.",
+                parent=self.root,
+            )
+            self.root.after_idle(self.root.focus_set)
             
         except Exception as e:
             import traceback
             traceback.print_exc()
-            messagebox.showerror("오류", f"일보 불러오기 중 오류가 발생했습니다:\n{e}")
+            messagebox.showerror(
+                "오류", f"일보 불러오기 중 오류가 발생했습니다:\n{e}",
+                parent=self.root,
+            )
 
     def extract_only(self, show_msg=True):
         """데이터만 추출하여 리스트와 미리보기에 반영 (PMI/RT 대응)"""
@@ -8934,9 +8973,24 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         self.populate_preview(self.extracted_data, switch_tab=False)
         self.log(f"📅 날짜 필터 적용 완료: {len(selected_dates)}개 날짜 선택됨")
 
-    def show_report_issue_history(self):
+    def show_report_issue_history(self, mode=None):
         from site_apps.central.src.reports.report_issue_history import show_history
-        show_history(self.root)
+
+        def refresh_numbers():
+            if not mode:
+                return
+            mode_info = self._get_mode_info(mode)
+            if not mode_info:
+                return
+            data = mode_info[2]
+            # Imported issue numbers are derived from active issue history.
+            # Clear only source-linked rows so manually entered values survive.
+            for item in data:
+                if item.get('_source_id'):
+                    item.pop('Report No', None)
+            self.populate_preview(data, switch_tab=False, mode=mode)
+
+        show_history(self.root, on_change=refresh_numbers)
 
     def _report_save_path(self, directory, extension, mode=None, choose_directory=True):
         from site_apps.central.src.reports.report_issue_history import report_output_path
@@ -8963,16 +9017,27 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
             if cell is None:
                 cell = self.config.get('GAPJI_REPORT_NO_CELL', 'B10')
             report_no = workbook.worksheets[0][cell].value
+            if not messagebox.askyesno(
+                '정식 발행 등록',
+                f'생성한 {mode} 성적서를 정식 발행 이력에 등록할까요?\n\n'
+                f'보고서 번호: {report_no or "(번호 미입력)"}\n'
+                '아니오를 선택하면 파일만 생성되고 일보 항목은 미발행 상태로 유지됩니다.',
+                parent=self.root,
+            ):
+                self.log(f"파일만 생성: {report_no or '(번호 미입력)'} · 발행 이력 미등록")
+                return False
             record_issue(mode, report_no, save_path, items)
             if mode == 'PAUT':
                 self.populate_preview(self.paut_extracted_data, switch_tab=False, mode=mode)
             elif mode in ('MT', 'RT', 'KOGAS'):
                 self.populate_preview(self._get_mode_info(mode)[2], switch_tab=False, mode=mode)
             self.log(f"발행 이력 저장: {report_no or '(번호 미입력)'} · {len(items)}건")
+            return True
         except Exception as exc:
             self.log(f"발행 이력 저장 실패: {exc}")
             messagebox.showwarning('발행 이력 저장 실패',
                 f'보고서 파일은 생성되었으나 발행 이력을 저장하지 못했습니다.\n{save_path}\n\n{exc}')
+            return False
 
 
     def _create_top_action_bar(self, parent, mode):

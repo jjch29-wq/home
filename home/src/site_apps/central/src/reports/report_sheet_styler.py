@@ -374,7 +374,10 @@ class ReportSheetStylerMixin:
                 ws.page_setup.fitToHeight = (
                     0 if mode == "RT" and context == "COVER" else 1
                 )
-                if mode in ("PT", "PMI") and context == "COVER":
+                # PAUT templates can retain a fixed scale from the source file.
+                # Excel may prioritize that stale value over fitToWidth and
+                # create an extra page to the right, so remove it explicitly.
+                if mode == "PAUT" or (mode in ("PT", "PMI") and context == "COVER"):
                     ws.page_setup.scale = None
 
             def _margin(name, default):

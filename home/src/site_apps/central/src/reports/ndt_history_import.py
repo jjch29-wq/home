@@ -108,6 +108,16 @@ def read_results(site, mode, source_dir=None):
     return rows
 
 
+def read_unissued_results(site, mode, source_dir=None, issue_path=None):
+    """Return daily-log rows that have no active report issue number."""
+    from site_apps.central.src.reports.report_issue_history import restore_report_numbers
+
+    rows = read_results(site, mode, source_dir)
+    restore_report_numbers(mode, rows, path=issue_path)
+    pending = [row for row in rows if not str(row.get('Report No') or '').strip()]
+    return pending, len(rows) - len(pending)
+
+
 def rt_report_quantities(items):
     """Sum source daily-log quantities across the selected report, not a page."""
     original = repair = fallback_rows = 0
@@ -222,7 +232,10 @@ def select_history_rows(parent, mode):
     combo = ttk.Combobox(top, textvariable=site_var, values=list(SITES), state='readonly', width=30)
     combo.pack(side='left', padx=10)
     ttk.Label(dialog, textvariable=path_var, wraplength=1030).pack(fill='x', padx=10)
-    ttk.Label(dialog, text='가져올 행을 선택하세요. Ctrl/Shift로 여러 행을 선택할 수 있습니다.').pack(anchor='w', padx=10, pady=6)
+    ttk.Label(
+        dialog,
+        text='미발행 행만 표시합니다. Ctrl/Shift로 여러 행을 선택할 수 있습니다.',
+    ).pack(anchor='w', padx=10, pady=6)
     frame = ttk.Frame(dialog)
     frame.pack(fill='both', expand=True, padx=10)
     columns = ('사업장', '작업일', '현장명', '검사방법', '라인번호', 'Joint No.', '구간', '결과')
@@ -238,6 +251,17 @@ def select_history_rows(parent, mode):
     buttons = ttk.Frame(dialog, padding=10)
     buttons.pack(fill='x')
 
+    def close_dialog():
+        try:
+            if dialog.grab_current() == dialog:
+                dialog.grab_release()
+        except tk.TclError:
+            pass
+        try:
+            dialog.destroy()
+        except tk.TclError:
+            pass
+
     def selection_changed(_event=None):
         count = len(tree.selection())
         import_button.configure(state='normal' if count else 'disabled')
@@ -251,7 +275,8 @@ def select_history_rows(parent, mode):
         status_var.set('불러오는 중…')
         try:
             path_var.set(str(history_path(site)))
-            rows.extend(read_results(site, mode))
+            pending, issued_count = read_unissued_results(site, mode)
+            rows.extend(pending)
         except (OSError, ValueError) as exc:
             status_var.set('불러오기 실패 — 파일과 데이터 형식을 확인하세요.')
             messagebox.showerror('일보 불러오기 실패', f'{site}\n{path_var.get()}\n\n{exc}', parent=dialog)
@@ -259,7 +284,10 @@ def select_history_rows(parent, mode):
         for index, row in enumerate(rows):
             tree.insert('', 'end', iid=str(index), values=(site, row['Date'], row['_source_location'] or '(미기록)',
                 row.get('검사방법', ''), row.get('라인번호', ''), row.get('Joint No.', ''), row.get('구간', ''), row.get('결과', '')))
-        status_var.set(f'{site} · {mode} 항목 {len(rows)}건 (원본 읽기 전용)')
+        status_var.set(
+            f'{site} · {mode} 미발행 {len(rows)}건 · 발행 완료 제외 {issued_count}건 '
+            '(원본 읽기 전용)'
+        )
 
     def accept():
         selected = tree.selection()
@@ -269,17 +297,22 @@ def select_history_rows(parent, mode):
             f'{site_var.get()}의 {len(selected)}건을 현재 {mode} 보고서에 추가할까요?\n기존 보고서 행은 유지됩니다.', parent=dialog):
             return
         result.extend(dict(rows[int(index)]) for index in selected)
-        dialog.destroy()
+        close_dialog()
 
     ttk.Button(buttons, text='전체 선택', command=lambda: tree.selection_set(tree.get_children())).pack(side='left')
     ttk.Button(buttons, text='새로고침', command=reload_rows).pack(side='left', padx=5)
-    ttk.Button(buttons, text='취소', command=dialog.destroy).pack(side='right')
+    ttk.Button(buttons, text='취소', command=close_dialog).pack(side='right')
     import_button = ttk.Button(buttons, text='선택 항목 가져오기', command=accept, state='disabled')
     import_button.pack(side='right', padx=5)
     combo.bind('<<ComboboxSelected>>', reload_rows)
     tree.bind('<<TreeviewSelect>>', selection_changed)
-    dialog.bind('<Escape>', lambda _event: dialog.destroy())
+    dialog.bind('<Escape>', lambda _event: close_dialog())
+    dialog.protocol('WM_DELETE_WINDOW', close_dialog)
     dialog.grab_set()
     reload_rows()
     parent.wait_window(dialog)
+    try:
+        parent.after_idle(parent.focus_set)
+    except tk.TclError:
+        pass
     return result

@@ -360,7 +360,7 @@ def delete_selections(selections, whole_issue=False, path=None):
     save_history(records, path)
 
 
-def show_history(parent, path=None):
+def show_history(parent, path=None, on_change=None):
     import tkinter as tk
     from tkinter import ttk, messagebox
     window = tk.Toplevel(parent)
@@ -487,6 +487,8 @@ def show_history(parent, path=None):
                 return
             editor.destroy()
             refresh()
+            if on_change is not None:
+                on_change()
         ttk.Button(editor, text='저장', command=save).grid(row=9, column=1, sticky='e', padx=10, pady=10)
         ttk.Button(editor, text='취소', command=editor.destroy).grid(row=9, column=0, padx=10, pady=10)
 
@@ -506,6 +508,8 @@ def show_history(parent, path=None):
             messagebox.showerror('이력 삭제 실패', str(exc), parent=window)
             return
         refresh()
+        if on_change is not None:
+            on_change()
 
     actions = ttk.Frame(window, padding=10)
     actions.pack(fill='x')
