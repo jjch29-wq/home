@@ -2,6 +2,8 @@
 import math
 import re
 from copy import deepcopy
+from collections import defaultdict
+from itertools import chain
 
 
 def films(value):
@@ -170,15 +172,29 @@ def sync_rt_widgets(row, from_details=False, all_rows=None):
 def corrected_rt_history(history):
     """Recalculate report quantities in memory; never rewrite historical source files."""
     result = deepcopy(history)
-    context = []
-    for day in sorted(result):
-        for index, row in enumerate(result[day].get('ndt_results', [])):
-            normalized = resolve_rt_row(row, context + result[day]['ndt_results'])
-            result[day]['ndt_results'][index] = normalized
-            context.append(normalized)
+    days = sorted(result)
+    previous_joints = defaultdict(list)
+    for day in days:
+        rows = result[day].get('ndt_results', [])
+        day_joints = defaultdict(list)
+        for index, row in enumerate(rows):
+            if str(row.get('검사방법', '')).strip().upper() == 'RT':
+                joint = str(row.get('Joint No.', '') or '').strip().upper()
+                if joint:
+                    day_joints[joint].append(index)
+        for index, row in enumerate(rows):
+            parent = retest_parent(row.get('Joint No.', ''))
+            candidates = chain(previous_joints.get(parent, ()),
+                               (rows[i] for i in day_joints.get(parent, ())))
+            normalized = resolve_rt_row(row, candidates)
+            rows[index] = normalized
+            if str(row.get('검사방법', '')).strip().upper() == 'RT':
+                joint = str(row.get('Joint No.', '') or '').strip().upper()
+                if joint:
+                    previous_joints[joint].append(normalized)
     previous = {}
     previous_rejected = {}
-    for day in sorted(result):
+    for day in days:
         data = result[day]
         rt_rows = [row for row in data.get('ndt_results', []) if str(row.get('검사방법', '')).strip().upper() == 'RT']
         quantities = data.get('qty_data', {})

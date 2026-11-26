@@ -164,6 +164,8 @@ home/src/Daily_Economic_Report_*.xlsx
 # Central runtime backups and save artifacts
 /.sync-backups/
 /home/src/site_apps/central/data/backups/
+/home/src/site_apps/central/data/.mobile_pending_deletes.json
+/home/src/site_apps/central/data/report_settings/
 /home/src/site_apps/central/data/report_issue_history.backup-*.json
 /home/src/site_apps/central/data/.material-save-*.xlsx
 /home/src/site_apps/central/data/*_Conflict_*.xlsx

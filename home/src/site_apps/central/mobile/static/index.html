@@ -1743,6 +1743,7 @@
       if (isEditing) {
         payload.id = currentEditingRecord.id;
         payload.entry_time = currentEditingRecord.entry_time;
+        payload.client_request_id = currentEditingRecord.client_request_id;
         payload.is_update = true;
       }
 
@@ -1972,10 +1973,14 @@
       }
 
       try {
-        const res = await apiCall('deleteRecord', { id: r.id, entry_time: r.entry_time });
+        const res = await apiCall('deleteRecord', {
+          id: r.id, entry_time: r.entry_time, client_request_id: r.client_request_id
+        });
         if (res && res.status === 'success') {
           showToast(`${desc} 내역이 삭제되었습니다.`);
-          if (currentEditingRecord && currentEditingRecord.entry_time === r.entry_time) {
+          if (currentEditingRecord && (r.client_request_id
+            ? currentEditingRecord.client_request_id === r.client_request_id
+            : currentEditingRecord.entry_time === r.entry_time)) {
             cancelEditMode();
           }
           loadRecentRecords();

@@ -13,6 +13,56 @@ from site_apps.central.src.daily_work_log_tab import DailyWorkLogTab
 
 
 class CentralDailyWorkLogSearchTests(unittest.TestCase):
+    def test_selection_menu_and_shift_click_share_checkbox_state(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "daily_work_history.json"
+            with patch("site_apps.central.src.daily_work_log_tab.get_history_path", return_value=str(path)):
+                tab = DailyWorkLogTab(self.root)
+                tab.ndt_grid_entries[1]["Joint No."].insert(0, "J01")
+                tab.ndt_grid_entries[4]["Joint No."].insert(0, "J02")
+                grid = tab._ndt_grid_frame
+                menu_button = grid.grid_slaves(row=0, column=0)[0]
+                menu = menu_button.nametowidget(menu_button.cget("menu"))
+
+                def selected():
+                    return [i for i, var in enumerate(tab.ndt_selection_vars) if var.get()]
+
+                menu.invoke(0)
+                self.assertEqual(selected(), [1, 4])
+                self.assertEqual(tab.ndt_selection_text.get(), "2개 행 선택됨")
+                menu.invoke(1)
+                self.assertEqual(selected(), [])
+
+                tab.pack(fill="both", expand=True)
+                self.root.deiconify()
+                self.root.update_idletasks()
+                cell = tab.ndt_grid_entries[0]["Joint No."]
+                cell.event_generate("<ButtonPress-1>")
+                self.assertIs(tab.selected_ndt_row, tab.ndt_grid_entries[0])
+                self.assertEqual(selected(), [])
+                grid.grid_slaves(row=2, column=0)[0].invoke()
+                last = grid.grid_slaves(row=5, column=0)[0]
+                last.event_generate("<ButtonPress-1>", state=1)
+                last.event_generate("<ButtonRelease-1>", state=1)
+                self.assertEqual(selected(), [1, 2, 3, 4])
+                self.assertEqual(tab.ndt_selection_text.get(), "4개 행 선택됨")
+
+    def test_initial_rows_expand_to_show_all_saved_records(self):
+        selected = date(2026, 11, 17)
+        rows = [{"검사방법": "MT", "Joint No.": f"J{index:02}"} for index in range(35)]
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "daily_work_history.json"
+            path.write_text(json.dumps({selected.isoformat(): {"ndt_results": rows}}), encoding="utf-8")
+            with patch("site_apps.central.src.daily_work_log_tab.get_history_path", return_value=str(path)):
+                tab = DailyWorkLogTab(self.root)
+                self.assertEqual(len(tab.ndt_grid_entries), 10)
+                tab.date_entry.set_date(selected)
+                tab.on_date_change()
+                self.assertEqual(
+                    [widgets["Joint No."].get() for widgets in tab.ndt_grid_entries[:35]],
+                    [row["Joint No."] for row in rows],
+                )
+
     def setUp(self):
         self.root = tk.Tk()
         self.root.withdraw()

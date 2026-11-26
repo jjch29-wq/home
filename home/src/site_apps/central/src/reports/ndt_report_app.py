@@ -202,15 +202,29 @@ if getattr(sys, 'frozen', False):
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
     SCRIPT_HOME = base_path
     BASE_DIR = base_path
-    CONFIG_DIR = base_path
+    CONFIG_DIR = os.path.join(
+        os.environ.get("LOCALAPPDATA") or os.path.dirname(sys.executable),
+        "PMI", "central", "report_settings",
+    )
+    LEGACY_SETTINGS_FILE = os.path.join(os.path.dirname(sys.executable), "logo_settings_unified.json")
     RESOURCE_DIR = os.path.join(base_path, "resources")
 else:
     SCRIPT_HOME = os.path.dirname(os.path.abspath(__file__))
     BASE_DIR = find_project_home(SCRIPT_HOME)
-    CONFIG_DIR = os.path.join(BASE_DIR, "config")
+    CONFIG_DIR = os.path.abspath(os.path.join(SCRIPT_HOME, "..", "..", "data", "report_settings"))
+    LEGACY_SETTINGS_FILE = os.path.join(BASE_DIR, "config", "logo_settings_unified.json")
     RESOURCE_DIR = os.path.join(BASE_DIR, "resources")
 
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "logo_settings_unified.json")
+PHOTO_LOG_CONFIG_FILE = os.path.join(CONFIG_DIR, "photolog_config.json")
+LEGACY_PHOTO_LOG_CONFIG_FILE = os.path.join(
+    os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else BASE_DIR,
+    "photolog_config.json",
+)
+
+
+def _existing_report_settings(primary, *legacy_paths):
+    return next((path for path in (primary, *legacy_paths) if os.path.isfile(path)), None)
 SRC_ROOT = str(Path(__file__).resolve().parents[4]) if 'Path' in globals() else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
 
@@ -591,9 +605,10 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                     print(f"WARNING: 내장 설정 불러오기 실패: {e}")
 
         # 2. 외부 설정 파일 (사용자 저장값 - 내장값보다 우선순위 높음)
-        if os.path.exists(SETTINGS_FILE):
+        settings_path = _existing_report_settings(SETTINGS_FILE, LEGACY_SETTINGS_FILE)
+        if settings_path:
             try:
-                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                with open(settings_path, 'r', encoding='utf-8') as f:
                     saved_data = json.load(f)
                     
                     # [REFINED] Case-insensitive Sanitization for all modules
@@ -884,11 +899,11 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
 
     def save_photo_log_config(self):
         """Save Photo Log specific layout settings to a separate JSON."""
-        config_path = os.path.join(os.getcwd(), "photolog_config.json")
         self.capture_ui_state()
         plist = self.config.get('PHOTO_LOG_SETTINGS', {})
         try:
-            with open(config_path, 'w', encoding='utf-8') as f:
+            os.makedirs(CONFIG_DIR, exist_ok=True)
+            with open(PHOTO_LOG_CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(plist, f, indent=4, ensure_ascii=False)
             self.log("💾 사진대장 전용 설정이 저장되었습니다.")
             messagebox.showinfo("저장 완료", "사진대장 레이아웃 설정이 저장되었습니다.")
@@ -897,8 +912,11 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
 
     def load_photo_log_config(self):
         """Load Photo Log specific layout settings."""
-        config_path = os.path.join(os.getcwd(), "photolog_config.json")
-        if not os.path.exists(config_path): return
+        config_path = _existing_report_settings(
+            PHOTO_LOG_CONFIG_FILE, LEGACY_PHOTO_LOG_CONFIG_FILE
+        )
+        if not config_path:
+            return
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 plist = json.load(f)
@@ -1229,7 +1247,8 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         else:
             # Fallback: Material_Inventory.xlsx 직접 로드
             try:
-                inv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "Material_Inventory.xlsx")
+                from ..sync_google_sheet import get_sync_inventory_path
+                inv_path = get_sync_inventory_path()
                 if os.path.exists(inv_path):
                     df = pd.read_excel(inv_path, sheet_name="DailyUsage")
             except Exception as e:

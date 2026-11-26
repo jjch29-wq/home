@@ -3,6 +3,12 @@ import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
+from ..data_sync import get_external_data_root
+from ..sync_google_sheet import get_sync_inventory_path
+
+
+class AttendanceExportError(RuntimeError):
+    """The standard export cannot continue without the central work log."""
 
 def to_float(val):
     if val is None:
@@ -44,6 +50,13 @@ def load_central_work_log_attendance(base_dir=None):
         'F:/내 드라이브/07_Antigravity/PMI_Data/central/data/Material_Inventory.xlsx'
     ]
     
+    use_external_inventory = bool(get_external_data_root())
+    if use_external_inventory:
+        inventory = get_sync_inventory_path()
+        if not inventory.is_file():
+            raise FileNotFoundError(f"중앙지사 운영 재고 파일이 없습니다: {inventory}")
+        inv_candidates = [inventory]
+
     attendance = {}
     import openpyxl
     for inv_path in inv_candidates:
@@ -192,10 +205,17 @@ def load_central_work_log_attendance(base_dir=None):
 
                     attendance['_ot_totals'] = ot_totals
                     break
+                if use_external_inventory:
+                    raise ValueError("운영 재고에 DailyUsage 시트가 없습니다.")
             except Exception as e:
+                if use_external_inventory:
+                    raise RuntimeError(f"운영 재고의 작업일보를 읽을 수 없습니다: {e}") from e
                 import traceback
                 traceback.print_exc()
                 continue
+    else:
+        if use_external_inventory:
+            raise FileNotFoundError("중앙지사 운영 재고 파일을 찾을 수 없습니다.")
     return attendance
 
 
@@ -221,6 +241,8 @@ def export_budget_estimation_to_excel(filepath, summary_data, labor_data, materi
                 actual_expense_data=actual_expense_data,
                 template_path=template_path
             )
+        except AttendanceExportError:
+            raise
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -541,7 +563,10 @@ def export_budget_to_standard_template(filepath, summary_data, labor_data, mater
         ws_a_labor.column_dimensions['F'].width = 18.0
 
         # 실제 작업일보(DailyUsage) 데이터 로드 (User1~User10 전체 순회 및 공법/시간 집계)
-        att_data = load_central_work_log_attendance()
+        try:
+            att_data = load_central_work_log_attendance()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise AttendanceExportError(str(exc)) from exc
 
         # 사후 인원 구성:
         # 1) 사전 4인(7~10행)을 1순위로 배치하되 공법은 일보 실제 수행 공법 반영

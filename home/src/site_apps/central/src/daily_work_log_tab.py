@@ -14,6 +14,7 @@ import sys
 import json
 import shutil
 import uuid
+from copy import deepcopy
 from site_apps.central.src.rt_quantities import rt_counts, sync_rt_widgets, widget_rt_values, resolve_rt_row, retest_parent, default_rt_copy, corrected_rt_history
 from site_apps.central.src.services.section_line_helper import (
     extract_company_section_line_mapping,
@@ -100,8 +101,11 @@ class DailyWorkLogTab(ttk.Frame):
         if not os.path.exists(self.history_path):
             return
         try:
+            source_mtime = os.path.getmtime(self.history_path)
             with open(self.history_path, 'r', encoding='utf-8') as history_file:
                 history = json.load(history_file)
+            if not isinstance(history, dict) or any(not isinstance(day, dict) for day in history.values()):
+                return  # The normal loader reports invalid history to the user.
 
             changed_count = 0
 
@@ -117,14 +121,22 @@ class DailyWorkLogTab(ttk.Frame):
                 return value
 
             migrated_history = replace_legacy_ids(history)
-            if not changed_count:
+            if os.path.getmtime(self.history_path) != source_mtime:
                 return
 
-            temp_path = self.history_path + '.tmp'
-            with open(temp_path, 'w', encoding='utf-8') as history_file:
-                json.dump(migrated_history, history_file, ensure_ascii=False, indent=4)
-            os.replace(temp_path, self.history_path)
-            print(f"[DailyWorkLog] 용접사 번호 {changed_count}건 최신화 완료")
+            if changed_count:
+                temp_path = self.history_path + '.tmp'
+                with open(temp_path, 'w', encoding='utf-8') as history_file:
+                    json.dump(migrated_history, history_file, ensure_ascii=False, indent=4)
+                os.replace(temp_path, self.history_path)
+                source_mtime = os.path.getmtime(self.history_path)
+                history = migrated_history
+                print(f"[DailyWorkLog] 용접사 번호 {changed_count}건 최신화 완료")
+            self._rt_parent_history = [
+                row for day in sorted(history) for row in history[day].get('ndt_results', [])
+            ]
+            self._history_cache = history
+            self._history_cache_mtime = source_mtime
         except Exception as exc:
             print(f"[DailyWorkLog] 용접사 번호 최신화 실패: {exc}")
 
@@ -160,10 +172,7 @@ class DailyWorkLogTab(ttk.Frame):
         self.left_scrollbar = ttk.Scrollbar(self.left_container, orient="vertical", command=self.left_canvas.yview)
         self.left_frame = ttk.Frame(self.left_canvas)
         
-        def _update_left_scroll(e=None):
-            bbox = self.left_canvas.bbox("all")
-            if bbox:
-                self.left_canvas.configure(scrollregion=(0, 0, bbox[2], max(bbox[3], self.left_canvas.winfo_height())))
+        _update_left_scroll = self._bind_scroll_region(self.left_canvas)
         self.left_frame.bind("<Configure>", _update_left_scroll)
         self.left_window = self.left_canvas.create_window((0, 0), window=self.left_frame, anchor="nw")
         self.left_canvas.configure(yscrollcommand=self.left_scrollbar.set)
@@ -190,10 +199,7 @@ class DailyWorkLogTab(ttk.Frame):
         self.right_yscroll = ttk.Scrollbar(self.right_container, orient="vertical", command=self.right_canvas.yview)
         self.right_frame = ttk.Frame(self.right_canvas)
         
-        def _update_right_scroll(e=None):
-            bbox = self.right_canvas.bbox("all")
-            if bbox:
-                self.right_canvas.configure(scrollregion=(0, 0, bbox[2], max(bbox[3], self.right_canvas.winfo_height())))
+        _update_right_scroll = self._bind_scroll_region(self.right_canvas)
         self.right_frame.bind("<Configure>", _update_right_scroll)
         self.right_window = self.right_canvas.create_window((0, 0), window=self.right_frame, anchor="nw")
         self.right_canvas.configure(xscrollcommand=self.right_xscroll.set, yscrollcommand=self.right_yscroll.set)
@@ -220,6 +226,37 @@ class DailyWorkLogTab(ttk.Frame):
         
         # Initial load for today's date
         self.after(100, self.on_date_change)
+
+    @staticmethod
+    def _bind_scroll_region(canvas):
+        pending = None
+        previous_region = None
+
+        def refresh():
+            nonlocal pending, previous_region
+            pending = None
+            if not canvas.winfo_exists():
+                return
+            bbox = canvas.bbox("all")
+            if bbox:
+                region = (0, 0, bbox[2], max(bbox[3], canvas.winfo_height()))
+                if region != previous_region:
+                    canvas.configure(scrollregion=region)
+                    previous_region = region
+
+        def schedule(_event=None):
+            nonlocal pending
+            if pending is None:
+                pending = canvas.after_idle(refresh)
+
+        def cancel(_event):
+            nonlocal pending
+            if pending is not None:
+                canvas.after_cancel(pending)
+                pending = None
+
+        canvas.bind("<Destroy>", cancel, add="+")
+        return schedule
 
     def _apply_initial_pane_layout(self):
         try:
@@ -321,7 +358,7 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(right_box, text="🏷️ 공사구분 일괄", command=self._edit_ndt_work_categories, style="Warning.TButton").grid(row=1, column=2, padx=2, pady=1, sticky="w")
 
         self.ndt_selection_vars = []
-        self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
+        self.ndt_selection_text = tk.StringVar(value='체크박스로 선택 · Shift+클릭으로 범위 선택')
         ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=0, column=3, rowspan=2, padx=(8, 4), pady=1, sticky="w")
 
         # 4. 우측: 선택 행 핫태핑 및 공정사진 (2단 배치)
@@ -567,7 +604,12 @@ class DailyWorkLogTab(ttk.Frame):
 
         
         # Draw Headers
-        ttk.Label(grid_frame, text='선택').grid(row=0, column=0, padx=4)
+        selection_button = ttk.Menubutton(grid_frame, text='선택', width=5, padding=(4, 1))
+        selection_menu = tk.Menu(selection_button, tearoff=False)
+        selection_menu.add_command(label='입력된 행 선택', command=self._select_filled_ndt_rows)
+        selection_menu.add_command(label='전체 해제', command=self._clear_ndt_selection)
+        selection_button.configure(menu=selection_menu)
+        selection_button.grid(row=0, column=0, padx=(2, 4), pady=(0, 2), sticky='w')
         for col_idx, c in enumerate(self.ndt_cols, start=1):
             label = {'RT_OR': 'RT_OR 전체', 'RT_RE': 'RT_RE 불량'}.get(c, c)
             ttk.Label(grid_frame, text=label, font=("맑은 고딕", 9, "bold")).grid(row=0, column=col_idx, padx=1, pady=2)
@@ -586,7 +628,7 @@ class DailyWorkLogTab(ttk.Frame):
             
         self._ndt_grid_frame = grid_frame
         self.ndt_grid_entries = []
-        self._append_ndt_rows(30)
+        self._append_ndt_rows(10)
 
     def _append_ndt_rows(self, count=10, focus=False):
         first = len(self.ndt_grid_entries)
@@ -614,10 +656,12 @@ class DailyWorkLogTab(ttk.Frame):
         row_entries = {}
         selected = tk.BooleanVar(value=False)
         self.ndt_selection_vars.append(selected)
-        ttk.Checkbutton(
+        checkbox = ttk.Checkbutton(
             grid_frame, text=str(row_idx), variable=selected,
             command=lambda: self._toggle_ndt_row(row_entries, selected)
-        ).grid(row=row_idx, column=0, sticky='w', padx=4)
+        )
+        checkbox.grid(row=row_idx, column=0, sticky='w', padx=(4, 2))
+        checkbox.bind('<Shift-Button-1>', lambda _event: self._select_ndt_range(row_idx - 1))
 
         for col_idx, c in enumerate(self.ndt_cols, start=1):
             # Adjust width for some columns
@@ -1020,13 +1064,17 @@ class DailyWorkLogTab(ttk.Frame):
                     row[key].insert(0, values.get(key, ''))
             self._sync_ndt_spec(row)
 
-    def _replace_ndt_line(self, old_line, new_line):
+    def _replace_ndt_line(self, old_line, new_line, selected_only=False):
         old_line, new_line = old_line.strip(), new_line.strip()
         if not old_line or not new_line:
             raise ValueError('기존 라인번호와 새 라인번호를 입력하세요.')
         if old_line == new_line:
             raise ValueError('새 라인번호가 기존 번호와 같습니다.')
-        targets = [row for row in self.ndt_grid_entries if row['라인번호'].get().strip() == old_line]
+        targets = [row for index, row in enumerate(self.ndt_grid_entries)
+                   if row['라인번호'].get().strip() == old_line
+                   and (not selected_only or self.ndt_selection_vars[index].get())]
+        if not targets:
+            raise ValueError('변경할 행이 없습니다. 기존 라인번호와 체크한 행을 확인하세요.')
         for row in targets:
             row['라인번호'].set(new_line)
         if targets:
@@ -1068,7 +1116,7 @@ class DailyWorkLogTab(ttk.Frame):
         body.pack(fill='both', expand=True)
         old = tk.StringVar(value=initial or (sections[0] if sections else ''))
         new = tk.StringVar()
-        selected_only = tk.BooleanVar(value=False)
+        selected_only = tk.BooleanVar(value=True)
         preview = tk.StringVar()
         ttk.Label(body, text=f'현재 날짜: {self.date_entry.get()}').grid(
             row=0, column=0, columnspan=2, sticky='w', pady=(0, 10))
@@ -1129,23 +1177,30 @@ class DailyWorkLogTab(ttk.Frame):
         body.pack(fill='both', expand=True)
         old = tk.StringVar(value=initial if initial in lines else lines[0])
         new = tk.StringVar()
+        selected_only = tk.BooleanVar(value=True)
         preview = tk.StringVar()
         ttk.Label(body, text=f'현재 날짜: {self.date_entry.get()}').grid(row=0, column=0, columnspan=2, sticky='w', pady=(0, 10))
-        ttk.Label(body, text='기존 라인번호').grid(row=1, column=0, sticky='w', padx=(0, 10))
-        ttk.Combobox(body, textvariable=old, values=lines, state='readonly', width=42).grid(row=1, column=1, pady=4)
-        ttk.Label(body, text='새 라인번호').grid(row=2, column=0, sticky='w')
+        ttk.Radiobutton(body, text='체크한 행 중 기존 라인번호가 같은 행', variable=selected_only,
+                        value=True).grid(row=1, column=0, columnspan=2, sticky='w')
+        ttk.Radiobutton(body, text='기존 라인번호와 같은 모든 행', variable=selected_only,
+                        value=False).grid(row=2, column=0, columnspan=2, sticky='w')
+        ttk.Label(body, text='기존 라인번호').grid(row=3, column=0, sticky='w', padx=(0, 10))
+        ttk.Combobox(body, textvariable=old, values=lines, state='readonly', width=42).grid(row=3, column=1, pady=4)
+        ttk.Label(body, text='새 라인번호').grid(row=4, column=0, sticky='w')
         entry = ttk.Entry(body, textvariable=new, width=45)
-        entry.grid(row=2, column=1, pady=4)
-        ttk.Label(body, textvariable=preview).grid(row=3, column=0, columnspan=2, sticky='w', pady=10)
-        ttk.Label(body, text='변경 후 상단 저장 버튼을 눌러 주세요.').grid(row=4, column=0, columnspan=2, sticky='w')
+        entry.grid(row=4, column=1, pady=4)
+        ttk.Label(body, textvariable=preview).grid(row=5, column=0, columnspan=2, sticky='w', pady=10)
+        ttk.Label(body, text='변경 후 상단 저장 버튼을 눌러 주세요.').grid(row=6, column=0, columnspan=2, sticky='w')
 
         def update_preview(*args):
-            count = sum(row['라인번호'].get().strip() == old.get() for row in self.ndt_grid_entries)
-            preview.set(f'변경 대상: {count}행 (기존 라인번호가 일치하는 행)')
+            count = sum(row['라인번호'].get().strip() == old.get()
+                        and (not selected_only.get() or self.ndt_selection_vars[i].get())
+                        for i, row in enumerate(self.ndt_grid_entries))
+            preview.set(f'변경 대상: {count}행')
 
         def apply():
             try:
-                count = self._replace_ndt_line(old.get(), new.get())
+                count = self._replace_ndt_line(old.get(), new.get(), selected_only.get())
             except ValueError as error:
                 messagebox.showwarning('라인번호 일괄 변경', str(error), parent=dialog)
                 return
@@ -1153,9 +1208,10 @@ class DailyWorkLogTab(ttk.Frame):
             messagebox.showinfo('라인번호 일괄 변경', f'{count}행을 변경했습니다. 상단 저장 버튼을 눌러 주세요.')
 
         old.trace_add('write', update_preview)
+        selected_only.trace_add('write', update_preview)
         update_preview()
         buttons = ttk.Frame(body)
-        buttons.grid(row=5, column=0, columnspan=2, sticky='e', pady=(12, 0))
+        buttons.grid(row=7, column=0, columnspan=2, sticky='e', pady=(12, 0))
         ttk.Button(buttons, text='변경 적용', command=apply).pack(side='left', padx=4)
         ttk.Button(buttons, text='취소', command=dialog.destroy).pack(side='left')
         dialog.grab_set()
@@ -1172,8 +1228,7 @@ class DailyWorkLogTab(ttk.Frame):
         body.pack(fill='both', expand=True)
 
         new = tk.StringVar(value=initial)
-        has_checks = any(bool(v.get()) for v in self.ndt_selection_vars)
-        selected_only = tk.BooleanVar(value=has_checks)
+        selected_only = tk.BooleanVar(value=True)
         preview = tk.StringVar()
 
         ttk.Label(body, text=f'현재 날짜: {self.date_entry.get()}').grid(row=0, column=0, columnspan=2, sticky='w', pady=(0, 10))
@@ -1210,6 +1265,9 @@ class DailyWorkLogTab(ttk.Frame):
                     if any(row[k].get().strip() for k in ('업체', '라인번호', 'Joint No.', '검사방법') if k in row):
                         row['공사구분'].set(val)
                         count += 1
+            if not count:
+                messagebox.showwarning('공사구분 일괄 변경', '변경할 행이 없습니다. 체크한 행을 확인하세요.', parent=dialog)
+                return
             dialog.destroy()
             messagebox.showinfo('공사구분 일괄 변경', f'{count}개 행의 공사구분을 [{val or "공란"}]으로 변경했습니다.\n상단 [💾 자동 집계/저장]을 눌러 저장해 주세요.', parent=self)
 
@@ -1952,10 +2010,8 @@ class DailyWorkLogTab(ttk.Frame):
         return True
 
     def _select_ndt_row(self, row_entries):
+        """Focus an editing row for row-specific tools without changing batch checks."""
         self.selected_ndt_row = row_entries
-        index = next(i for i, row in enumerate(self.ndt_grid_entries, 1) if row is row_entries)
-        self.ndt_selection_vars[index - 1].set(True)
-        self._refresh_ndt_selection_text()
         method = row_entries['검사방법'].get().strip() or '-'
         section = row_entries['구간'].get().strip() or '-'
         joint = row_entries['Joint No.'].get().strip() or '-'
@@ -1966,19 +2022,45 @@ class DailyWorkLogTab(ttk.Frame):
 
     def _refresh_ndt_selection_text(self):
         count = sum(bool(var.get()) for var in self.ndt_selection_vars)
-        self.ndt_selection_text.set(f'{count}개 행 선택됨' if count else '왼쪽 체크박스로 여러 행 선택 가능')
+        self.ndt_selection_text.set(f'{count}개 행 선택됨' if count else '체크박스로 선택 · Shift+클릭으로 범위 선택')
+
+    def _select_filled_ndt_rows(self):
+        self._clear_ndt_selection()
+        first = None
+        for index, row in enumerate(self.ndt_grid_entries):
+            if any(str(widget.get()).strip() for widget in row.values()):
+                self.ndt_selection_vars[index].set(True)
+                if first is None:
+                    first = row
+        if first is not None:
+            self._select_ndt_row(first)
+        self._refresh_ndt_selection_text()
+
+    def _select_ndt_range(self, index):
+        anchor = getattr(self, '_ndt_selection_anchor', None)
+        if anchor is None:
+            anchor = index
+        first, last = sorted((anchor, index))
+        for selected in self.ndt_selection_vars[first:last + 1]:
+            selected.set(True)
+        self._select_ndt_row(self.ndt_grid_entries[index])
+        self._ndt_selection_anchor = anchor
+        self._refresh_ndt_selection_text()
+        return 'break'
 
     def _toggle_ndt_row(self, row, selected):
         if selected.get():
+            self._ndt_selection_anchor = next(i for i, var in enumerate(self.ndt_selection_vars) if var is selected)
             self._select_ndt_row(row)
         else:
             if self.selected_ndt_row is row:
                 self.selected_ndt_row = None
                 self.photo_selection_var.set('NDT 행을 선택하세요.')
-            self._refresh_ndt_selection_text()
+        self._refresh_ndt_selection_text()
 
     def _clear_ndt_selection(self, event=None):
         self.selected_ndt_row = None
+        self._ndt_selection_anchor = None
         for var in self.ndt_selection_vars:
             var.set(False)
         self._refresh_ndt_selection_text()
@@ -2091,6 +2173,13 @@ class DailyWorkLogTab(ttk.Frame):
 
         history = self.load_history()
         day_data = history.get(date_str, {})
+        saved_fields = {key: value for key, value in day_data.items() if key != 'process_photos'}
+        if (getattr(self, '_loaded_log_date', None) == date_str
+                and hasattr(self, '_saved_log_fields') and self._saved_log_fields != saved_fields):
+            messagebox.showerror('작업일보 삭제 충돌',
+                                 '다른 곳에서 이 날짜의 기록을 변경했습니다. 최신 내용을 다시 불러온 뒤 삭제해 주세요.',
+                                 parent=self)
+            return
         day_photos = day_data.get('process_photos', [])
         photo_count = len(day_photos)
 
@@ -2120,8 +2209,7 @@ class DailyWorkLogTab(ttk.Frame):
         # 먼저 해당 날짜 기록을 저장소에서 제거한 뒤 관리용 사진을 정리한다.
         # 저장에 실패하면 사진 삭제를 시작하지 않는다.
         if date_str in history:
-            del history[date_str]
-            self.save_history(history)
+            self.save_history({day: data for day, data in history.items() if day != date_str})
 
         deleted_photo_count = 0
         failed_photos = []
@@ -2171,6 +2259,11 @@ class DailyWorkLogTab(ttk.Frame):
                     ent.set('')
                 elif hasattr(ent, 'delete'):
                     ent.delete(0, tk.END)
+
+        self._clear_ndt_selection()
+        self._loaded_log_date = date_str
+        self._saved_log_fields = {}
+        self._log_baseline = self._capture_log_input()
             
         if hasattr(self, 'log'):
             self.log(f"[{date_str}] 작업일보 데이터가 삭제되었습니다.")
@@ -2541,15 +2634,36 @@ class DailyWorkLogTab(ttk.Frame):
             )
             raise SharedDataUnavailableError(connection_error)
 
-        if os.path.isfile(self.history_path):
-            self.load_history() # Refuse to overwrite an unreadable existing history.
-            shutil.copy2(self.history_path, self.history_path + '.backup.json')
-        temp_path = self.history_path + '.tmp'
-        with open(temp_path, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False, indent=4)
-        os.replace(temp_path, self.history_path)
+        expected_mtime = getattr(self, '_history_cache_mtime', None)
+        temp_path = self.history_path + f'.{uuid.uuid4().hex}.tmp'
+
+        def verify_version():
+            try:
+                current_mtime = os.path.getmtime(self.history_path)
+            except FileNotFoundError:
+                current_mtime = None
+            if current_mtime != expected_mtime:
+                self._history_cache = None
+                self._history_cache_mtime = None
+                message = '다른 곳에서 작업일보를 변경했습니다. 작성 내용은 화면에 남아 있습니다.'
+                messagebox.showerror('작업일보 저장 충돌', message, parent=self)
+                raise OSError(message)
+
+        try:
+            verify_version()
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                json.dump(history, f, ensure_ascii=False, indent=4)
+            if expected_mtime is not None:
+                shutil.copy2(self.history_path, self.history_path + '.backup.json')
+            verify_version()
+            os.replace(temp_path, self.history_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
         self._history_cache = history
         self._history_cache_mtime = os.path.getmtime(self.history_path) if os.path.exists(self.history_path) else None
+        self._corrected_history_source = None
+        self._corrected_history_cache = None
         self._refresh_ndt_history_choices(history)
         self._refresh_saved_date_markers(history)
         self._update_date_status(history)
@@ -2614,6 +2728,13 @@ class DailyWorkLogTab(ttk.Frame):
             return
         history = self.load_history()
         current_date = self._selected_date_key()
+        saved_fields = {key: value for key, value in history.get(current_date, {}).items()
+                        if key != 'process_photos'}
+        if (getattr(self, '_loaded_log_date', None) == current_date
+                and hasattr(self, '_saved_log_fields') and self._saved_log_fields != saved_fields):
+            message = '작성 중인 날짜가 다른 곳에서 변경되었습니다. 작성 내용을 보존한 뒤 최신 기록을 다시 확인해 주세요.'
+            messagebox.showerror('작업일보 저장 충돌', message, parent=self)
+            raise OSError(message)
         if not self._validate_hot_rows():
             return
         existing_photos = history.get(current_date, {}).get('process_photos', [])
@@ -2647,9 +2768,10 @@ class DailyWorkLogTab(ttk.Frame):
             row_dict.update(getattr(row_entries.get('구간정보'), '_rt_retake_meta', {}))
             data['ndt_results'].append(row_dict)
             
-        history[current_date] = data
-        self.save_history(history)
+        from copy import deepcopy
+        self.save_history({**history, current_date: data})
         self._loaded_log_date = current_date
+        self._saved_log_fields = deepcopy({key: value for key, value in data.items() if key != 'process_photos'})
         self._log_baseline = self._capture_log_input()
 
     def _capture_log_input(self):
@@ -2665,6 +2787,12 @@ class DailyWorkLogTab(ttk.Frame):
             'ndt': [{key: widget.get() for key, widget in row.items() if hasattr(widget, 'get')}
                     for row in self.ndt_grid_entries],
         }
+
+    def _history_for_date_view(self, history):
+        if getattr(self, '_corrected_history_source', None) is not history:
+            self._corrected_history_cache = corrected_rt_history(history)
+            self._corrected_history_source = history
+        return self._corrected_history_cache
 
     def on_date_change(self, event=None):
         current_date = self._selected_date_key()
@@ -2684,7 +2812,7 @@ class DailyWorkLogTab(ttk.Frame):
             return
         self._clear_ndt_selection()
         # 화면에서도 RT 불량과 불량률을 검사수량 누계와 같은 기준으로 표시한다.
-        history = corrected_rt_history(loaded_history)
+        history = self._history_for_date_view(loaded_history)
         self._refresh_saved_date_markers(history)
         self._update_date_status(history)
         
@@ -2918,7 +3046,10 @@ class DailyWorkLogTab(ttk.Frame):
             if rt_expected > 0:
                 self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
 
+        from copy import deepcopy
         self._loaded_log_date = current_date
+        self._saved_log_fields = deepcopy({key: value for key, value in loaded_history.get(current_date, {}).items()
+                                          if key != 'process_photos'})
         self._log_baseline = self._capture_log_input()
 
     def auto_calculate_and_save(self, show_completion=True):

@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 import uuid
 
+from ..data_sync import get_data_dir, get_external_data_root
 
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / 'data' / 'report_issue_history.json'
 SYNC_CONFIG = Path(__file__).resolve().parents[1] / 'sync_config.json'
@@ -15,6 +16,8 @@ SYNC_CONFIG = Path(__file__).resolve().parents[1] / 'sync_config.json'
 def resolve_history_path(path=None):
     if path is not None:
         return Path(path)
+    if get_external_data_root():
+        return Path(get_data_dir()) / DEFAULT_PATH.name
     if not DEFAULT_PATH.exists():
         # Fallback to ndt_report data if central data does not exist yet
         fallback = Path(__file__).resolve().parents[4] / 'report_apps' / 'ndt_report' / 'data' / 'report_issue_history.json'

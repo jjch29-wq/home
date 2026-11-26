@@ -9,6 +9,10 @@ import json
 import logging
 import os
 import shutil
+import tempfile
+from collections import Counter
+from threading import Lock
+from contextlib import contextmanager
 import urllib.request
 import urllib.parse
 from datetime import datetime
@@ -17,12 +21,24 @@ from typing import Dict, List, Optional, Tuple, Any
 
 import pandas as pd
 from .runtime_profile import is_development, disabled_sync_result
+from .data_sync import get_external_data_root, get_business_data_dir
 
 logger = logging.getLogger("central_sync")
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "data" / "google_sync_config.json"
 DEFAULT_INVENTORY_PATH = Path(__file__).resolve().parent.parent / "data" / "Material_Inventory.xlsx"
 
+
+def get_sync_inventory_path() -> Path:
+    if get_external_data_root():
+        return Path(get_business_data_dir()) / DEFAULT_INVENTORY_PATH.name
+    return DEFAULT_INVENTORY_PATH
+
+
+def _get_sync_config_path() -> Path:
+    if get_external_data_root():
+        return Path(get_business_data_dir()) / CONFIG_PATH.name
+    return CONFIG_PATH
 
 def _sync_state_path(inventory_path: Path) -> Path:
     """Return the per-database state used to recognize mobile deletions safely."""
@@ -42,18 +58,46 @@ def _load_sync_state(inventory_path: Path) -> Dict[str, Any]:
     return {"cloud_entry_times": []}
 
 
+def _inventory_version(path: Path):
+    metadata = path.stat()
+    return metadata.st_ino, metadata.st_size, metadata.st_mtime_ns
+
+
+@contextmanager
+def _atomic_output(target: Path, copy_existing=False, expected_version=None):
+    with tempfile.NamedTemporaryFile(
+        dir=target.parent, suffix=target.suffix, delete=False
+    ) as stream:
+        temporary = Path(stream.name)
+    try:
+        if copy_existing:
+            shutil.copyfile(target, temporary)
+        yield temporary
+        if expected_version is not None and _inventory_version(target) != expected_version:
+            raise RuntimeError("동기화 중 재고 원본이 변경되었습니다. 최신 자료로 다시 시도해 주세요.")
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _save_sync_state(inventory_path: Path, cloud_entry_times: set) -> None:
     path = _sync_state_path(inventory_path)
     payload = {
         "cloud_entry_times": sorted(cloud_entry_times),
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    with _atomic_output(path) as temporary:
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def get_all_inventory_paths() -> List[Path]:
     """중앙지사의 모든 재고 DB 경로 탐색 (로컬 및 Google Drive)"""
     if is_development():
         return [DEFAULT_INVENTORY_PATH] if DEFAULT_INVENTORY_PATH.exists() else []
+    if get_external_data_root():
+        path = get_sync_inventory_path()
+        if not path.is_file():
+            raise FileNotFoundError(f"중앙지사 운영 재고 파일이 없습니다: {path}")
+        return [path]
     paths = []
     if DEFAULT_INVENTORY_PATH.exists():
         paths.append(DEFAULT_INVENTORY_PATH)
@@ -84,9 +128,10 @@ def get_all_inventory_paths() -> List[Path]:
 def load_sync_config() -> dict:
     if is_development():
         return {'web_app_url': '', 'sheet_id': '', 'auto_sync_on_startup': False, 'last_sync_time': ''}
-    if CONFIG_PATH.exists():
+    config_path = _get_sync_config_path()
+    if config_path.exists():
         try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            with config_path.open("r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.warning(f"설정 파일 읽기 오류: {e}")
@@ -99,8 +144,9 @@ def load_sync_config() -> dict:
 
 def save_sync_config(cfg: dict) -> bool:
     try:
-        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        config_path = _get_sync_config_path()
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with _atomic_output(config_path) as temporary, temporary.open("w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
@@ -129,8 +175,14 @@ def fetch_records_from_web_app(web_app_url: str) -> Tuple[List[str], List[Dict[s
     if data.get("status") != "success":
         raise RuntimeError(f"클라우드 API 반환 오류: {data.get('detail', 'Unknown error')}")
 
-    headers = data.get("headers", [])
-    rows = data.get("rows", [])
+    headers = data.get("headers")
+    rows = data.get("rows")
+    if (
+        not isinstance(headers, list) or "EntryTime" not in headers
+        or not isinstance(rows, list)
+        or any(not isinstance(row, dict) or "EntryTime" not in row for row in rows)
+    ):
+        raise ValueError("클라우드 일보 응답에 입력 시각 또는 작업 목록이 없습니다.")
     return headers, rows
 
 def _normalized_entry_time(value):
@@ -168,7 +220,7 @@ def sync_records_to_excel(
     inventory_path: Optional[Path] = None
 ) -> Dict[str, Any]:
     """구글 시트에서 가져온 레코드들을 로컬/클라우드 Material_Inventory.xlsx의 DailyUsage에 추가"""
-    target_path = Path(inventory_path) if inventory_path else DEFAULT_INVENTORY_PATH
+    target_path = Path(inventory_path) if inventory_path else get_sync_inventory_path()
     if not target_path.exists():
         raise FileNotFoundError(f"재고 파일이 존재하지 않습니다: {target_path}")
 
@@ -180,6 +232,7 @@ def sync_records_to_excel(
     shutil.copy2(target_path, backup_path)
 
     # 엑셀 파일 읽기
+    inventory_version = _inventory_version(target_path)
     with pd.ExcelFile(target_path) as excel_file:
         all_sheets = {sheet: excel_file.parse(sheet) for sheet in excel_file.sheet_names}
 
@@ -190,6 +243,8 @@ def sync_records_to_excel(
 
     # 기존 행들의 고유 키 집합 생성 (중복 방지)
     existing_keys = set()
+    known_ids = set()
+    legacy_keys = set()
     for _, row in daily_df.iterrows():
         entry_time = _normalized_entry_time(row.get("EntryTime", ""))
         date_str = str(row.get("Date", "")).split()[0].strip()
@@ -203,6 +258,11 @@ def sync_records_to_excel(
         composite_key = f"COMP:{_sync_content_key(row)}"
         if not entry_time:
             existing_keys.add(composite_key)
+        client_id = _client_request_id(row)
+        if client_id:
+            known_ids.add(client_id)
+        else:
+            legacy_keys.add(f"TIME:{entry_time}|{_sync_content_key(row)}" if entry_time else composite_key)
 
     new_rows = []
     skipped_count = 0
@@ -218,11 +278,18 @@ def sync_records_to_excel(
         time_key = f"TIME:{entry_time}|{_sync_content_key(r)}" if entry_time else None
         comp_key = f"COMP:{_sync_content_key(r)}"
 
-        if (time_key in existing_keys if time_key else comp_key in existing_keys):
+        client_id = _client_request_id(r)
+        key = time_key or comp_key
+        duplicate = (client_id in known_ids or key in legacy_keys) if client_id else key in existing_keys
+        if duplicate:
             skipped_count += 1
             continue
 
         new_rows.append(r)
+        if client_id:
+            known_ids.add(client_id)
+        else:
+            legacy_keys.add(key)
         if time_key:
             existing_keys.add(time_key)
         if not time_key:
@@ -238,6 +305,8 @@ def sync_records_to_excel(
         }
 
     new_df = pd.DataFrame(new_rows)
+    if "ClientRequestID" in new_df and "ClientRequestID" not in daily_df:
+        daily_df = daily_df.assign(ClientRequestID="")
     for col in daily_df.columns:
         if col not in new_df.columns:
             new_df[col] = None
@@ -247,7 +316,7 @@ def sync_records_to_excel(
 
     all_sheets["DailyUsage"] = updated_daily_df
 
-    with pd.ExcelWriter(target_path, engine="openpyxl") as writer:
+    with _atomic_output(target_path, expected_version=inventory_version) as temporary, pd.ExcelWriter(temporary, engine="openpyxl") as writer:
         for sheet_name, df in all_sheets.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False)
 
@@ -297,6 +366,8 @@ def push_record_to_web_app(
         "entry_time": str(original_entry_time or record.get("EntryTime", "")).split(".")[0].strip(),
         "row_data": clean_record_for_json(record)
     }
+    if action == "delete" and record.get("ClientRequestID"):
+        payload["client_request_id"] = record["ClientRequestID"]
 
     try:
         try:
@@ -329,12 +400,14 @@ def push_record_to_web_app(
 
 def push_delete_to_web_app(
     entry_time: str,
-    web_app_url: Optional[str] = None
+    web_app_url: Optional[str] = None,
+    client_request_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     중앙지사 PC에서 삭제된 작업 일보의 EntryTime을 Google Apps Script Web App에 전송하여 시트에서도 삭제
     """
-    return push_record_to_web_app({}, action="delete", original_entry_time=entry_time, web_app_url=web_app_url)
+    record = {"ClientRequestID": client_request_id} if client_request_id else {}
+    return push_record_to_web_app(record, action="delete", original_entry_time=entry_time, web_app_url=web_app_url)
 
 def push_batch_to_web_app(
     saves: Optional[List[Dict[str, Any]]] = None,
@@ -415,15 +488,17 @@ def two_way_reconcile_with_web_app(
     if not target_url:
         return {"status": "error", "message": "Google Apps Script URL 미설정"}
 
-    target_path = Path(inventory_path) if inventory_path else DEFAULT_INVENTORY_PATH
+    target_path = Path(inventory_path) if inventory_path else get_sync_inventory_path()
     if not target_path.exists():
         return {"status": "error", "message": f"재고 파일이 존재하지 않습니다: {target_path}"}
 
+    applied = {"added_count": 0, "pulled_count": 0, "updated_count": 0, "deleted_count": 0}
     try:
         # 1. 구글 시트 전체 레코드 가져오기
         headers, cloud_rows = fetch_records_from_web_app(target_url)
 
         # 2. 엑셀 파일 읽기
+        inventory_version = _inventory_version(target_path)
         with pd.ExcelFile(target_path) as ef:
             all_sheets = {sheet: ef.parse(sheet) for sheet in ef.sheet_names}
 
@@ -433,11 +508,14 @@ def two_way_reconcile_with_web_app(
         daily_df = all_sheets["DailyUsage"].copy()
         local_rows = daily_df.to_dict(orient="records") if not daily_df.empty else []
         previous_cloud_times = set(_load_sync_state(target_path).get("cloud_entry_times", []))
+        if any(key.startswith("ID:") for key in previous_cloud_times) and "ClientRequestID" not in headers:
+            raise ValueError("모바일 응답에 작업 ID 열이 없어 기존 기록을 보호하기 위해 동기화를 중단했습니다.")
 
         def get_keys(r):
             entry_time = _normalized_entry_time(r.get('EntryTime'))
             time_key = f"TIME:{entry_time}" if entry_time else None
-            comp_key = f"COMP:{entry_time}|{_sync_content_key(r)}"
+            client_id = _client_request_id(r)
+            comp_key = f"ID:{client_id}" if client_id else f"COMP:{entry_time}|{_sync_content_key(r)}"
             return time_key, comp_key
 
         def same_job(left, right):
@@ -449,6 +527,12 @@ def two_way_reconcile_with_web_app(
             return identity(left) == identity(right)
 
         def matching_record(record, candidates):
+            client_id = _client_request_id(record)
+            if client_id:
+                same_id = [row for row in candidates if _client_request_id(row) == client_id]
+                if same_id:
+                    return same_id[0] if len(same_id) == 1 else None
+                candidates = [row for row in candidates if not _client_request_id(row)]
             content = _sync_content_key(record)
             exact = [row for row in candidates if _sync_content_key(row) == content]
             if len(exact) == 1:
@@ -489,21 +573,22 @@ def two_way_reconcile_with_web_app(
                 cloud_time_map[tk] = r
             cloud_keys.add(ck)
 
-        current_cloud_times = {
-            str(r.get("EntryTime", "")).split(".")[0].strip()
-            for r in cloud_rows
-            if str(r.get("EntryTime", "")).split(".")[0].strip() not in ("", "nan")
-        }
+        current_cloud_times = set(_deletion_keys(cloud_rows))
 
         # Only infer a mobile deletion for rows observed in the previous successful
         # cloud snapshot. The first sync preserves every PC row to avoid data loss.
         mobile_deleted_times = previous_cloud_times - current_cloud_times
         mobile_deleted_count = 0
         if mobile_deleted_times:
+            local_id_counts = Counter(filter(None, map(_client_request_id, local_rows)))
             retained_rows = []
             for row in local_rows:
-                entry_time = str(row.get("EntryTime", "")).split(".")[0].strip()
-                if entry_time not in mobile_deleted_times or len(local_groups.get(f'TIME:{entry_time}', [])) > 1:
+                key = inventory_deletion_key(row)
+                if key.startswith("ID:"):
+                    ambiguous = local_id_counts[key[3:]] > 1
+                else:
+                    ambiguous = len(local_groups.get(f"TIME:{key}", [])) > 1
+                if key not in mobile_deleted_times or ambiguous:
                     retained_rows.append(row)
             if len(retained_rows) != len(local_rows):
                 mobile_deleted_count = len(local_rows) - len(retained_rows)
@@ -513,9 +598,11 @@ def two_way_reconcile_with_web_app(
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 shutil.copy2(target_path, backup_dir / f"Material_Inventory_pre_mobile_delete_{timestamp}.xlsx")
-                with pd.ExcelWriter(target_path, engine="openpyxl") as writer:
+                with _atomic_output(target_path, expected_version=inventory_version) as temporary, pd.ExcelWriter(temporary, engine="openpyxl") as writer:
                     for sheet_name, frame in all_sheets.items():
                         frame.to_excel(writer, sheet_name=sheet_name, index=False)
+                applied["deleted_count"] = mobile_deleted_count
+                inventory_version = _inventory_version(target_path)
 
                 local_keys = set()
                 local_time_map = {}
@@ -560,6 +647,9 @@ def two_way_reconcile_with_web_app(
                         and any(_norm_val(lr.get(k)) not in ('', '0')
                                 for k in ('검사량', 'Usage'))):
                     quantity_key = None
+                if _client_request_id(cr) and not _client_request_id(lr):
+                    lr["ClientRequestID"] = _client_request_id(cr)
+                    row_changed = True
                 for col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "관경(Inch)", "규격", "출장비", "검사비", "핫태핑차수", "핫태핑개소", "핫태핑관경"]:
                     if col in cr and _norm_val(lr.get(col)) != _norm_val(cr.get(col)):
                         lr[col] = cr[col]
@@ -587,8 +677,10 @@ def two_way_reconcile_with_web_app(
             with pd.ExcelFile(target_path) as ef:
                 all_sheets = {sheet: ef.parse(sheet) for sheet in ef.sheet_names}
             all_sheets["DailyUsage"] = pd.DataFrame(local_rows)
-            with pd.ExcelWriter(target_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-                all_sheets["DailyUsage"].to_excel(writer, sheet_name="DailyUsage", index=False)
+            with _atomic_output(target_path, copy_existing=True, expected_version=inventory_version) as temporary:
+                with pd.ExcelWriter(temporary, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+                    all_sheets["DailyUsage"].to_excel(writer, sheet_name="DailyUsage", index=False)
+            applied["updated_count"] = updated_count
             logger.info("모바일 수정 사항이 로컬 엑셀 행에 제자리 갱신되었습니다.")
 
         # Append new jobs after in-place updates; otherwise replacing the old
@@ -596,6 +688,7 @@ def two_way_reconcile_with_web_app(
         if to_pull:
             res_p = sync_records_to_excel(to_pull, inventory_path=target_path)
             pulled_cnt = res_p.get("added_count", 0)
+            applied.update(added_count=pulled_cnt, pulled_count=pulled_cnt)
 
         # B. PC에만 있는 행 -> 구글 시트로 밀어넣기 (Push)
         to_push_saves = []
@@ -635,16 +728,18 @@ def two_way_reconcile_with_web_app(
             pushed_cnt = res_batch.get("added_count", 0) + res_batch.get("updated_count", 0)
             if res_batch.get("status") != "success":
                 return {
+                    **applied,
                     "status": "error",
                     "message": res_batch.get("message", "모바일 클라우드 전송에 실패했습니다."),
                     "pulled_count": pulled_cnt,
                     "pushed_count": pushed_cnt,
                 }
 
-        if target_path.resolve() == DEFAULT_INVENTORY_PATH.resolve():
-            cfg["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            save_sync_config(cfg)
         _save_sync_state(target_path, current_cloud_times)
+        if target_path.resolve() == get_sync_inventory_path().resolve():
+            cfg["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if not save_sync_config(cfg):
+                return {**applied, "status": "error", "message": "동기화 데이터를 반영했지만 마지막 동기화 시각을 저장하지 못했습니다."}
 
         return {
             "status": "success",
@@ -662,7 +757,7 @@ def two_way_reconcile_with_web_app(
         }
     except Exception as e:
         logger.error(f"양방향 동기화 오류: {e}")
-        return {"status": "error", "message": f"양방향 동기화 오류: {e}"}
+        return {**applied, "status": "error", "message": f"양방향 동기화 오류: {e}"}
 
 def run_sync(web_app_url: Optional[str] = None, inventory_path: Optional[Path] = None) -> Dict[str, Any]:
     """통합 동기화 실행 함수 (완전 양방향 지원)"""
@@ -713,7 +808,120 @@ def sync_local_and_drive_files() -> Dict[str, Any]:
         logger.error(f"로컬/드라이브 동기화 실패: {e}")
         return {"status": "error", "message": str(e), "added_count": 0}
 
+_CENTRAL_SYNC_LOCK = Lock()
+
+
+@contextmanager
+def queue_inventory_deletions(inventory_path, entry_times):
+    """Record deletion intents before the local save, under the sync lock."""
+    if is_development() or not entry_times or not inventory_path:
+        yield
+        return
+    if not _CENTRAL_SYNC_LOCK.acquire(blocking=False):
+        raise RuntimeError("모바일 동기화가 진행 중입니다. 완료 후 삭제를 다시 시도해 주세요.")
+    try:
+        path = Path(inventory_path).with_name(".mobile_pending_deletes.json")
+        pending = _load_pending_deletes(path)
+        _write_pending_deletes(path, pending | set(entry_times))
+        yield
+    finally:
+        _CENTRAL_SYNC_LOCK.release()
+
+
+def _load_pending_deletes(path):
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return set()
+    if not isinstance(entries, list) or not all(isinstance(value, str) and value for value in entries):
+        raise ValueError("모바일 삭제 대기열 형식이 올바르지 않습니다.")
+    return set(entries)
+
+
+def _write_pending_deletes(path, pending):
+    with _atomic_output(path) as temporary:
+        temporary.write_text(json.dumps(sorted(pending), ensure_ascii=False), encoding="utf-8")
+
+
+def _client_request_id(row):
+    client_id = row.get("ClientRequestID")
+    if client_id is not None and not pd.isna(client_id) and str(client_id).strip():
+        return str(client_id).strip()
+    return ""
+
+
+def inventory_deletion_key(row):
+    client_id = _client_request_id(row)
+    if client_id:
+        return f"ID:{client_id}"
+    return _normalized_entry_time(row.get("EntryTime"))
+
+
+def _deletion_keys(rows):
+    keys = []
+    for row in rows:
+        entry_time = _normalized_entry_time(row.get("EntryTime"))
+        key = inventory_deletion_key(row)
+        if entry_time:
+            keys.append(entry_time)
+        if key and key != entry_time:
+            keys.append(key)
+    return keys
+
+
+def _inventory_entry_times(inventory):
+    daily = pd.read_excel(inventory, sheet_name="DailyUsage")
+    if daily.empty and "EntryTime" not in daily:
+        return set()
+    return set(_deletion_keys(daily.to_dict("records")))
+
+
+def _validate_pending_deletes_across_inventories(inventories):
+    for inventory in inventories:
+        pending = _load_pending_deletes(inventory.with_name(".mobile_pending_deletes.json"))
+        if not pending:
+            continue
+        deleted = pending - _inventory_entry_times(inventory)
+        for other in inventories:
+            if other != inventory and deleted and deleted & _inventory_entry_times(other):
+                raise RuntimeError("다른 재고 사본에 삭제 대상 기록이 남아 있어 동기화를 보류했습니다.")
+
+
+def _flush_pending_deletes(inventory, web_app_url):
+    path = inventory.with_name(".mobile_pending_deletes.json")
+    pending = _load_pending_deletes(path)
+    if not pending:
+        return
+
+    local_times = _inventory_entry_times(inventory)
+    headers, cloud = fetch_records_from_web_app(web_app_url)
+    if any(key.startswith("ID:") for key in pending) and "ClientRequestID" not in headers:
+        raise ValueError("모바일 응답에 작업 ID 열이 없어 삭제 요청을 보관했습니다.")
+    cloud_times = Counter(_deletion_keys(cloud))
+    for entry_time in sorted(pending):
+        if entry_time not in local_times and entry_time in cloud_times:
+            if cloud_times[entry_time] != 1:
+                raise RuntimeError(f"같은 입력 시각의 모바일 기록이 여러 건입니다: {entry_time}")
+            if entry_time.startswith("ID:"):
+                result = push_delete_to_web_app("", web_app_url=web_app_url, client_request_id=entry_time[3:])
+            else:
+                result = push_delete_to_web_app(entry_time, web_app_url=web_app_url)
+            if result.get("status") != "success":
+                raise RuntimeError(result.get("message") or result.get("detail") or "모바일 삭제 전송 실패")
+        pending.remove(entry_time)
+        _write_pending_deletes(path, pending)
+
+
 def sync_all_central_sources() -> Dict[str, Any]:
+    if not _CENTRAL_SYNC_LOCK.acquire(blocking=False):
+        return {"status": "busy", "message": "모바일 동기화가 이미 진행 중입니다."}
+    try:
+        return _sync_all_central_sources()
+    finally:
+        _CENTRAL_SYNC_LOCK.release()
+
+
+def _sync_all_central_sources() -> Dict[str, Any]:
     """
     중앙지사 전체 데이터 소스 (Google Apps Script Web App + Google Drive + Local) 자동 통합 동기화
     휴대폰에서 저장된 내역을 앱 실행 시 또는 백그라운드에서 자동으로 감지하여 엑셀에 반영합니다.
@@ -728,6 +936,18 @@ def sync_all_central_sources() -> Dict[str, Any]:
     conflict_count = 0
     messages = []
     errors = []
+    mobile_synced = False
+
+    cfg = load_sync_config()
+    target_url = cfg.get("web_app_url")
+    try:
+        inventories = list(dict.fromkeys(path.resolve() for path in get_all_inventory_paths()))
+        _validate_pending_deletes_across_inventories(inventories)
+        if target_url:
+            for inventory in inventories:
+                _flush_pending_deletes(inventory, target_url)
+    except Exception as exc:
+        return {"status": "error", "message": f"모바일 삭제 동기화 보류: {exc}"}
 
     # 1. Google Drive 및 Local 간 상호 동기화
     res_drive = sync_local_and_drive_files()
@@ -738,22 +958,19 @@ def sync_all_central_sources() -> Dict[str, Any]:
         messages.append(res_drive["message"])
 
     # 2. Google Apps Script 클라우드 Web App 동기화 (설정된 경우)
-    cfg = load_sync_config()
-    target_url = cfg.get("web_app_url")
     if target_url:
         try:
-            for p in get_all_inventory_paths():
+            for p in inventories:
                 res_web = run_sync(target_url, inventory_path=p)
+                added = res_web.get("added_count", 0)
+                total_added += added
+                pulled_count += res_web.get("pulled_count", added)
+                pushed_count += res_web.get("pushed_count", 0)
+                updated_count += res_web.get('updated_count', 0)
+                deleted_count += res_web.get('deleted_count', 0)
+                conflict_count += res_web.get('conflict_count', 0)
                 if res_web.get("status") == "success":
-                    added = res_web.get("added_count", 0)
-                    pulled = res_web.get("pulled_count", added)
-                    pushed = res_web.get("pushed_count", 0)
-                    total_added += added
-                    pulled_count += pulled
-                    pushed_count += pushed
-                    updated_count += res_web.get('updated_count', 0)
-                    deleted_count += res_web.get('deleted_count', 0)
-                    conflict_count += res_web.get('conflict_count', 0)
+                    mobile_synced = True
                     if res_web.get("message"):
                         messages.append(res_web["message"])
                 else:
@@ -772,6 +989,7 @@ def sync_all_central_sources() -> Dict[str, Any]:
         "deleted_count": deleted_count,
         "conflict_count": conflict_count,
         "errors": errors,
+        "last_success_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S") if mobile_synced and not errors else "",
         "message": summary_msg
     }
 

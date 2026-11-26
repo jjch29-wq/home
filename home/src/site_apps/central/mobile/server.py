@@ -6,7 +6,9 @@ import sys
 import math
 import json
 import datetime
+import uuid
 from pathlib import Path
+from threading import Lock
 from typing import List, Dict, Any, Optional
 
 import pandas as pd
@@ -15,7 +17,6 @@ import openpyxl
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Add central src to path
@@ -28,18 +29,12 @@ if str(HOME_SRC) not in sys.path:
 
 from site_apps.central.src.services.ot_calculator import ot_breakdown
 from site_apps.central.src.services.inspection_quantity import quantity_per_joint
-from site_apps.central.src.data_sync import get_business_data_dir
+from site_apps.central.src.data_sync import get_business_data_dir, get_external_data_root, SharedDataUnavailableError
 from site_apps.central.src.runtime_profile import is_development
+from site_apps.central.src.sync_google_sheet import _atomic_output, _inventory_version
 
 app = FastAPI(title="중앙지사 모바일 현장 입력 시스템", version="1.0.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 def safe_float(val, default=0.0):
     try:
@@ -184,6 +179,12 @@ def get_inventory_paths():
     if is_development():
         local = Path(__file__).resolve().parents[1] / 'data' / 'Material_Inventory.xlsx'
         return [str(local)] if local.exists() else []
+    if get_external_data_root():
+        try:
+            path = Path(get_business_data_dir()) / "Material_Inventory.xlsx"
+        except SharedDataUnavailableError:
+            return []
+        return [str(path)] if path.is_file() else []
     paths = []
     local_p = Path(__file__).resolve().parents[1] / "data" / "Material_Inventory.xlsx"
     if local_p.exists():
@@ -312,11 +313,13 @@ class RecordSaveRequest(BaseModel):
 class RecordUpdateRequest(RecordSaveRequest):
     id: Optional[int] = None
     entry_time: Optional[str] = None
+    client_request_id: Optional[str] = None
     is_update: bool = True
 
 class RecordDeleteRequest(BaseModel):
     id: Optional[int] = None
     entry_time: Optional[str] = None
+    client_request_id: Optional[str] = None
 
 @app.get("/api/config")
 def get_config():
@@ -448,6 +451,7 @@ def get_recent_records(date: Optional[str] = None):
             records.append({
                 "id": int(idx),
                 "entry_time": entry_time_val,
+                "client_request_id": safe_str(row.get("ClientRequestID")),
                 "date": safe_str(row.get("Date_str"), safe_str(row.get("Date"))),
                 "site": safe_str(row.get("Site"), "중앙지사"),
                 "company": safe_str(row.get("업체명"), "한국지역난방공사 중앙지사"),
@@ -604,6 +608,31 @@ def build_row_data(req: RecordSaveRequest, preserve_entry_time: Optional[str] = 
     row_dict["(Full작업자)"] = ", ".join(all_workers_desc)
     return row_dict
 
+def _find_workbook_record(ws, headers, req):
+    if req.client_request_id:
+        column_name, key = "ClientRequestID", req.client_request_id.strip()
+    else:
+        column_name = "EntryTime" if "EntryTime" in headers else "입력시간"
+        key = (req.entry_time or "").strip()
+    if not key or column_name not in headers:
+        return None
+    column = headers.index(column_name) + 1
+    matches = [index for index in range(2, ws.max_row + 1)
+               if str(ws.cell(row=index, column=column).value or "").strip() == key]
+    if len(matches) > 1:
+        raise HTTPException(status_code=409, detail="같은 식별자의 작업 기록이 여러 건입니다.")
+    return matches[0] if matches else None
+
+
+_INVENTORY_WRITE_LOCK = Lock()
+
+
+def _save_inventory_workbook(wb, path, version):
+    with _INVENTORY_WRITE_LOCK:
+        with _atomic_output(path, expected_version=version) as temporary:
+            wb.save(temporary)
+
+
 @app.post("/api/save_record")
 def save_record(req: RecordSaveRequest):
     paths = get_inventory_paths()
@@ -611,15 +640,21 @@ def save_record(req: RecordSaveRequest):
         raise HTTPException(status_code=500, detail="Database file not found")
 
     row_dict = build_row_data(req)
+    row_dict["ClientRequestID"] = uuid.uuid4().hex
 
     saved_dbs = []
     for p in paths:
         try:
+            path = Path(p)
+            version = _inventory_version(path)
             wb = openpyxl.load_workbook(p)
             if "DailyUsage" not in wb.sheetnames:
                 continue
             ws = wb["DailyUsage"]
             headers = [cell.value for cell in ws[1]]
+            if "ClientRequestID" not in headers:
+                headers.append("ClientRequestID")
+                ws.cell(row=1, column=len(headers), value="ClientRequestID")
 
             row_values = []
             for h in headers:
@@ -627,7 +662,7 @@ def save_record(req: RecordSaveRequest):
                 row_values.append(val)
 
             ws.append(row_values)
-            wb.save(p)
+            _save_inventory_workbook(wb, path, version)
             saved_dbs.append(p)
         except Exception as ex:
             print(f"Error saving to {p}: {ex}")
@@ -648,41 +683,32 @@ def update_record(req: RecordUpdateRequest):
         raise HTTPException(status_code=500, detail="Database file not found")
 
     row_dict = build_row_data(req, preserve_entry_time=req.entry_time)
+    row_dict.pop("EntryTime", None)
+    row_dict.pop("입력시간", None)
 
     updated_dbs = []
     for p in paths:
         try:
+            path = Path(p)
+            version = _inventory_version(path)
             wb = openpyxl.load_workbook(p)
             if "DailyUsage" not in wb.sheetnames:
                 continue
             ws = wb["DailyUsage"]
             headers = [cell.value for cell in ws[1]]
 
-            target_row_idx = None
-
-            # 1. Match by EntryTime if available
-            if req.entry_time and ("EntryTime" in headers or "입력시간" in headers):
-                time_col = headers.index("EntryTime") + 1 if "EntryTime" in headers else headers.index("입력시간") + 1
-                for r in range(2, ws.max_row + 1):
-                    val = str(ws.cell(row=r, column=time_col).value or "").strip()
-                    if val == req.entry_time.strip():
-                        target_row_idx = r
-                        break
-
-            # 2. Fallback to row index id (id is 0-based index from DataFrame -> row is id + 2)
-            if target_row_idx is None and req.id is not None:
-                candidate_row = req.id + 2
-                if 2 <= candidate_row <= ws.max_row:
-                    target_row_idx = candidate_row
+            target_row_idx = _find_workbook_record(ws, headers, req)
 
             if target_row_idx is not None:
                 for col_idx, h in enumerate(headers, start=1):
                     if h in row_dict:
                         ws.cell(row=target_row_idx, column=col_idx, value=row_dict[h])
-                wb.save(p)
+                _save_inventory_workbook(wb, path, version)
                 updated_dbs.append(p)
             else:
                 print(f"Record not found for update in {p}")
+        except HTTPException:
+            raise
         except Exception as ex:
             print(f"Error updating {p}: {ex}")
 
@@ -704,32 +730,24 @@ def delete_record(req: RecordDeleteRequest):
     deleted_dbs = []
     for p in paths:
         try:
+            path = Path(p)
+            version = _inventory_version(path)
             wb = openpyxl.load_workbook(p)
             if "DailyUsage" not in wb.sheetnames:
                 continue
             ws = wb["DailyUsage"]
             headers = [cell.value for cell in ws[1]]
 
-            target_row_idx = None
-            if req.entry_time and ("EntryTime" in headers or "입력시간" in headers):
-                time_col = headers.index("EntryTime") + 1 if "EntryTime" in headers else headers.index("입력시간") + 1
-                for r in range(2, ws.max_row + 1):
-                    val = str(ws.cell(row=r, column=time_col).value or "").strip()
-                    if val == req.entry_time.strip():
-                        target_row_idx = r
-                        break
-
-            if target_row_idx is None and req.id is not None:
-                candidate_row = req.id + 2
-                if 2 <= candidate_row <= ws.max_row:
-                    target_row_idx = candidate_row
+            target_row_idx = _find_workbook_record(ws, headers, req)
 
             if target_row_idx is not None:
                 ws.delete_rows(target_row_idx, 1)
-                wb.save(p)
+                _save_inventory_workbook(wb, path, version)
                 deleted_dbs.append(p)
             else:
                 print(f"Record not found for deletion in {p}")
+        except HTTPException:
+            raise
         except Exception as ex:
             print(f"Error deleting {p}: {ex}")
 
@@ -760,4 +778,4 @@ def index():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

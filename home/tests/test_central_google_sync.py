@@ -138,6 +138,74 @@ class TestCentralGoogleSync(unittest.TestCase):
                     self.assertEqual(sync.sync_records_to_excel([second],path)['added_count'],1)
                 self.assertEqual(len(pd.read_excel(path)),2)
 
+    def test_failed_excel_write_preserves_original_inventory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stock.xlsx"
+            first = dict(Date="2026-11-14", Site="A", User="worker", Usage=10,
+                         EntryTime="2026-11-14 10:00:00", 검사방법="MT")
+            pd.DataFrame([first]).to_excel(path, sheet_name="DailyUsage", index=False)
+            original = path.read_bytes()
+            incoming = dict(first, EntryTime="2026-11-14 11:00:00")
+            def fail_writer(temporary, **kwargs):
+                temporary.write_bytes(b"incomplete workbook")
+                raise OSError("simulated write failure")
+
+            with patch.object(pd, "ExcelWriter", side_effect=fail_writer):
+                with self.assertRaisesRegex(OSError, "simulated write failure"):
+                    sync_records_to_excel([incoming], inventory_path=path)
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(list(path.parent.glob("*.xlsx")), [path])
+
+    def test_inventory_changed_during_sync_is_not_overwritten(self):
+        from contextlib import contextmanager
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stock.xlsx"
+            first = dict(Date="2026-11-14", Site="A", User="worker", Usage=10,
+                         EntryTime="2026-11-14 10:00:00", 검사방법="MT")
+            incoming = dict(first, EntryTime="2026-11-14 11:00:00")
+            concurrent = dict(first, Usage=125, EntryTime="2026-11-14 12:00:00")
+            pd.DataFrame([first]).to_excel(path, sheet_name="DailyUsage", index=False)
+            excel_writer = pd.ExcelWriter
+
+            @contextmanager
+            def write_then_change_original(temporary, **kwargs):
+                with excel_writer(temporary, **kwargs) as writer:
+                    yield writer
+                with excel_writer(path, engine="openpyxl") as writer:
+                    pd.DataFrame([first, concurrent]).to_excel(writer, sheet_name="DailyUsage", index=False)
+
+            with patch.object(pd, "ExcelWriter", side_effect=write_then_change_original):
+                with self.assertRaisesRegex(RuntimeError, "재고 원본이 변경"):
+                    sync_records_to_excel([incoming], inventory_path=path)
+            self.assertEqual(pd.read_excel(path)["Usage"].tolist(), [10, 125])
+            self.assertEqual(list(path.parent.glob("*.xlsx")), [path])
+
+    def test_retry_after_snapshot_write_failure_keeps_each_job_once(self):
+        from home.src.site_apps.central.src import sync_google_sheet as sync
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stock.xlsx"
+            first = dict(Date="2026-11-14", Site="A", User="worker", Usage=10,
+                         EntryTime="2026-11-14 10:00:00", 검사방법="MT")
+            second = dict(first, EntryTime="2026-11-14 11:00:00")
+            pd.DataFrame([first]).to_excel(path, sheet_name="DailyUsage", index=False)
+            with (
+                patch.object(sync, "fetch_records_from_web_app", return_value=([], [first, second])),
+                patch.object(sync, "push_batch_to_web_app", return_value={"status": "success"}),
+            ):
+                with patch.object(sync, "_save_sync_state", side_effect=OSError("disk full")):
+                    failed = sync.two_way_reconcile_with_web_app(path, "https://mock.invalid")
+                self.assertEqual(failed["status"], "error")
+                self.assertIn("disk full", failed["message"])
+                self.assertEqual(failed["added_count"], 1)
+                self.assertEqual(len(pd.read_excel(path)), 2)
+
+                retried = sync.two_way_reconcile_with_web_app(path, "https://mock.invalid")
+                self.assertEqual(retried["status"], "success")
+                self.assertEqual(retried["pulled_count"], 0)
+                self.assertCountEqual(pd.read_excel(path)["EntryTime"], [first["EntryTime"], second["EntryTime"]])
+
     def test_two_way_same_second_does_not_overwrite_other_job(self):
         from home.src.site_apps.central.src import sync_google_sheet as sync
         for same_site in (False, True):

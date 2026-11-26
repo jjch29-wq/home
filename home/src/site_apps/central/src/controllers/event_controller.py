@@ -355,17 +355,35 @@ def on_tab_drag_end_impl(self, event):
     pass
 
 
+def _cancel_tab_config_save(app):
+    pending = getattr(app, '_tab_config_save_after_id', None)
+    if pending is not None:
+        app.root.after_cancel(pending)
+        app._tab_config_save_after_id = None
+
+
+def _schedule_tab_config_save(app):
+    if not getattr(app, 'is_ready', False):
+        return
+    _cancel_tab_config_save(app)
+
+    def save():
+        app._tab_config_save_after_id = None
+        app.save_tab_config()
+
+    app._tab_config_save_after_id = app.root.after(250, save)
+
+
 def on_tab_changed_impl(self, event=None):
     """Handle tab selection change event"""
     try:
-        # 1. Save configuration when tab changes (respects is_ready via save_tab_config)
-        self.save_tab_config()
+        _schedule_tab_config_save(self)
 
         # 1-1. 탭 이동 시 실제 데이터(Excel)는 변경사항이 있을 때만 안전하게 저장
         # (단순 탭 이동/조회 시 동기식 대용량 엑셀 디스크 쓰기로 인한 UI 멈춤 현상 제거)
         if getattr(self, 'is_ready', False) and getattr(self, '_data_dirty', False):
-            self.save_data()
-            self._data_dirty = False
+            if self.save_data():
+                self._data_dirty = False
         
         # 2. Handle specific tab UI adjustments
         current_tab = self.notebook.select()
@@ -411,6 +429,7 @@ def on_tab_changed_impl(self, event=None):
 
 def on_closing_impl(self):
     """Handle window closing event"""
+    _cancel_tab_config_save(self)
     self.save_tab_config(force=True)
     if hasattr(self, 'ndt_calculator') and hasattr(self.ndt_calculator, 'save_ui_state'):
         self.ndt_calculator.save_ui_state()

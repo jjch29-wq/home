@@ -56,13 +56,17 @@ class NdtRowsTests(unittest.TestCase):
         old, new = 'JA2026-017-001-0-1-100A', 'JA2026-017-003-0-1-100A'
         rows = [{'라인번호': Line(line), 'Joint No.': f'S{index}', 'PAUT': '0.3591'}
                 for index, line in enumerate((new, old, old, old + '-extra', ''))]
-        app = SimpleNamespace(ndt_grid_entries=rows, history_lines=['', old, new])
+        app = SimpleNamespace(ndt_grid_entries=rows, history_lines=['', old, new],
+                              ndt_selection_vars=[Mock(get=Mock(return_value=(index == 1))) for index in range(5)])
         replace = namespace['_replace_ndt_line']
-        self.assertEqual(replace(app, old, new), 2)
+        self.assertEqual(replace(app, old, new, selected_only=True), 1)
+        self.assertEqual([row['라인번호'].get() for row in rows], [new, new, old, old + '-extra', ''])
+        with self.assertRaisesRegex(ValueError, '변경할 행이 없습니다'):
+            replace(app, old, new, selected_only=True)
+        self.assertEqual(replace(app, old, new), 1)
         self.assertEqual([row['라인번호'].get() for row in rows], [new, new, new, old + '-extra', ''])
         self.assertEqual([row['Joint No.'] for row in rows], [f'S{index}' for index in range(5)])
         self.assertTrue(all(row['PAUT'] == '0.3591' for row in rows))
-        self.assertEqual(replace(app, old, new), 0)
         for before, after in (('', new), (old, ''), (new, new)):
             with self.assertRaises(ValueError):
                 replace(app, before, after)

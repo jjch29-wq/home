@@ -24,6 +24,19 @@ def method(path,name,ns):
 
 
 class StorageSafetyTests(unittest.TestCase):
+    def test_tab_change_retries_failed_save(self):
+        from site_apps.central.src.controllers.event_controller import on_tab_changed_impl
+
+        app = SimpleNamespace(root=Mock(), notebook=Mock(), is_ready=True,
+                              _data_dirty=True, save_data=Mock(side_effect=[False, True]))
+        app.notebook.select.return_value = ''
+        on_tab_changed_impl(app)
+        self.assertTrue(app._data_dirty)
+        on_tab_changed_impl(app)
+        self.assertFalse(app._data_dirty)
+        on_tab_changed_impl(app)
+        self.assertEqual(app.save_data.call_count, 2)
+
     def saver(self):
         return method(ROOT/'home/src/site_apps/central/src/services/data_loader.py','save_data_impl',
                       {'pd':pd,'os':os,'time':time,'datetime':datetime})

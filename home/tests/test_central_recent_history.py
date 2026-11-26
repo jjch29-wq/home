@@ -24,7 +24,7 @@ class RecentHistoryTests(unittest.TestCase):
         tv = Mock()
         tv.selection.return_value = ['row']
         tv.item.return_value = ('7',)
-        self.app = SimpleNamespace(root=Mock(), tv_recent=tv,
+        self.app = SimpleNamespace(root=Mock(), tv_recent=tv, db_path="unused.xlsx",
             daily_usage_df=pd.DataFrame([{'Date':'2026-10-23','Site':'A'},
                                         {'Date':'2026-10-23','Site':'A'}],index=[7,8]),
             transactions_df=pd.DataFrame([{'Note':'A 現場 manual'}, {'Note':'auto'}]),

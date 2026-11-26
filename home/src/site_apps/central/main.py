@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import sys
 import threading
+from time import perf_counter
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from site_apps.central.src.app import MaterialManager
@@ -15,18 +16,33 @@ class CentralMaterialManager(MaterialManager):
             self.root.title('[개발용 · 운영 동기화 차단] 중앙지사 자재관리')
             return
         # 1. 앱 실행 시 모바일 및 구글 클라우드 내역 선제 자동 동기화
+        init_res = {}
+        sync_started = perf_counter()
         try:
-            from site_apps.central.src.sync_google_sheet import sync_all_central_sources
-            init_res = sync_all_central_sources()
-            if init_res.get("status") != "success":
+            from site_apps.central.src.sync_google_sheet import load_sync_config, sync_all_central_sources
+            config = load_sync_config()
+            self._last_sync_success_at = config.get("last_sync_time", "")
+            if config.get("auto_sync_on_startup", True):
+                init_res = sync_all_central_sources()
+            if init_res.get("status") == "error":
                 print(f"[중앙지사 모바일] 시작 동기화 오류: {init_res.get('message', '')}")
             elif init_res.get("added_count", 0) > 0:
                 print(f"[중앙지사 모바일] 시작 시 신규 {init_res['added_count']}건 자동 동기화 완료")
         except Exception as e:
+            init_res = {"status": "error", "message": str(e)}
             print(f"[중앙지사 모바일] 시작 동기화 건너뜀: {e}")
+        finally:
+            if init_res:
+                print(f"[중앙지사 모바일] 시작 동기화 소요: {perf_counter() - sync_started:.2f}초")
 
         super().__init__(root)
         self.root.title("한국지역난방공사 중앙지사 - 자재 및 소모품 관리 시스템")
+        if init_res.get("status") == "success":
+            self._apply_sync_result({"last_success_at": init_res.get("last_success_at")})
+        elif init_res.get("status") == "error":
+            self._on_periodic_sync_error(init_res.get("message", ""))
+        elif getattr(self, "_last_sync_success_at", "") and self.daily_save_status:
+            self.daily_save_status.config(text=f"📱 마지막 성공 {self._last_sync_success_at}")
 
         # 2. 주기적 백그라운드 자동 동기화 (앱 켜둔 상태에서도 30초마다 신규 모바일 입력 자동 감지)
         self.root.after(15000, self._start_periodic_sync)
@@ -56,6 +72,8 @@ class CentralMaterialManager(MaterialManager):
 
     def trigger_mobile_sync(self, show_msg=True):
         """사용자가 '📱 모바일 동기화' 버튼 클릭 시 즉시 수동 동기화 실행"""
+        from tkinter import messagebox
+
         if is_development():
             if show_msg:
                 from tkinter import messagebox
@@ -71,13 +89,17 @@ class CentralMaterialManager(MaterialManager):
                     return
 
             res = sync_all_central_sources()
+            if res.get("status") == "busy":
+                if show_msg:
+                    messagebox.showinfo("모바일 동기화", res["message"])
+                return
+            self._apply_sync_result(res)
             if res.get("status") != "success":
                 if show_msg:
                     from tkinter import messagebox
                     messagebox.showerror("동기화 오류", res.get("message", "모바일 동기화에 실패했습니다."))
                 return
             added = res.get("added_count", 0)
-            self._apply_sync_result(res)
             if show_msg:
                 from tkinter import messagebox
                 notify = messagebox.showwarning if res.get('conflict_count', 0) else messagebox.showinfo
@@ -95,12 +117,11 @@ class CentralMaterialManager(MaterialManager):
             try:
                 from site_apps.central.src.sync_google_sheet import sync_all_central_sources
                 res = sync_all_central_sources()
-                if res.get("status") != "success":
-                    self.root.after(0, self._on_periodic_sync_error, res.get("message", "모바일 동기화 실패"))
-                else:
-                    self.root.after(0, self._apply_sync_result, res)
-            except Exception:
-                pass
+                if res.get("status") == "busy":
+                    return
+                self.root.after(0, self._apply_sync_result, res)
+            except Exception as exc:
+                self.root.after(0, self._on_periodic_sync_error, str(exc))
             finally:
                 try:
                     self.root.after(30000, self._start_periodic_sync)
@@ -112,7 +133,11 @@ class CentralMaterialManager(MaterialManager):
     def _on_periodic_sync_error(self, message):
         """백그라운드 동기화 실패를 숨기지 않고 상태 영역과 콘솔에 표시한다."""
         if hasattr(self, 'daily_save_status') and self.daily_save_status:
-            self.daily_save_status.config(text="📱 모바일 동기화 오류", foreground="red")
+            text = "📱 모바일 동기화 오류"
+            last_success = getattr(self, "_last_sync_success_at", "")
+            if last_success:
+                text += f" · 마지막 성공 {last_success}"
+            self.daily_save_status.config(text=text, foreground="red")
         print(f"[중앙지사 모바일] 백그라운드 동기화 오류: {message}")
 
     def _apply_sync_result(self, result):
@@ -121,6 +146,8 @@ class CentralMaterialManager(MaterialManager):
         updated = result.get('updated_count', 0)
         deleted = result.get('deleted_count', 0)
         conflicts = result.get('conflict_count', 0)
+        if result.get("last_success_at"):
+            self._last_sync_success_at = result["last_success_at"]
         if added or updated or deleted:
             self.load_data()
             for name in ('update_daily_usage_view', 'update_recent_entries_view',
@@ -128,10 +155,16 @@ class CentralMaterialManager(MaterialManager):
                 refresh = getattr(self, name, None)
                 if callable(refresh):
                     refresh()
+        if result.get("status") == "error":
+            self._on_periodic_sync_error(result.get("message", "모바일 동기화 실패"))
+            return
         if hasattr(self, 'daily_save_status') and self.daily_save_status:
             text = f'📱 동기화: 추가 {added} · 수정 {updated} · 삭제 {deleted}'
             if conflicts:
                 text += f' · 식별 충돌 {conflicts}건 보류 (수동 확인 필요)'
+            last_success = getattr(self, "_last_sync_success_at", "")
+            if last_success:
+                text += f" · 마지막 성공 {last_success}"
             self.daily_save_status.config(text=text, foreground='#A33A00' if conflicts else 'green')
 
     def _on_periodic_sync_found(self, count):

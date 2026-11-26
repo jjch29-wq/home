@@ -28,7 +28,13 @@ function test(name,fn){sheet=new Sheet();sheet.appendRow([...context.HEADERS]);f
 const record=(id,extra={})=>({client_request_id:id,date:'2026-11-14',company:'한국지역난방공사',method:'MT',qty:2.774,unit:'M',unit_price:75433,total_fee:209251,workers:[{user:'부장 주진철',time:'09:00~18:00',ot:0,meal:12000}],...extra});
 test('managed catalogs exclude historical entry-company aliases',()=>{
  assert.equal(context.getConfig().users.length,32);assert.equal(context.getConfig().vehicles.length,16);
- assert.deepEqual(Array.from(context.getConfig().companies),['한국지역난방공사']);
+ const managed=Array.from(context.CENTRAL_REFERENCE.config.companies);
+ const historical='이력 전용 테스트 업체';
+ const historicalRow=Array.from(context.HEADERS,header=>header==='업체명'?historical:'');
+ sheet.appendRow(historicalRow);
+ assert.deepEqual(Array.from(context.getConfig().companies),managed);
+ assert.equal(managed.includes(historical),false);
+ assert.deepEqual(Array.from(context.getHistoricalCompanies()),[...managed,historical]);
 });
 test('retry is idempotent and retains worker meals / exact quantities',()=>{
  const r=record('retry');context.saveRecord(r);const res=context.saveRecord({...r});assert.equal(res.duplicate,true);assert.equal(sheet.getLastRow(),2);

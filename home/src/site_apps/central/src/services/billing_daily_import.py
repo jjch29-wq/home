@@ -1,8 +1,8 @@
 """Read billing records from the same daily ledger used by the central app."""
-from pathlib import Path
 import re
 
 import pandas as pd
+from ..sync_google_sheet import get_sync_inventory_path
 
 
 def load_billing_daily_records(app, start='', end='', site='전체'):
@@ -11,7 +11,7 @@ def load_billing_daily_records(app, start='', end='', site='전체'):
         frame = current.copy()
     else:
         selected = getattr(app, 'db_path', None)
-        path = selected or Path(__file__).resolve().parents[2] / 'data' / 'Material_Inventory.xlsx'
+        path = selected or get_sync_inventory_path()
         frame = pd.read_excel(path, sheet_name='DailyUsage')
     aliases = {'날짜': 'Date', '현장': 'Site', '수량': 'Usage'}
     frame.columns = frame.columns.astype(str).str.strip()
@@ -34,7 +34,7 @@ def load_billing_daily_records(app, start='', end='', site='전체'):
     materials = getattr(app, 'materials_df', None)
     if 'MaterialID' in frame and not isinstance(materials, pd.DataFrame):
         selected = getattr(app, 'db_path', None)
-        path = selected or Path(__file__).resolve().parents[2] / 'data' / 'Material_Inventory.xlsx'
+        path = selected or get_sync_inventory_path()
         materials = pd.read_excel(path, sheet_name='Materials')
     names = {}
     if isinstance(materials, pd.DataFrame) and {'MaterialID', '품목명'}.issubset(materials.columns):

@@ -3,6 +3,7 @@ import tempfile
 import openpyxl
 from pathlib import Path
 from unittest.mock import patch
+from fastapi import HTTPException
 
 from home.src.site_apps.central.mobile.server import (
     save_record,
@@ -16,6 +17,36 @@ from home.src.site_apps.central.mobile.server import (
 )
 
 class TestCentralMobileApi(unittest.TestCase):
+    def test_delete_rejects_ambiguous_time_and_targets_exact_id(self):
+        entry_time = "2026-11-10 09:00:00"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "inventory.xlsx"
+            book = openpyxl.Workbook()
+            sheet = book.active
+            sheet.title = "DailyUsage"
+            sheet.append(["EntryTime", "ClientRequestID"])
+            sheet.append([entry_time, "first"])
+            sheet.append([entry_time, "second"])
+            book.save(path)
+            original = path.read_bytes()
+
+            with patch("home.src.site_apps.central.mobile.server.get_inventory_paths", return_value=[str(path)]):
+                for request, status in (
+                    (RecordDeleteRequest(id=0, entry_time=entry_time), 409),
+                    (RecordDeleteRequest(id=0), 404),
+                    (RecordDeleteRequest(id=0, entry_time=entry_time, client_request_id="missing"), 404),
+                ):
+                    with self.assertRaises(HTTPException) as error:
+                        delete_record(request)
+                    self.assertEqual(error.exception.status_code, status)
+                    self.assertEqual(path.read_bytes(), original)
+                self.assertEqual(delete_record(RecordDeleteRequest(client_request_id="second"))["status"], "success")
+            result = openpyxl.load_workbook(path, read_only=True)
+            try:
+                self.assertEqual(list(result["DailyUsage"].values)[1:], [(entry_time, "first")])
+            finally:
+                result.close()
+
     def test_mobile_crud_lifecycle(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             test_db = Path(tmp_dir) / "Material_Inventory.xlsx"

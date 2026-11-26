@@ -1,16 +1,30 @@
 import json
 import os
 import time
-from site_apps.central.src.runtime_profile import is_development
+from .runtime_profile import is_development
 
 
 class SharedDataUnavailableError(RuntimeError):
     """Raised when configured shared business storage is unavailable."""
 
 
+def get_external_data_root():
+    if is_development():
+        return None
+    external_dir = os.environ.get("PMI_CENTRAL_DATA_ROOT", "").strip()
+    if external_dir:
+        if not os.path.isabs(external_dir):
+            raise ValueError("PMI_CENTRAL_DATA_ROOT에는 절대 경로를 지정해야 합니다.")
+        return external_dir
+    return None
+
+
 def _configured_data_dir():
     if is_development():
         return None
+    external_dir = get_external_data_root()
+    if external_dir:
+        return external_dir
     base_dir = os.path.dirname(os.path.abspath(__file__))
     config_file = os.path.join(base_dir, "sync_config.json")
     if not os.path.exists(config_file):
@@ -82,6 +96,9 @@ def _shared_dir_candidates(custom_dir):
 def _find_available_shared_dir(custom_dir, retries=3, delay=0.4):
     """Google Drive 가상 드라이브의 일시적 마운트 지연/응답 대기를 고려하여 재시도하며 유효 경로를 찾는다."""
     global _CACHED_SHARED_DIR, _CACHED_CUSTOM_DIR
+    external_dir = os.environ.get("PMI_CENTRAL_DATA_ROOT", "").strip()
+    if external_dir and custom_dir == external_dir:
+        return custom_dir if os.path.isdir(custom_dir) else None
     if _CACHED_SHARED_DIR and _CACHED_CUSTOM_DIR == custom_dir:
         try:
             if os.path.isdir(_CACHED_SHARED_DIR):
@@ -129,6 +146,10 @@ def require_shared_data_available():
 
 def get_data_dir():
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    external_dir = get_external_data_root()
+    if external_dir:
+        require_shared_data_available()
+        return external_dir
     custom_dir = _configured_data_dir()
     if custom_dir:
         found = _find_available_shared_dir(custom_dir)

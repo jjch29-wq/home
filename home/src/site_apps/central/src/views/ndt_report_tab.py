@@ -8,8 +8,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import logging
 
-from site_apps.central.src.reports.ndt_report_app import PMIReportApp
-
 logger = logging.getLogger(__name__)
 
 
@@ -24,16 +22,8 @@ class NDTReportTab(ttk.Frame):
 
         if lazy:
             self.bind("<Map>", self._on_first_map, add="+")
-            self.after(1200, self._background_warmup)
         else:
             self._setup_view()
-
-    def _background_warmup(self):
-        try:
-            if self.winfo_exists() and self._report_app is None and not self._init_failed:
-                self.ensure_initialized()
-        except Exception:
-            pass
 
     def _on_first_map(self, _event=None):
         self.ensure_initialized()
@@ -58,6 +48,8 @@ class NDTReportTab(ttk.Frame):
         if self._report_app is not None:
             return
         try:
+            from site_apps.central.src.reports.ndt_report_app import PMIReportApp
+
             self._report_app = PMIReportApp(self, central_app=self.main_app, is_embedded=True)
             logger.info("NDTReportTab: PMIReportApp initialized successfully.")
         except Exception as e:

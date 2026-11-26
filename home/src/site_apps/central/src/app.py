@@ -563,8 +563,10 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             self.db_path = os.path.join(self.app_dir, 'Material_Inventory.xlsx')
 
         # 중앙지사에서 선택한 클라우드 재고 파일을 우선 사용한다.
-        from site_apps.central.src.data_sync import get_business_data_dir
+        from site_apps.central.src.data_sync import get_business_data_dir, get_external_data_root
         cloud_inventory = os.path.join(get_business_data_dir(), 'Material_Inventory.xlsx')
+        if get_external_data_root() and not os.path.isfile(cloud_inventory):
+            raise FileNotFoundError(f'중앙지사 운영 재고 파일이 없습니다: {cloud_inventory}')
         if os.path.isfile(cloud_inventory):
             self.db_path = cloud_inventory
 
@@ -1916,44 +1918,25 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             return
         old_daily = self.daily_usage_df.copy(deep=True)
         old_transactions = self.transactions_df.copy(deep=True)
+        from site_apps.central.src.sync_google_sheet import inventory_deletion_key, queue_inventory_deletions
         cloud_deletes = []
         for idx in indices:
-            row = old_daily.loc[idx]
-            etime = str(row.get('EntryTime', '')).split('.')[0].strip()
-            if etime and etime.lower() not in ('', 'nan', 'nat', 'none'):
-                cloud_deletes.append(etime)
+            deletion_key = inventory_deletion_key(old_daily.loc[idx])
+            if deletion_key:
+                cloud_deletes.append(deletion_key)
         try:
             # Auto-deduction transactions are already excluded by stock calculation.
             # Date/site matches cannot identify which daily job created a legacy transaction.
-            self.daily_usage_df = self.daily_usage_df.drop(list(indices))
-            if not self.save_data(require_primary=True):
-                raise RuntimeError('원본 파일에 저장하지 못했습니다.')
+            with queue_inventory_deletions(getattr(self, 'db_path', None), cloud_deletes):
+                self.daily_usage_df = self.daily_usage_df.drop(list(indices))
+                if not self.save_data(require_primary=True):
+                    raise RuntimeError('원본 파일에 저장하지 못했습니다.')
         except Exception as error:
             self.daily_usage_df = old_daily
             self.transactions_df = old_transactions
             messagebox.showerror('삭제 저장 실패', f'{error}\n원본 기록을 복원했습니다.', parent=self.root)
             return
 
-        # [CLOUD SYNC] Propagate deletion to Google Apps Script and update local state immediately
-        if cloud_deletes:
-            try:
-                import threading
-                from site_apps.central.src.sync_google_sheet import push_batch_to_web_app, DEFAULT_INVENTORY_PATH, _load_sync_state, _save_sync_state
-                try:
-                    state = _load_sync_state(DEFAULT_INVENTORY_PATH)
-                    cur_times = set(state.get("cloud_entry_times", [])) - set(cloud_deletes)
-                    _save_sync_state(DEFAULT_INVENTORY_PATH, cur_times)
-                except Exception as ex:
-                    print(f"DEBUG: Failed to update local sync state on delete: {ex}")
-
-                def _async_cloud_delete(deletes_list):
-                    try:
-                        push_batch_to_web_app(deletes=deletes_list)
-                    except Exception as err:
-                        print(f"DEBUG: Async cloud delete failed: {err}")
-                threading.Thread(target=_async_cloud_delete, args=(cloud_deletes,), daemon=True).start()
-            except Exception as e:
-                print(f"DEBUG: Cloud delete dispatch error: {e}")
         self.update_daily_usage_view()
         self.update_recent_entries_view()
         self.update_stock_view()
@@ -3818,44 +3801,25 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             return
         old_daily = self.daily_usage_df.copy(deep=True)
         old_transactions = self.transactions_df.copy(deep=True)
+        from site_apps.central.src.sync_google_sheet import inventory_deletion_key, queue_inventory_deletions
         cloud_deletes = []
         for idx in indices:
-            row = old_daily.loc[idx]
-            etime = str(row.get('EntryTime', '')).split('.')[0].strip()
-            if etime and etime.lower() not in ('', 'nan', 'nat', 'none'):
-                cloud_deletes.append(etime)
+            deletion_key = inventory_deletion_key(old_daily.loc[idx])
+            if deletion_key:
+                cloud_deletes.append(deletion_key)
         try:
             # Auto-deduction transactions are already excluded by stock calculation.
             # Date/site matches cannot identify which daily job created a legacy transaction.
-            self.daily_usage_df = self.daily_usage_df.drop(list(indices))
-            if not self.save_data(require_primary=True):
-                raise RuntimeError('원본 파일에 저장하지 못했습니다.')
+            with queue_inventory_deletions(getattr(self, 'db_path', None), cloud_deletes):
+                self.daily_usage_df = self.daily_usage_df.drop(list(indices))
+                if not self.save_data(require_primary=True):
+                    raise RuntimeError('원본 파일에 저장하지 못했습니다.')
         except Exception as error:
             self.daily_usage_df = old_daily
             self.transactions_df = old_transactions
             messagebox.showerror('삭제 저장 실패', f'{error}\n원본 기록을 복원했습니다.', parent=self.root)
             return
 
-        # [CLOUD SYNC] Propagate deletion to Google Apps Script and update local state immediately
-        if cloud_deletes:
-            try:
-                import threading
-                from site_apps.central.src.sync_google_sheet import push_batch_to_web_app, DEFAULT_INVENTORY_PATH, _load_sync_state, _save_sync_state
-                try:
-                    state = _load_sync_state(DEFAULT_INVENTORY_PATH)
-                    cur_times = set(state.get("cloud_entry_times", [])) - set(cloud_deletes)
-                    _save_sync_state(DEFAULT_INVENTORY_PATH, cur_times)
-                except Exception as ex:
-                    print(f"DEBUG: Failed to update local sync state on delete: {ex}")
-
-                def _async_cloud_delete(deletes_list):
-                    try:
-                        push_batch_to_web_app(deletes=deletes_list)
-                    except Exception as err:
-                        print(f"DEBUG: Async cloud delete failed: {err}")
-                threading.Thread(target=_async_cloud_delete, args=(cloud_deletes,), daemon=True).start()
-            except Exception as e:
-                print(f"DEBUG: Cloud delete dispatch error: {e}")
         self.update_daily_usage_view()
         self.update_recent_entries_view()
         self.update_stock_view()

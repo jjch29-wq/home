@@ -10,8 +10,16 @@ class Select{
 }
 const multiIds=new Set(['select-equip','select-aux-equip','select-paut-scanner','select-paut-probe','select-paut-wedge']);
 const fields={};for(const id of ['workspace-material-id','workspace-warehouse','select-material','select-equip','select-aux-equip','select-paut-scanner','select-paut-probe','select-paut-wedge'])fields[id]=new Select(multiIds.has(id));
-fields['input-custom-aux']={value:'',classList:{add(){}}};
-fields['input-custom-mat']={value:'',classList:{contains:()=>true,add(){}}};
+function customInput(){
+ const classes=new Set(['hidden']);
+ return {value:'',classList:{
+  contains:name=>classes.has(name),
+  add:name=>classes.add(name),
+  toggle(name,force=!classes.has(name)){if(force)classes.add(name);else classes.delete(name);return force;}
+ }};
+}
+fields['input-custom-aux']=customInput();
+fields['input-custom-mat']=customInput();
 fields['material-input-wrap']={classList:{toggle(_name,hidden){this.hidden=hidden;}}};fields['material-history-notice']={classList:{toggle(_name,hidden){this.hidden=hidden;}}};
 fields['workspace-manual-link']={checked:false};fields['workspace-manual-fields']={hidden:true};fields['workspace-warehouse-wrap']={hidden:true};
 fields['paut-equipment-grid']={style:{},classList:{toggle(){}}};fields['main-equipment-wrap']={style:{}};fields['aux-equipment-wrap']={style:{},classList:{toggle(){}}};fields['aux-equipment-label']={textContent:''};
