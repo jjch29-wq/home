@@ -344,6 +344,12 @@ class ReportPreviewViewMixin:
                 ent.bind('<<ComboboxSelected>>', lambda _event: self._on_pmi_material_changed())
                 ent.bind('<FocusOut>', lambda _event: [self._on_pmi_material_changed(), self.save_settings()])
                 self.pmi_material_combobox = ent
+            elif lbl == '재질:':
+                from site_apps.central.src.reports.pipe_material_spec import KDHC_PIPE_MATERIALS
+                ent = ttk.Combobox(block, textvariable=var, width=15,
+                                   values=KDHC_PIPE_MATERIALS)
+                ent.bind('<<ComboboxSelected>>', lambda _event, m=mode: self._on_gapji_material_selected(m))
+                ent.bind('<FocusOut>', lambda _event, m=mode: self._on_gapji_material_selected(m, from_focus_out=True))
             else:
                 ent = ttk.Entry(
                     block, textvariable=var, width=15,

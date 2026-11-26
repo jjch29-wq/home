@@ -1540,10 +1540,15 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         if self.report_info_by_mode['MT']['item'].upper() == 'HOT TEPPING':
             self.report_info_by_mode['MT']['item'] = 'HOT TAPPING'
             self.config['MT_ITEM'] = 'HOT TAPPING'
-        mt_material = {'PIPE': 'SPPS380', 'HOT TAPPING': 'SPPS250'}.get(self.report_info_by_mode['MT']['item'].upper())
-        if mt_material:
-            self.report_info_by_mode['MT']['material'] = mt_material
-            self.config['MT_MATERIAL'] = mt_material
+        mt_item_upper = self.report_info_by_mode['MT']['item'].upper()
+        cur_mt_mat = self.report_info_by_mode['MT']['material'].strip()
+        if mt_item_upper == 'HOT TAPPING':
+            self.report_info_by_mode['MT']['material'] = 'SPPS250'
+            self.config['MT_MATERIAL'] = 'SPPS250'
+        elif mt_item_upper == 'PIPE' and cur_mt_mat in ('', 'SPPS250'):
+            self.report_info_by_mode['MT']['material'] = 'SPPS380'
+            self.config['MT_MATERIAL'] = 'SPPS380'
+        self._last_auto_material_sig = {}
         self._report_info_loading = False
 
     def _store_report_info_for_mode(self, mode):
@@ -1588,24 +1593,98 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
     def _on_report_info_changed(self):
         if getattr(self, '_report_info_loading', False):
             return
-        if getattr(self, 'current_mode', '') == 'MT':
-            material = {'PIPE': 'SPPS380', 'HOT TAPPING': 'SPPS250'}.get(self.gapji_item.get().strip().upper())
-            if material and self.gapji_material.get() != material:
-                self.gapji_material.set(material)
         self._store_report_info_for_mode(getattr(self, 'current_mode', ''))
         self._sync_photo_report_info()
 
-    def _apply_mt_item_selection(self):
-        item_name = self.gapji_item.get().strip()
-        material = {'PIPE': 'SPPS380', 'HOT TAPPING': 'SPPS250'}.get(item_name)
-        if not material:
+    def _mode_item_name(self, mode):
+        if getattr(self, 'current_mode', '') == mode and hasattr(self, 'gapji_item'):
+            return self.gapji_item.get().strip()
+        if hasattr(self, 'report_info_by_mode') and mode in self.report_info_by_mode:
+            return str(self.report_info_by_mode[mode].get('item', '')).strip()
+        return self.gapji_item.get().strip() if hasattr(self, 'gapji_item') else ''
+
+    def _on_gapji_material_selected(self, mode, from_focus_out=False):
+        mat = self.gapji_material.get().strip()
+        if hasattr(self, 'report_info_by_mode') and mode in self.report_info_by_mode:
+            self.report_info_by_mode[mode]['material'] = mat
+        self.config['GAPJI_MATERIAL'] = mat
+        self.config[f'{mode}_MATERIAL'] = mat
+        if mode == 'MT' and getattr(self, 'mt_extracted_data', None):
+            from site_apps.central.src.reports.pipe_material_spec import (
+                infer_row_pipe_material, is_row_active_for_report,
+            )
+            item_name = self._mode_item_name('MT')
+            changed = False
+            for row in self.mt_extracted_data:
+                if is_row_active_for_report(row, mode='MT'):
+                    target_mat = (
+                        infer_row_pipe_material(row, item_name) or mat
+                        if mat == 'SPPS380 / SPW400' else mat
+                    )
+                    if target_mat and row.get('Material') != target_mat:
+                        row['Material'] = target_mat
+                        changed = True
+            if changed and not from_focus_out:
+                self.populate_preview(self.mt_extracted_data, switch_tab=False, mode='MT')
+        self.save_settings()
+
+    def _sync_gapji_material_from_items(self, mode, data_list, force=False):
+        """현재 활성 행들의 관경(20A~600A -> SPPS380, 650A~900A -> SPW400)에 맞춰 갑지 재질을 자동 동기화한다."""
+        if mode not in ('RT', 'KOGAS', 'PT', 'MT', 'PAUT') or not data_list:
             return
+        from site_apps.central.src.reports.pipe_material_spec import (
+            KDHC_PIPE_MATERIALS, infer_kdhc_pipe_material,
+            infer_row_pipe_material, is_row_active_for_report,
+        )
+        item_name = self._mode_item_name(mode)
+        inferred = infer_kdhc_pipe_material(data_list, mode=mode, item_name=item_name)
+        if not inferred:
+            return
+        if not hasattr(self, '_last_auto_material_sig') or not isinstance(self._last_auto_material_sig, dict):
+            self._last_auto_material_sig = {}
+        sig = (item_name.upper(), inferred)
+        prev_sig = self._last_auto_material_sig.get(mode)
+        if not force and prev_sig == sig:
+            return
+        self._last_auto_material_sig[mode] = sig
+
+        if hasattr(self, 'report_info_by_mode') and mode in self.report_info_by_mode:
+            self.report_info_by_mode[mode]['material'] = inferred
+        self.config[f'{mode}_MATERIAL'] = inferred
+
+        cur_mode = getattr(self, 'current_mode', '')
+        if cur_mode == mode or (not cur_mode and hasattr(self, 'gapji_material')):
+            if self.gapji_material.get().strip() != inferred:
+                self.gapji_material.set(inferred)
+            self.config['GAPJI_MATERIAL'] = inferred
+
+        if mode == 'MT':
+            auto_set = set(KDHC_PIPE_MATERIALS) | {''}
+            for row in data_list:
+                if is_row_active_for_report(row, mode='MT'):
+                    cur_row_mat = str(row.get('Material', '') or '').strip()
+                    if force or cur_row_mat in auto_set:
+                        row['Material'] = infer_row_pipe_material(row, item_name) or inferred
+
+    def _apply_mt_item_selection(self):
+        from site_apps.central.src.reports.pipe_material_spec import (
+            infer_kdhc_pipe_material, infer_row_pipe_material, is_row_active_for_report,
+        )
+        item_name = self.gapji_item.get().strip()
+        if item_name.upper() == 'HOT TAPPING':
+            material = 'SPPS250'
+        elif item_name.upper() == 'PIPE':
+            material = infer_kdhc_pipe_material(self.mt_extracted_data, mode='MT', item_name='PIPE') or 'SPPS380'
+        else:
+            return
+        if not hasattr(self, '_last_auto_material_sig') or not isinstance(self._last_auto_material_sig, dict):
+            self._last_auto_material_sig = {}
+        self._last_auto_material_sig['MT'] = (item_name.upper(), material)
         self.gapji_material.set(material)
         for item in self.mt_extracted_data:
-            if (item.get('selected', True) and item.get('date_filtered', True)
-                    and item.get('drawing_filtered', True)):
+            if is_row_active_for_report(item, mode='MT'):
                 item['TestItem'] = item_name
-                item['Material'] = material
+                item['Material'] = infer_row_pipe_material(item, item_name) or material
         self.save_settings()
         self.populate_preview(self.mt_extracted_data, switch_tab=False, mode='MT')
 
@@ -3380,6 +3459,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 self.paut_extracted_data.append(item_full)
                 
             self.log(f"✅ 사진 목록에서 PAUT 데이터 생성 완료: {len(self.paut_extracted_data)} 건")
+            getattr(self, '_last_auto_material_sig', {}).pop('PAUT', None)
             self.populate_preview(self.paut_extracted_data, mode="PAUT")
             self.update_date_listbox("PAUT")
             
@@ -3518,6 +3598,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 self.paut_extracted_data.append(item_full)
             
             self.progress['value'] = 100
+            getattr(self, '_last_auto_material_sig', {}).pop('PAUT', None)
             self.sort_by_column("ISO/DWG", mode="PAUT") # Auto sort for PAUT
             self.update_date_listbox("PAUT") # [FIX] Populate date filter
             self.log(f"✅ PAUT 데이터 추출 완료: {len(self.paut_extracted_data)} 건")
@@ -7663,6 +7744,17 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 if "Th'k(mm)" in keys_attr: new_row["Th'k(mm)"] = thickness
                 if not thickness and any(k in keys_attr for k in ('T', "Th'k(mm)")):
                     new_row['Remarks'] = '두께 확인 필요'
+                if any(k in keys_attr for k in ('Material', 'Mat')):
+                    from site_apps.central.src.reports.pipe_material_spec import infer_row_pipe_material
+                    inferred_mat = infer_row_pipe_material(
+                        {'Size': size, 'Line No.': dwg},
+                        item_name=self._mode_item_name(mode) if hasattr(self, '_mode_item_name') else '',
+                    )
+                    if inferred_mat:
+                        if 'Material' in keys_attr and not new_row.get('Material'):
+                            new_row['Material'] = inferred_mat
+                        if 'Mat' in keys_attr and not new_row.get('Mat'):
+                            new_row['Mat'] = inferred_mat
                 
                 # 용접사 / Welder
                 welder = self._normalize_daily_photo_welder(
@@ -7726,6 +7818,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 added_count += 1
                 
             self.update_date_listbox(mode=mode)
+            getattr(self, '_last_auto_material_sig', {}).pop(mode, None)
             if mode == 'PAUT':
                 companies = {row.get('업체', '').strip() for row in ndt_list if row.get('업체', '').strip()}
                 if len(companies) == 1 and hasattr(self, 'paut_contractor'):
@@ -7733,7 +7826,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                     self.config['PAUT_CONTRACTOR'] = self.paut_contractor.get()
                     self.save_settings()
                 self.populate_preview(data, switch_tab=False, mode=mode)
-            elif mode in ('MT', 'RT', 'KOGAS'):
+            elif mode in ('PT', 'MT', 'RT', 'KOGAS'):
                 self.populate_preview(data, switch_tab=False, mode=mode)
             messagebox.showinfo("완료", f"{ndt_list[0]['_source_site']} 작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.")
             
@@ -8579,6 +8672,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                 all_extracted_data.sort(key=lambda x: target_no_list.index(str(x['No'])) if str(x['No']) in target_no_list else 999999)
 
             # [CHANGE] Overwrite -> Accumulate + Auto Sort
+            getattr(self, '_last_auto_material_sig', {}).pop(mode, None)
             if mode == "RT":
                 self.rt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("RT")

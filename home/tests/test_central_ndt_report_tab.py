@@ -80,6 +80,88 @@ class TestCentralNDTReportTab(unittest.TestCase):
         self.assertEqual(paned.sash_coord(0)[0], width)
         self.assertEqual(entry.get(), "작성 중")
 
+    def test_pipe_size_material_mapping_and_gapji_dropdown(self):
+        """관경별 KS 재질 매핑(20A~600A -> SPPS380, 650A~900A -> SPW400), 갑지 드롭다운 및 수동 변경 보존 검증."""
+        from site_apps.central.src.reports.pipe_material_spec import (
+            KDHC_PIPE_MATERIALS,
+            infer_kdhc_pipe_material,
+            material_for_size_a,
+        )
+
+        # 1. 규격표 경계값(20A~600A vs 650A~900A) 검증
+        for sz in (20, 25, 32, 40, 50, 65, 80, 100, 125, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600):
+            self.assertEqual(material_for_size_a(sz), 'SPPS380')
+        for sz in (650, 700, 750, 800, 850, 900):
+            self.assertEqual(material_for_size_a(sz), 'SPW400')
+
+        self.assertEqual(
+            infer_kdhc_pipe_material([{'Line No.': 'JA2026-013-011-0-2-700A(S)', 'selected': True}], mode='PAUT'),
+            'SPW400',
+        )
+        self.assertEqual(
+            infer_kdhc_pipe_material([{'Size': '400A', 'selected': True}, {'Size': '750A', 'selected': True}], mode='PAUT'),
+            'SPPS380 / SPW400',
+        )
+        self.assertEqual(
+            infer_kdhc_pipe_material([{'Size': '700A', 'selected': True}], mode='MT', item_name='HOT TAPPING'),
+            'SPPS250',
+        )
+
+        if not self.has_tk:
+            self.skipTest("Tkinter display not available in current environment")
+
+        notebook = ttk.Notebook(self.root)
+        tab = NDTReportTab(notebook, main_app=None)
+        app = tab.report_app
+        app.save_settings = lambda: None  # 테스트 중 설정 파일 쓰기 차단
+
+        # PAUT 서브탭 생성 및 갑지 재질 Combobox 확인
+        app._ensure_subtab_built(4)
+        app.current_mode = 'PAUT'
+        app._load_report_info_for_mode('PAUT')
+
+        combos = []
+        def collect_combos(w):
+            for ch in w.winfo_children():
+                if isinstance(ch, ttk.Combobox):
+                    combos.append(ch)
+                collect_combos(ch)
+        collect_combos(app.paut_tab_notebook)
+        self.assertTrue(
+            any(tuple(cb.cget('values')) == KDHC_PIPE_MATERIALS and str(cb.cget('state')) != 'readonly' for cb in combos),
+            "PAUT 갑지 재질 칸이 편집 가능한 KDHC 표준 재질 드롭다운이어야 합니다.",
+        )
+
+        # 2. 700A 행 반영 시 갑지 재질이 SPW400으로 자동 세팅됨
+        app.gapji_material.set('SPPS380')
+        app.paut_extracted_data = [
+            {'Date': '2026-11-20', 'Line No.': 'JA2026-013-011-0-2-700A(S)', 'Joint No.': 'S20', 'Size': '700A', 'selected': True, 'date_filtered': True, 'line_filtered': True, 'size_filtered': True},
+            {'Date': '2026-11-20', 'Line No.': 'JA2026-013-011-0-2-400A(S)', 'Joint No.': 'S01', 'Size': '400A', 'selected': False, 'date_filtered': True, 'line_filtered': True, 'size_filtered': True},
+        ]
+        app.populate_preview(app.paut_extracted_data, switch_tab=False, mode='PAUT')
+        self.assertEqual(app.gapji_material.get(), 'SPW400')
+
+        # 3. 동일 관경 상태에서 사용자가 수동으로 재질을 바꾸면 재렌더링 시 유지됨
+        app.gapji_material.set('A106 Gr.B')
+        app._on_gapji_material_selected('PAUT')
+        app.populate_preview(app.paut_extracted_data, switch_tab=False, mode='PAUT')
+        self.assertEqual(app.gapji_material.get(), 'A106 Gr.B')
+
+        # 4. 선택 행 관경이 400A로 바뀌면 SPPS380으로 자동 갱신됨
+        app.paut_extracted_data[0]['selected'] = False
+        app.paut_extracted_data[1]['selected'] = True
+        app.populate_preview(app.paut_extracted_data, switch_tab=False, mode='PAUT')
+        self.assertEqual(app.gapji_material.get(), 'SPPS380')
+
+        # 5. MT 모드에서 PIPE 품명이어도 SPW400 선택이 강제로 SPPS380으로 덮어써지지 않음
+        app._ensure_subtab_built(3)
+        app.current_mode = 'MT'
+        app.gapji_item.set('PIPE')
+        app.gapji_material.set('SPW400')
+        app._on_gapji_material_selected('MT')
+        self.assertEqual(app.gapji_material.get(), 'SPW400')
+        self.assertEqual(app.report_info_by_mode['MT']['material'], 'SPW400')
+
 
 if __name__ == '__main__':
     unittest.main()

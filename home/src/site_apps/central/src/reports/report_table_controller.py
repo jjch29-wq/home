@@ -370,6 +370,7 @@ class ReportTableControllerMixin:
                     if 'order_index' not in item: item['order_index'] = i
                     
                 self.update_date_listbox(mode)
+                getattr(self, '_last_auto_material_sig', {}).pop(mode, None)
                 self.populate_preview(data, mode=mode)
                 self.log(f"📂 {mode} 데이터 불러오기 완료: {os.path.basename(file_path)}")
                 messagebox.showinfo("완료", f"데이터를 성공적으로 불러왔습니다.\n(총 {len(data)} 건)")
@@ -506,6 +507,8 @@ class ReportTableControllerMixin:
                 restore_report_numbers(mode, data_list)
             except (OSError, ValueError) as exc:
                 self.log(f'보고서번호 복원 실패: {exc}')
+        if mode in ('PAUT', 'MT', 'PT', 'RT', 'KOGAS') and data_list and hasattr(self, '_sync_gapji_material_from_items'):
+            self._sync_gapji_material_from_items(mode, data_list)
         if mode == "RT":
             tree = self.rt_preview_tree
             self.rt_item_idx_map = []
