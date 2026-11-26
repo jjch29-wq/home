@@ -26,6 +26,7 @@ from site_apps.central.src.utils.helpers import NAN_PATTERN, DOT_ZERO_PATTERN, M
 from site_apps.central.src.views.tab_config_manager import TabConfigMixin
 from site_apps.central.src.views.inout_view import InoutViewMixin
 from site_apps.central.src.views.app_dialogs import AppDialogsMixin
+from site_apps.central.src.runtime_config import ensure_initial_config
 # [FIX] Bypass slow pytz timezone loading on network drives (Google Drive)
 import builtins
 import inspect
@@ -561,6 +562,10 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         if getattr(sys, 'frozen', False):
             # exe 실행 모드: exe와 같은 폴더에 DB 저장 (어디서 실행해도 동일)
             self.db_path = os.path.join(self.app_dir, 'Material_Inventory.xlsx')
+
+        # User settings are intentionally ignored by Git, so a clean checkout
+        # needs a valid first-run file before configuration is loaded.
+        ensure_initial_config(self.config_path)
 
         # 중앙지사에서 선택한 클라우드 재고 파일을 우선 사용한다.
         from site_apps.central.src.data_sync import get_business_data_dir, get_external_data_root

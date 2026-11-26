@@ -57,11 +57,14 @@ class SiteIsolationTests(unittest.TestCase):
             obj = SimpleNamespace()
             context = {'self': obj, 'sys': SimpleNamespace(frozen=False), 'os': os, '__file__': str(app_path)}
             exec(compile(ast.Module(body=branches, type_ignores=[]), str(app_path), 'exec'), context)
-            for value in (obj.db_path, obj.config_path):
-                value = Path(value).resolve()
+            db_path = Path(obj.db_path).resolve()
+            config_path = Path(obj.config_path).resolve()
+            for value in (db_path, config_path):
                 self.assertTrue(value.is_relative_to(ROOT / site))
-                self.assertTrue(value.exists(), value)
                 paths.append(value)
+            self.assertTrue(db_path.exists(), db_path)
+            # Runtime settings are ignored by Git and are created on first run.
+            self.assertTrue(config_path.parent.exists(), config_path.parent)
         self.assertEqual(len(paths), len(set(paths)))
 
     def test_billing_config_and_history_paths_are_separate(self):

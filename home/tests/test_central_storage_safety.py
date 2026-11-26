@@ -15,6 +15,7 @@ import pandas as pd
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'home/src'))
 from site_apps.central.src.inspection_batch import commit_plans
+from site_apps.central.src.runtime_config import ensure_initial_config
 
 
 def method(path,name,ns):
@@ -24,6 +25,17 @@ def method(path,name,ns):
 
 
 class StorageSafetyTests(unittest.TestCase):
+    def test_first_run_creates_config_without_replacing_existing_settings(self):
+        with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as directory:
+            path = Path(directory) / 'nested' / 'Material_Manager_Config.json'
+            self.assertTrue(ensure_initial_config(path))
+            self.assertEqual(json.loads(path.read_text(encoding='utf-8')), {})
+
+            original = b'{"layout_locked": true}\n'
+            path.write_bytes(original)
+            self.assertFalse(ensure_initial_config(path))
+            self.assertEqual(path.read_bytes(), original)
+
     def test_tab_change_retries_failed_save(self):
         from site_apps.central.src.controllers.event_controller import on_tab_changed_impl
 
