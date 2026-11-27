@@ -6,6 +6,7 @@ import os
 from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 import json
 import win32com.client as win32
+from pywintypes import com_error
 from tkcalendar import DateEntry
 from site_apps.central.src.services.ndt_calculator import calculate_billing
 from site_apps.central.src.services.billing_totals import grouped_billing_totals, grouped_supply_amount
@@ -1907,6 +1908,19 @@ class NDTCalculatorTab(ttk.Frame):
         filepath = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=default_name, filetypes=[("Excel File", "*.xlsx")], title="정식 기성청구 엑셀 양식으로 저장")
         if not filepath: return
             
+        def freeze_header(sheet, rows):
+            try:
+                sheet.Activate()
+                window = wb.Windows(1)
+                window.FreezePanes = False
+                window.SplitColumn = 0
+                window.SplitRow = rows
+                window.FreezePanes = True
+                window.ScrollRow = 1
+                window.ScrollColumn = 1
+            except com_error as error:
+                print(f"[기성청구 엑셀] 상단 {rows}행 틀 고정 설정 실패: {error}", flush=True)
+
         try:
             excel = win32.Dispatch("Excel.Application")
             excel.Visible = False
@@ -1915,15 +1929,6 @@ class NDTCalculatorTab(ttk.Frame):
             wb = excel.Workbooks.Add()
             ws = wb.ActiveSheet
             ws.Name = "기성청구내역서"
-            ws.PageSetup.PrintTitleRows = "$1:$7"
-            ws.Activate()
-            billing_window = wb.Windows(1)
-            billing_window.FreezePanes = False
-            billing_window.SplitColumn = 0
-            billing_window.SplitRow = 7
-            billing_window.FreezePanes = True
-            billing_window.ScrollRow = 1
-            billing_window.ScrollColumn = 1
             
             # --- 상단 기본 정보 ---
             ws.Range("A1:O2").Merge()
@@ -2295,6 +2300,8 @@ class NDTCalculatorTab(ttk.Frame):
             # (세부 내역에는 실비 정산 및 부가세 항목 생략 - 갑지 및 기성내역서에만 포함)
                 
             # --- 내역서 페이지 여백 및 A4 1장 맞춤 설정 ---
+            ws.PageSetup.PrintArea = f"$A$1:$O${row - 1}"
+            ws.PageSetup.PaperSize = 9  # xlPaperA4
             ws.PageSetup.Orientation = 2 # xlLandscape
             ws.PageSetup.Zoom = False
             ws.PageSetup.FitToPagesWide = 1
@@ -2320,29 +2327,10 @@ class NDTCalculatorTab(ttk.Frame):
             for c in [7, 9, 11, 13, 15]:
                 ws.Columns(c).ColumnWidth = 12.0 # 금액
 
-            # --- A4 가로 인쇄 영역 비율에 맞춰 행 높이/배율 직접 계산 (자동 맞춤의 빈 여백 방지) ---
-            try:
-                last_row = row - 1
-                page_w = 842 - 40   # A4 가로(pt) - 좌우 여백
-                page_h = 595 - 40   # A4 세로(pt) - 상하 여백
-                tbl_w = ws.Range(f"A1:O{last_row}").Width
-                head_h = sum(ws.Rows(r).RowHeight for r in range(1, 8))
-                n_data = last_row - 7
-                if n_data > 0 and tbl_w > 0:
-                    target_h = tbl_w * page_h / page_w
-                    data_h = max(18.0, min(40.0, (target_h - head_h) / n_data))
-                    for r in range(8, last_row + 1):
-                        ws.Rows(r).RowHeight = data_h
-                    tbl_h = head_h + data_h * n_data
-                    zoom = int(min(page_w / tbl_w, page_h / tbl_h) * 100)
-                    ws.PageSetup.Zoom = max(10, min(400, zoom))
-            except Exception as e:
-                print(f"내역서 배율 계산 실패(자동 맞춤 유지): {e}")
-                ws.PageSetup.Zoom = False
-                ws.PageSetup.FitToPagesWide = 1
-                ws.PageSetup.FitToPagesTall = 1
+            billing_last_row = row - 1
 
-            # 셀 내부 글자 잘림 원천 차단 (셀 크기 맞춤)
+            freeze_header(ws, 7)
+
             ws.Range(f"A6:O{row-1}").ShrinkToFit = True
 
             # 표 외곽 테두리선 굵게 적용 (청구서 갑지와 동일한 완성도)
@@ -2355,6 +2343,7 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cover.Name = "청구서(갑지)"
             
             # --- 페이지 가로 모드 및 여백 설정 ---
+            ws_cover.PageSetup.PaperSize = 9  # xlPaperA4
             ws_cover.PageSetup.Orientation = 2 # xlLandscape
             ws_cover.PageSetup.LeftMargin = 20
             ws_cover.PageSetup.RightMargin = 20
@@ -2547,6 +2536,19 @@ class NDTCalculatorTab(ttk.Frame):
             
             # --- 전체 외곽선 (A1 ~ G33) 굵게 설정 ---
             outer_range = ws_cover.Range("A1:G33")
+            # Match the cover's proportions at the same printed width.
+            try:
+                detail_width = ws.Range(f"A1:O{billing_last_row}").Width
+                cover_ratio = outer_range.Height / outer_range.Width
+                a4_print_ratio = (595 - 40) / (842 - 40)
+                target_height = detail_width * min(cover_ratio, a4_print_ratio * 0.97)
+                header_height = ws.Range("A1:O7").Height
+                data_rows = billing_last_row - 7
+                if data_rows > 0:
+                    data_height = max(14.0, min(40.0, (target_height - header_height) / data_rows))
+                    ws.Rows(f"8:{billing_last_row}").RowHeight = data_height
+            except com_error as error:
+                print(f"내역서 행 높이 조정 실패: {error}")
             for edge in (7, 8, 9, 10): # xlEdgeLeft, xlEdgeTop, xlEdgeBottom, xlEdgeRight
                 outer_range.Borders(edge).LineStyle = 1
                 outer_range.Borders(edge).Weight = 4 # xlThick
@@ -2601,14 +2603,7 @@ class NDTCalculatorTab(ttk.Frame):
                 cell.HorizontalAlignment = -4108
                 cell.Borders.LineStyle = 1
             ws_summary.PageSetup.PrintTitleRows = "$1:$4"
-            ws_summary.Activate()
-            summary_window = wb.Windows(1)
-            summary_window.FreezePanes = False
-            summary_window.SplitColumn = 0
-            summary_window.SplitRow = 4
-            summary_window.FreezePanes = True
-            summary_window.ScrollRow = 1
-            summary_window.ScrollColumn = 1
+            freeze_header(ws_summary, 4)
             sum_row = 5
             contract_category_order = [
                 cat for cat in categories if cat in self.contract_vars
@@ -2754,7 +2749,7 @@ class NDTCalculatorTab(ttk.Frame):
 
             ws_summary.Columns(1).ColumnWidth = 14
             ws_summary.Columns(2).ColumnWidth = 40
-            ws_summary.Columns(3).ColumnWidth = 35
+            ws_summary.Columns(3).ColumnWidth = 44
             ws_summary.Columns(4).ColumnWidth = 8
             ws_summary.Columns(5).ColumnWidth = 12
             ws_summary.Columns(6).ColumnWidth = 12
@@ -2768,14 +2763,7 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cont = wb.Sheets.Add(None, ws_summary)
             ws_cont.Name = "업체별 수량내역"
             # Keep the title, column headers and first company band visible.
-            ws_cont.Activate()
-            detail_window = wb.Windows(1)
-            detail_window.FreezePanes = False
-            detail_window.SplitColumn = 0
-            detail_window.SplitRow = 5
-            detail_window.FreezePanes = True
-            detail_window.ScrollRow = 1
-            detail_window.ScrollColumn = 1
+            freeze_header(ws_cont, 5)
             
             # --- 페이지 가로 모드 및 폭 1장 맞춤 설정 ---
             ws_cont.PageSetup.Orientation = 2 # xlLandscape
