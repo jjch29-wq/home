@@ -269,6 +269,33 @@ class OwnerReportTest(unittest.TestCase):
         manager._set_print_area_end(sheet, 750)
         self.assertIn('$B$1:$W$750', str(sheet.print_area))
 
+    def test_owner_report_loader_accepts_xls_extension(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / 'owner_202609.xls'
+            workbook = openpyxl.Workbook()
+            inputs = workbook.active
+            inputs.title = '작업정보'
+            inputs.cell(5, 1, '202609')
+            inputs.cell(5, 2, '0993')
+            inputs.cell(5, 3, '서울검사(주)')
+            inputs.cell(5, 4, '294681')
+            inputs.cell(5, 5, '한국지역난방공사 중앙지사 서울특별시 서초구')
+            inputs.cell(5, 9, '주진철')
+            inputs.cell(5, 17, 6)
+            workbook.save(source)
+
+            target = openpyxl.Workbook()
+            sheet = target.active
+            sheet['B1'] = '1. 방사선안전관리통합정보망 보고자료'
+            manager = MonthlyReportManager('unused.xlsx')
+            manager._populate_owner_report_rows(sheet, '2026-09', str(source))
+            self.assertEqual(sheet['B5'].value, '202609')
+            self.assertEqual(sheet['F5'].value, '서울특별시 서초구')
+
+    def test_owner_report_dialog_filetypes_include_xls(self):
+        tab_src = Path('home/src/site_apps/central/src/daily_work_log_tab.py').read_text(encoding='utf-8')
+        self.assertIn('*.xlsx *.xls', tab_src)
+
 
 if __name__ == '__main__':
     unittest.main()

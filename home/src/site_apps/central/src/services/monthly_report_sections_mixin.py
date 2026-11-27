@@ -233,6 +233,106 @@ class MonthlyReportSectionsMixin:
             for col in range(2, 24):
                 ws.cell(row, col).border = self.border_thin
 
+    @staticmethod
+    def _load_owner_report_workbook(source_path):
+        """Load an owner report workbook supporting both .xlsx and legacy .xls."""
+        ext = os.path.splitext(str(source_path))[1].lower()
+        if ext != '.xls':
+            return openpyxl.load_workbook(source_path, data_only=True)
+
+        # Some portals save OOXML content with a .xls extension.
+        try:
+            with open(source_path, 'rb') as fh:
+                raw = fh.read()
+            if raw[:4] == b'PK\x03\x04':
+                from io import BytesIO
+                return openpyxl.load_workbook(BytesIO(raw), data_only=True)
+        except OSError:
+            pass
+
+        # Fast path: use xlrd if installed in the runtime environment.
+        try:
+            import xlrd  # type: ignore
+
+            xls_wb = xlrd.open_workbook(source_path)
+            mem_wb = openpyxl.Workbook()
+            first = True
+            for sheet_name in xls_wb.sheet_names():
+                xls_ws = xls_wb.sheet_by_name(sheet_name)
+                if first:
+                    dst_ws = mem_wb.active
+                    dst_ws.title = sheet_name
+                    first = False
+                else:
+                    dst_ws = mem_wb.create_sheet(title=sheet_name)
+                for r in range(xls_ws.nrows):
+                    for c in range(xls_ws.ncols):
+                        cell = xls_ws.cell(r, c)
+                        val = cell.value
+                        if cell.ctype == xlrd.XL_CELL_DATE:
+                            try:
+                                val = xlrd.xldate_as_datetime(val, xls_wb.datemode)
+                            except Exception:
+                                pass
+                        elif cell.ctype == xlrd.XL_CELL_NUMBER and isinstance(val, float) and val.is_integer():
+                            val = int(val)
+                        dst_ws.cell(r + 1, c + 1, val)
+            return mem_wb
+        except ImportError:
+            pass
+
+        # Fallback on Windows: convert .xls -> temporary .xlsx via Excel COM.
+        import tempfile
+        com_initialized = False
+        excel = None
+        wb_com = None
+        try:
+            import pythoncom  # type: ignore
+            import win32com.client  # type: ignore
+
+            try:
+                pythoncom.CoInitialize()
+                com_initialized = True
+            except Exception:
+                pass
+
+            with tempfile.TemporaryDirectory(prefix='central_owner_xls_') as tmp_dir:
+                tmp_xlsx = os.path.join(tmp_dir, 'owner_converted.xlsx')
+                excel = win32com.client.DispatchEx('Excel.Application')
+                excel.Visible = False
+                excel.DisplayAlerts = False
+                wb_com = excel.Workbooks.Open(os.path.abspath(source_path), ReadOnly=True)
+                wb_com.SaveAs(tmp_xlsx, FileFormat=51)
+                wb_com.Close(False)
+                wb_com = None
+                excel.Quit()
+                excel = None
+                # Load fully into memory before temp directory is removed.
+                with open(tmp_xlsx, 'rb') as fh:
+                    from io import BytesIO
+                    return openpyxl.load_workbook(BytesIO(fh.read()), data_only=True)
+        except Exception as exc:
+            raise ValueError(
+                f"'.xls' 발주자 보고 파일을 읽을 수 없습니다: {exc}\n"
+                "Excel에서 '.xlsx' 형식으로 다시 저장한 뒤 선택해 주세요."
+            ) from exc
+        finally:
+            if wb_com is not None:
+                try:
+                    wb_com.Close(False)
+                except Exception:
+                    pass
+            if excel is not None:
+                try:
+                    excel.Quit()
+                except Exception:
+                    pass
+            if com_initialized:
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception:
+                    pass
+
     def _populate_owner_report_rows(self, ws, target_ym, source_path):
         """Fill the existing section 6.0 template rows from a selected file."""
         title_row = None
@@ -261,7 +361,7 @@ class MonthlyReportSectionsMixin:
 
         records = []
         if source_path and os.path.exists(source_path):
-            source_wb = openpyxl.load_workbook(source_path, data_only=True)
+            source_wb = self._load_owner_report_workbook(source_path)
             try:
                 if '작업정보' not in source_wb.sheetnames:
                     raise ValueError("발주자 보고 파일에 '작업정보' 시트가 없습니다.")

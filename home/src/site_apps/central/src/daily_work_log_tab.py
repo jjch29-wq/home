@@ -2584,7 +2584,11 @@ class DailyWorkLogTab(ttk.Frame):
 
         def browse_owner_report():
             path = filedialog.askopenfilename(
-                filetypes=[("Excel", "*.xlsx")],
+                filetypes=[
+                    ("Excel", "*.xlsx *.xls"),
+                    ("Excel 통합 문서", "*.xlsx"),
+                    ("Excel 97-2003", "*.xls"),
+                ],
                 title="발주자 보고 파일 선택",
             )
             if path:

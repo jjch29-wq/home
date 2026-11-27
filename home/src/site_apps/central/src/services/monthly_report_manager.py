@@ -1325,8 +1325,7 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
         self._trim_trailing_blank_print_pages(ws)
         self._complete_ndt_quantity_totals(ws)
         self._annotate_ndt_overruns(ws)
-        page_capacity = self.CUMULATIVE_NDT_PAGE_HEIGHT if report_scope == "cumulative" else None
-        self._layout_ndt_pages(ws, capacity_points=page_capacity)
+        self._layout_ndt_pages(ws, capacity_points=self.CUMULATIVE_NDT_PAGE_HEIGHT)
         # Build photo pages only after every dynamic 3.0 row operation. Images
         # are drawing anchors rather than cells; creating them earlier makes
         # later row deletion/insertion detach them from their page headers.
