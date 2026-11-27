@@ -28,6 +28,19 @@
             }
         },
         {
+            "name": "중앙지사 안전관리교육 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\site_apps\\central\\src\\지역난방_안전관리교육.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src\\site_apps\\central\\src",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}\\home\\src"
+            }
+        },
+        {
             "name": "한국가스공사 앱 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
