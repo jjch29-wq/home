@@ -150,5 +150,79 @@ class TestCentralMobileApi(unittest.TestCase):
                 res_rec3 = get_recent_records(date="2026-11-10")
                 self.assertEqual(len(res_rec3["records"]), 0)
 
+    def test_mobile_separates_client_chemical_company_and_daily_memo_and_preserves_on_update(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_db = Path(tmp_dir) / "Material_Inventory.xlsx"
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "DailyUsage"
+            headers = [
+                'Date', 'Site', '업체명', '발주처', '회사코드', '검사방법', '수량', '검사량', 'Usage',
+                'Note', 'Remark', 'DailyMemo', 'EntryTime', '입력시간', 'ClientRequestID'
+            ]
+            ws.append(headers)
+            wb.save(test_db)
+
+            with patch("home.src.site_apps.central.mobile.server.get_inventory_paths", return_value=[str(test_db)]):
+                res = save_record(RecordSaveRequest(
+                    date="2026-11-27",
+                    site="중앙지사",
+                    company="다림건설(주)",
+                    client="한국지역난방공사 중앙지사",
+                    method="PAUT",
+                    qty=4.2,
+                    note="개별 작업 메모",
+                ))
+                self.assertEqual(res["status"], "success")
+
+                # Simulate PC adding a shared DailyMemo and chemical manufacturer on that row
+                wb_edit = openpyxl.load_workbook(test_db)
+                ws_edit = wb_edit["DailyUsage"]
+                row_headers = [c.value for c in ws_edit[1]]
+                self.assertEqual(ws_edit.cell(row=2, column=row_headers.index('발주처') + 1).value, "한국지역난방공사 중앙지사")
+                self.assertEqual(ws_edit.cell(row=2, column=row_headers.index('회사코드') + 1).value or "", "")
+                self.assertEqual(ws_edit.cell(row=2, column=row_headers.index('DailyMemo') + 1).value or "", "")
+                entry_time = ws_edit.cell(row=2, column=row_headers.index('EntryTime') + 1).value
+                client_req_id = ws_edit.cell(row=2, column=row_headers.index('ClientRequestID') + 1).value
+
+                ws_edit.cell(row=2, column=row_headers.index('DailyMemo') + 1, value="당일 전체 공지사항")
+                ws_edit.cell(row=2, column=row_headers.index('회사코드') + 1, value="NAWOO")
+                wb_edit.save(test_db)
+
+                # Mobile edits the row's note/qty -> must NOT clobber DailyMemo or 회사코드
+                upd_res = update_record(RecordUpdateRequest(
+                    date="2026-11-27",
+                    site="중앙지사",
+                    company="다림건설(주)",
+                    client="한국지역난방공사 중앙지사",
+                    method="PAUT",
+                    qty=5.0,
+                    note="수정된 개별 메모",
+                    entry_time=entry_time,
+                    client_request_id=client_req_id,
+                ))
+                self.assertEqual(upd_res["status"], "success")
+
+                wb_after = openpyxl.load_workbook(test_db, read_only=True)
+                try:
+                    ws_after = wb_after["DailyUsage"]
+                    vals = dict(zip(row_headers, list(ws_after.values)[1]))
+                    self.assertEqual(vals["Note"], "수정된 개별 메모")
+                    self.assertEqual(vals["DailyMemo"], "당일 전체 공지사항")
+                    self.assertEqual(vals["회사코드"], "NAWOO")
+                    self.assertEqual(vals["발주처"], "한국지역난방공사 중앙지사")
+                finally:
+                    wb_after.close()
+
+    def test_packaged_gas_excludes_other_site_warehouses_and_hardcoded_dates(self):
+        root = Path(__file__).resolve().parents[2]
+        code_gs = (root / "outputs" / "central-mobile-gas" / "Code.gs").read_text(encoding="utf-8")
+        self.assertEqual(code_gs.count("function include("), 1)
+        self.assertNotIn("recDate === '2026-11-19'", code_gs)
+        self.assertNotIn("경인사무소-삼일산업", code_gs)
+        self.assertNotIn("경인사무소-세종알로이", code_gs)
+        self.assertIn("경인사무소-본점", code_gs)
+
+
 if __name__ == "__main__":
     unittest.main()

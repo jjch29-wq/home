@@ -263,7 +263,10 @@ class RecordSaveRequest(BaseModel):
     date: str
     site: str = "중앙지사"
     company: str = "한국지역난방공사 중앙지사"
+    client: str = ""
     company_code: str = "한국지역난방공사"
+    chemical_company: str = ""
+    daily_memo: str = ""
     loc_type: str = "열수송관"
     hot_tap_stage: str = ""
     hot_tap_joints: str = ""
@@ -448,6 +451,11 @@ def get_recent_records(date: Optional[str] = None):
 
             entry_time_val = safe_str(row.get("EntryTime"), safe_str(row.get("입력시간")))
 
+            raw_client = safe_str(row.get("발주처"))
+            if not raw_client:
+                legacy_cc = safe_str(row.get("회사코드"))
+                raw_client = legacy_cc if "지역난방" in legacy_cc else "한국지역난방공사"
+
             records.append({
                 "id": int(idx),
                 "entry_time": entry_time_val,
@@ -455,6 +463,8 @@ def get_recent_records(date: Optional[str] = None):
                 "date": safe_str(row.get("Date_str"), safe_str(row.get("Date"))),
                 "site": safe_str(row.get("Site"), "중앙지사"),
                 "company": safe_str(row.get("업체명"), "한국지역난방공사 중앙지사"),
+                "client": raw_client,
+                "company_code": raw_client,
                 "loc_type": safe_str(row.get("작업구분"), safe_str(row.get("구분"), "열수송관")),
                 "method": safe_str(row.get("검사방법"), "PAUT"),
                 "pipe": safe_str(row.get("관경(Inch)"), safe_str(row.get("규격"))),
@@ -480,7 +490,8 @@ def get_recent_records(date: Optional[str] = None):
                 "vehicle_no": safe_str(row.get("차량번호")),
                 "mileage": safe_str(row.get("주행거리")),
                 "vehicle_note": safe_str(row.get("차량비고")),
-                "note": safe_str(row.get("Note"), safe_str(row.get("DailyMemo"))),
+                "note": safe_str(row.get("Note"), safe_str(row.get("Remark"))),
+                "daily_memo": safe_str(row.get("DailyMemo")),
                 # RTK
                 "rtk_center_miss": safe_float(row.get("RTK_센터미스")),
                 "rtk_density": safe_float(row.get("RTK_농도")),
@@ -524,7 +535,8 @@ def build_row_data(req: RecordSaveRequest, preserve_entry_time: Optional[str] = 
         "구분": req.loc_type,
         "검사구분": req.loc_type,
         "업체명": req.company,
-        "회사코드": req.company_code or "한국지역난방공사",
+        "발주처": req.client or req.company_code or "한국지역난방공사",
+        "회사코드": req.chemical_company or "",
         "검사방법": req.method,
         "규격": req.pipe,
         "관경(Inch)": req.pipe,
@@ -555,7 +567,7 @@ def build_row_data(req: RecordSaveRequest, preserve_entry_time: Optional[str] = 
         "차량비고": req.vehicle_note,
         "Note": req.note,
         "Remark": req.note,
-        "DailyMemo": req.note,
+        "DailyMemo": req.daily_memo,
         "EntryTime": now_str,
         "입력시간": now_str,
         "검사자": req.workers[0].user if req.workers else "",
@@ -685,6 +697,10 @@ def update_record(req: RecordUpdateRequest):
     row_dict = build_row_data(req, preserve_entry_time=req.entry_time)
     row_dict.pop("EntryTime", None)
     row_dict.pop("입력시간", None)
+    if not req.daily_memo:
+        row_dict.pop("DailyMemo", None)
+    if not req.chemical_company:
+        row_dict.pop("회사코드", None)
 
     updated_dbs = []
     for p in paths:

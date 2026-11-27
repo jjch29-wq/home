@@ -293,5 +293,51 @@ class SyncResultTests(unittest.TestCase):
         self.assertEqual(status['foreground'], 'red')
         self.assertIn(timestamp, status['text'])
 
+    def test_update_pushes_client_request_id_for_same_second_rows_and_skips_polluted_memo(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'stock.xlsx'
+            ts = '2026-11-27 10:00:00'
+            local_rows = [
+                dict(Date='2026-11-27', Site='중앙지사', User='작업자A', Usage=10, 검사량=10, 수량=10,
+                     Note='수정된비고A', DailyMemo='', EntryTime=ts, 검사방법='PAUT', ClientRequestID='req-1'),
+                dict(Date='2026-11-27', Site='중앙지사', User='작업자B', Usage=5, 검사량=5, 수량=5, FilmCount=5,
+                     Note='비고B', DailyMemo='', EntryTime=ts, 검사방법='RT', ClientRequestID='req-2'),
+            ]
+            cloud_rows = [
+                dict(Date='2026-11-27', Site='중앙지사', User='작업자A', Usage=10, 검사량=10, 수량=10,
+                     Note='기존비고A', DailyMemo='기존비고A', EntryTime=ts, 검사방법='PAUT', ClientRequestID='req-1'),
+                dict(Date='2026-11-27', Site='중앙지사', User='작업자B', Usage=5, 검사량=5, 수량=5, FilmCount=5,
+                     Note='비고B', DailyMemo='비고B', EntryTime=ts, 검사방법='RT', ClientRequestID='req-2'),
+            ]
+            pd.DataFrame(local_rows).to_excel(path, sheet_name='DailyUsage', index=False)
+
+            captured_payloads = []
+            def fake_post(url, json=None, **kwargs):
+                captured_payloads.append(json)
+                resp = Mock()
+                resp.json.return_value = {'status': 'success', 'message': 'ok'}
+                return resp
+
+            with (
+                patch.object(sync, 'fetch_records_from_web_app', return_value=(['EntryTime', 'ClientRequestID'], cloud_rows)),
+                patch.object(sync, 'save_sync_config', return_value=True),
+                patch.object(sync, 'load_sync_config', return_value={'web_app_url': 'https://mock.invalid'}),
+                patch('requests.post', side_effect=fake_post),
+            ):
+                # PC batch update pushes client_request_id at top level so findMobileRow resolves same-second rows
+                push_res = sync.push_batch_to_web_app(updates=[local_rows[0]], web_app_url='https://mock.invalid')
+                self.assertEqual(push_res['status'], 'success')
+                self.assertEqual(push_res['updated_count'], 1)
+                self.assertTrue(any(p.get('client_request_id') == 'req-1' and p.get('action') == 'update' for p in captured_payloads))
+
+                # Also verify two_way_reconcile_with_web_app does not pollute empty local DailyMemo when cloud DailyMemo == cloud Note
+                pd.DataFrame([dict(cloud_rows[1], DailyMemo='')]).to_excel(path, sheet_name='DailyUsage', index=False)
+                with patch.object(sync, 'fetch_records_from_web_app', return_value=(['EntryTime', 'ClientRequestID'], [cloud_rows[1]])):
+                    rec_res = sync.two_way_reconcile_with_web_app(path, 'https://mock.invalid')
+                self.assertEqual(rec_res['updated_count'], 0)
+                self.assertEqual(rec_res['conflict_count'], 0)
+                saved_memo = pd.read_excel(path).iloc[0].get('DailyMemo', '')
+                self.assertTrue(pd.isna(saved_memo) or str(saved_memo).strip() == '')
+
 
 if __name__=='__main__': unittest.main()

@@ -395,8 +395,9 @@ def push_record_to_web_app(
         "entry_time": str(original_entry_time or record.get("EntryTime", "")).split(".")[0].strip(),
         "row_data": clean_record_for_json(record)
     }
-    if action == "delete" and record.get("ClientRequestID"):
-        payload["client_request_id"] = record["ClientRequestID"]
+    client_req_id = _client_request_id(record)
+    if client_req_id:
+        payload["client_request_id"] = client_req_id
 
     try:
         try:
@@ -679,11 +680,19 @@ def two_way_reconcile_with_web_app(
                 if _client_request_id(cr) and not _client_request_id(lr):
                     lr["ClientRequestID"] = _client_request_id(cr)
                     row_changed = True
-                for col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "관경(Inch)", "규격", "출장비", "검사비", "핫태핑차수", "핫태핑개소", "핫태핑관경"]:
+                for col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "발주처", "관경(Inch)", "규격", "출장비", "검사비", "핫태핑차수", "핫태핑개소", "핫태핑관경"]:
                     if col in cr and _norm_val(lr.get(col)) != _norm_val(cr.get(col)):
+                        if (col == "DailyMemo"
+                                and _norm_val(lr.get("DailyMemo")) == ""
+                                and _norm_val(cr.get("DailyMemo")) == _norm_val(cr.get("Note"))):
+                            continue
                         lr[col] = cr[col]
                         row_changed = True
-                if quantity_key is not None:
+                is_rt_rep = (
+                    str(cr.get('검사방법', lr.get('검사방법', ''))).strip().upper() == 'RT'
+                    and str(cr.get('검사구분', lr.get('검사구분', ''))).strip().upper() == 'REP'
+                )
+                if quantity_key is not None and not is_rt_rep:
                     quantity = cr[quantity_key]
                     fields = ['수량', '검사량', 'Usage']
                     if str(cr.get('검사방법', lr.get('검사방법', ''))).strip().upper() == 'RT':
@@ -737,12 +746,19 @@ def two_way_reconcile_with_web_app(
                 cr = matching_record(r, cloud_groups.get(tk, []))
                 if cr is not None:
                     is_modified = False
-                    for check_col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "관경(Inch)", "규격", "출장비", "검사비", "핫태핑차수", "핫태핑개소", "핫태핑관경"]:
+                    for check_col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "발주처", "관경(Inch)", "규격", "출장비", "검사비", "핫태핑차수", "핫태핑개소", "핫태핑관경"]:
+                        if check_col == "발주처" and "발주처" not in cr:
+                            continue
+                        if (check_col == "DailyMemo"
+                                and _norm_val(r.get("DailyMemo")) == ""
+                                and _norm_val(cr.get("DailyMemo")) == _norm_val(cr.get("Note"))):
+                            continue
                         if _norm_val(r.get(check_col)) != _norm_val(cr.get(check_col)):
                             is_modified = True
                             break
                     if is_modified:
-                        if len(cloud_groups.get(tk, [])) == 1:
+                        has_unique_id = bool(_client_request_id(r) and _client_request_id(r) == _client_request_id(cr))
+                        if has_unique_id or len(cloud_groups.get(tk, [])) == 1:
                             to_push_updates.append(r)
                         else:
                             sync_conflicts += 1

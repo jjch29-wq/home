@@ -88,7 +88,8 @@ var HEADERS = [
   '조건1', '조건2', '제경비율', '기술료율', '보정계수', '환산물량', '재료비', '인건비', '제경비', '기술료',
   'Meal', 'Meal2', 'Meal3', 'Meal4', 'Meal5', 'Meal6', 'Meal7', 'Meal8', 'Meal9', 'Meal10',
   '검사구분', '조인트수', '불량수', '관경(Inch)', '구분', 'Remark', 'DailyMemo',
-  '핫태핑차수', '핫태핑개소', '핫태핑관경', '보조장비', '수량', 'ClientRequestID', 'ClientRequestHash'
+  '핫태핑차수', '핫태핑개소', '핫태핑관경', '보조장비', '수량', '발주처', '구간', '라인번호',
+  'ClientRequestID', 'ClientRequestHash'
 ];
 
 /**
@@ -252,7 +253,10 @@ function buildRowMap(req, preserveEntryTime) {
     '구분': req.loc_type || '열수송관',
     '검사구분': req.loc_type || '열수송관',
     '업체명': req.company || '한국지역난방공사 중앙지사',
-    '회사코드': req.company_code || '한국지역난방공사',
+    '발주처': req.client || req.company_code || '한국지역난방공사',
+    '회사코드': req.chemical_company || '',
+    '구간': req.section || '',
+    '라인번호': req.line_no || '',
     '검사방법': req.method || 'PAUT',
     '규격': req.pipe || '',
     '관경(Inch)': req.pipe || '',
@@ -285,7 +289,7 @@ function buildRowMap(req, preserveEntryTime) {
     '차량비고': req.vehicle_note || '',
     'Note': req.note || '',
     'Remark': req.note || '',
-    'DailyMemo': req.note || '',
+    'DailyMemo': req.daily_memo || '',
     'EntryTime': nowStr,
     '입력시간': nowStr,
     'FilmCount': (req.method === 'RT') ? Number(req.qty || 0) : 0,
@@ -399,7 +403,43 @@ function updateRecordCore(req) {
   validateMobileRecord(req);
   var oldRow = sheet.getRange(targetRow,1,1,headerRow.length).getValues()[0];
   var rowMap = buildRowMap(req, formatCellTime(oldRow[entryTimeCol]));
-  rowMap.ClientRequestID = oldRow[headerRow.indexOf('ClientRequestID')] || req.client_request_id || '';
+  var idIdx = headerRow.indexOf('ClientRequestID');
+  rowMap.ClientRequestID = (idIdx >= 0 ? oldRow[idIdx] : '') || req.client_request_id || '';
+  if (!req.row_data) {
+    var dailyMemoIdx = headerRow.indexOf('DailyMemo');
+    var oldNoteIdx = headerRow.indexOf('Note');
+    if (!req.daily_memo && dailyMemoIdx >= 0 && oldRow[dailyMemoIdx]) {
+      var existingMemo = String(oldRow[dailyMemoIdx]);
+      var previousNote = oldNoteIdx >= 0 ? String(oldRow[oldNoteIdx] || '') : '';
+      if (existingMemo !== previousNote) {
+        rowMap['DailyMemo'] = existingMemo;
+      }
+    }
+    var chemIdx = headerRow.indexOf('회사코드');
+    if (!req.chemical_company && chemIdx >= 0 && oldRow[chemIdx]) {
+      var existingChem = String(oldRow[chemIdx]);
+      if (existingChem.indexOf('지역난방') < 0) {
+        rowMap['회사코드'] = existingChem;
+      }
+    }
+    var secIdx = headerRow.indexOf('구간');
+    if (!req.section && secIdx >= 0 && oldRow[secIdx]) {
+      rowMap['구간'] = oldRow[secIdx];
+    }
+    var lineIdx = headerRow.indexOf('라인번호');
+    if (!req.line_no && lineIdx >= 0 && oldRow[lineIdx]) {
+      rowMap['라인번호'] = oldRow[lineIdx];
+    }
+  }
+  var hashPayload = {};
+  Object.keys(rowMap).sort().forEach(function(key) {
+    if (key !== 'EntryTime' && key !== '입력시간' && key !== 'ClientRequestHash') {
+      hashPayload[key] = rowMap[key];
+    }
+  });
+  rowMap.ClientRequestHash = Utilities.base64Encode(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, JSON.stringify(hashPayload))
+  );
   var rowValues = [];
   for (var j = 0; j < headerRow.length; j++) {
     var colName = headerRow[j];

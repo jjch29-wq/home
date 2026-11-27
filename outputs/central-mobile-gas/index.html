@@ -2041,6 +2041,7 @@ function applyMethodDefaults(method){
       return {
         date: document.getElementById("input-date").value,
         company: selectedCompany,
+        client: clientVal,
         company_code: clientVal,
         loc_type: document.getElementById("select-loc-type").value,
         hot_tap_stage: document.getElementById("hottap-stage").value,
@@ -2221,8 +2222,8 @@ function applyMethodDefaults(method){
             handleContractorChange(compSel);
           }
         }
-        if (r.company_code) {
-          workspaceSelectValue(document.getElementById("select-client"), r.company_code);
+        if (r.client || r.company_code) {
+          workspaceSelectValue(document.getElementById("select-client"), r.client || r.company_code);
         }
         if (r.loc_type) {
           const locSel = document.getElementById("select-loc-type");

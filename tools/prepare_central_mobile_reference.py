@@ -30,18 +30,28 @@ def prepare(inventory=None):
                           ndt_materials_all=['형광자분','흑색자분','백색페인트','침투제','세척제','현상제','형광침투제'],
                           normalize_id=lambda v: re.sub(r'\.0$', '', clean(v)))
     app._is_consumable_material = lambda name,method: _is_consumable_material_impl(app,name,method)
+    def is_other_site_stationary_warehouse(wh: str) -> bool:
+        w = clean(wh)
+        return w.startswith('경인사무소-') and w != '경인사무소-본점'
+
     lookups = build_stock_lookups(app)
     items=[]
-    for _, row in app.materials_df.iterrows():
+    central_mat_indices = []
+    for idx, row in app.materials_df.iterrows():
         if not app.normalize_id(row.get('MaterialID')): continue
         amount = stock_breakdown(app,row,lookups)
-        if row.get('Active',1)==0 and not any(amount[k] for k in ('in_qty','out_qty','daily_qty','ndt_usage')): continue
+        has_central_activity = any(amount[k] for k in ('in_qty','out_qty','daily_qty','ndt_usage'))
+        if row.get('Active',1)==0 and not has_central_activity: continue
+        if is_other_site_stationary_warehouse(row.get('창고')) and not has_central_activity:
+            continue
+        central_mat_indices.append(idx)
         methods,role=row_classification(row)
         items.append(dict(id=app.normalize_id(row['MaterialID']), name=clean(row.get('품목명')),
             model=clean(row.get('모델명')), sn=clean(row.get('SN')), warehouse=clean(row.get('창고')),
             company=clean(row.get('회사코드')), unit=clean(row.get('관리단위')),
             incoming=amount['total_incoming'],used=amount['total_used'],stock=amount['current_stock'],
             methods=sorted(methods),role=role,active=row.get('Active',1)!=0))
+    app.materials_df = app.materials_df.loc[central_mat_indices].copy()
     fields=('companies','users','vehicles','equipments','aux_equipments','sites','daily_units','test_items','applied_codes','worktimes')
     managed={k:config[k] for k in fields if k in config}
     prices=json.loads((central/'src/config.json').read_text(encoding='utf-8'))

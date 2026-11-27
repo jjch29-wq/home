@@ -1,5 +1,4 @@
 /** Mobile workspace: managed configuration, retry-safe queue, history and stock. */
-function include(name) { return HtmlService.createHtmlOutputFromFile(name).getContent(); }
 
 function findMobileRow(sheet, headers, req) {
   if (sheet.getLastRow() < 2) return -1;
@@ -194,6 +193,10 @@ function mobileRecordFromRow(headerRow, row, rowNumber) {
     date: rowDateStr,
     site: String(item['Site'] || '중앙지사'),
     company: String(item['업체명'] || '한국지역난방공사 중앙지사'),
+    client: String(item['발주처'] || ((item['회사코드'] && String(item['회사코드']).indexOf('지역난방') >= 0) ? item['회사코드'] : '한국지역난방공사')),
+    company_code: String(item['발주처'] || ((item['회사코드'] && String(item['회사코드']).indexOf('지역난방') >= 0) ? item['회사코드'] : '한국지역난방공사')),
+    section: String(item['구간'] || item['Section'] || ''),
+    line_no: String(item['라인번호'] || item['LineNo'] || ''),
     method: String(item['검사방법'] || ''),
     item_name: String(item['검사품명'] || 'Pipe'),
     material: String(item['Material'] || item['자재명'] || item['품목명'] || ''),
@@ -217,7 +220,8 @@ function mobileRecordFromRow(headerRow, row, rowNumber) {
     vehicle_no: String(item['차량번호'] || ''),
     mileage: String(item['주행거리'] || ''),
     vehicle_note: String(item['차량비고'] || ''),
-    note: String(item['Note'] || item['Remark'] || item['DailyMemo'] || ''),
+    note: String(item['Note'] || item['Remark'] || ''),
+    daily_memo: String(item['DailyMemo'] || ''),
     applied_code: String(item['적용코드'] || ''),
     report_no: String(item['성적서번호'] || ''),
     rtk_center_miss: safeNum(item['RTK_센터미스'], 0),
@@ -365,8 +369,6 @@ function getProgressSummary(targetDate) {
         if (record.section || record.line_no) {
           if (record.section) locStr += ' / ' + record.section;
           if (record.line_no) locStr += ' / ' + record.line_no;
-        } else if (recDate === '2026-11-19') {
-          locStr += ' / Sec 11 / IA2026-013-011-0-2-700A(S)';
         }
         liveBillingRecords.push({
           date: recDate,
