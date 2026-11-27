@@ -688,6 +688,32 @@ class ReportPaddingTest(unittest.TestCase):
         self.assertEqual((anchor._from.row, anchor.to.row), (10, 39))
         self.assertEqual([b.id for b in sheet.row_breaks.brk], [45])
 
+    def test_final_photo_overflow_trims_print_area_without_changing_rows(self):
+        from types import SimpleNamespace
+
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.page_setup.scale = 100
+        sheet.page_margins.top = sheet.page_margins.bottom = .75
+        sheet.page_margins.footer = .3
+        sheet.print_area = 'B1:W45'
+        sheet.cell(5, 6, '7.0 사진대지')
+        sheet.cell(41, 2, '사진 설명')
+        for row in range(1, 46):
+            sheet.row_dimensions[row].height = 18
+        anchor = SimpleNamespace(_from=SimpleNamespace(row=10), to=SimpleNamespace(row=39))
+        sheet._images.append(SimpleNamespace(anchor=anchor, height=200))
+        sheet.cell(45, 2, '인쇄할 내용')
+        manager._fit_blank_photo_page_overflow(sheet)
+        self.assertIn('$W$45', sheet.print_area)
+
+        sheet.cell(45, 2).value = None
+        manager._fit_blank_photo_page_overflow(sheet)
+        self.assertNotIn('$W$45', sheet.print_area)
+        self.assertEqual(sheet.cell(41, 2).value, '사진 설명')
+        self.assertTrue(all(sheet.row_dimensions[row].height == 18 for row in range(1, 46)))
+        self.assertEqual((anchor._from.row, anchor.to.row), (10, 39))
+
     def test_rt_gap_compaction_keeps_last_record_and_total_on_page(self):
         manager = MonthlyReportManager('unused.xlsx')
         sheet = openpyxl.Workbook().active

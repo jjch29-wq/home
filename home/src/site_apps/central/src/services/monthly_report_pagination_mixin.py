@@ -1573,7 +1573,7 @@ class MonthlyReportPaginationMixin:
                     while '(계속) (계속)' in cell.value:
                         cell.value = cell.value.replace('(계속) (계속)', '(계속)')
 
-    def _paginate_reflowed_ndt(self, ws):
+    def _paginate_reflowed_ndt(self, ws, capacity_points=None):
         """Paginate the continuous 3.0 body and repeat only needed headers."""
         from openpyxl.worksheet.pagebreak import Break
         max_column = min(ws.max_column, 23)
@@ -1616,7 +1616,7 @@ class MonthlyReportPaginationMixin:
                 overflow = self._first_print_overflow_row(
                     ws, page_start, page_end - page_start + 1,
                     reserve_footer=False,
-                    capacity_points=self.NDT_PAGE_HEIGHT,
+                    capacity_points=capacity_points if capacity_points is not None else self.NDT_PAGE_HEIGHT,
                 )
                 if overflow is None:
                     page_start = page_end + 1
@@ -2717,6 +2717,77 @@ class MonthlyReportPaginationMixin:
                     ws.row_dimensions[r].height = height(r) - reduction
                     excess -= reduction
             start = end + 1
+
+    def _fit_blank_photo_page_overflow(self, ws):
+        """Remove only blank overflow at the bottom of each photo page."""
+        print_area = re.fullmatch(r'\$?B\$?1:\$?W\$?(\d+)', str(ws.print_area).split('!')[-1])
+        if not print_area:
+            return
+        print_end = int(print_area[1])
+        ends = sorted({int(brk.id) for brk in ws.row_breaks.brk if 0 < int(brk.id) < print_end} | {print_end})
+        scale = self._report_height_scale(ws)
+        start = 1
+        for end in ends:
+            overflow = self._blank_photo_overflow_start(ws, start, end, scale)
+            if overflow is not None:
+                if end == print_end:
+                    self._set_print_area_end(ws, overflow - 1)
+                else:
+                    for row in range(overflow, end + 1):
+                        ws.row_dimensions[row].hidden = True
+            start = end + 1
+
+    def _blank_photo_overflow_start(self, ws, start, end, scale):
+        title = ''.join(
+            str(ws.cell(row, col).value or '')
+            for row in range(start, min(end, start + 10) + 1)
+            for col in range(2, 24)
+        )
+        if '사진대지' not in ''.join(title.split()):
+            return
+        overflow = self._first_print_overflow_row(
+            ws, start, end - start + 1, scale,
+        )
+        if overflow is None:
+            return
+        last_content = max(
+            (row for row in range(overflow, end + 1)
+             if any(ws.cell(row, col).value is not None for col in range(2, 24))),
+            default=overflow - 1,
+        )
+
+        # Two-cell photos expose their bottom row. For a one-cell drawing,
+        # use its physical extent to find the last occupied row.
+        default_height = float(ws.sheet_format.defaultRowHeight or 15)
+        has_photo = False
+        for image in ws._images:
+            anchor = getattr(image, 'anchor', None)
+            marker = getattr(anchor, '_from', None)
+            if marker is None:
+                return
+            image_start = marker.row + 1
+            if not start <= image_start <= end:
+                continue
+            if getattr(image, 'height', 0) >= 150:
+                has_photo = True
+            bottom = getattr(anchor, 'to', None)
+            if bottom is not None:
+                last_content = max(last_content, bottom.row + 1)
+            else:
+                extent = getattr(anchor, 'ext', None)
+                if extent is None:
+                    return
+                remaining = (extent.cy + marker.rowOff) / 12700
+                row = image_start
+                while row <= end:
+                    dim = ws.row_dimensions[row]
+                    if not dim.hidden:
+                        remaining -= float(dim.height if dim.height is not None else default_height)
+                    if remaining <= 0:
+                        break
+                    row += 1
+                last_content = max(last_content, row)
+        return last_content + 1 if has_photo and last_content < end else None
 
     def _compact_rt_leading_gap(self, ws, header_row):
         """Reclaim the blank MT-to-RT gap before RT pagination is decided."""

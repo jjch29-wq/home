@@ -2011,7 +2011,7 @@ class MonthlyReportSectionsMixin:
                     note.alignment = Alignment(horizontal='center', vertical='center',
                                                wrap_text=False, shrink_to_fit=True)
 
-    def _layout_ndt_pages(self, ws):
+    def _layout_ndt_pages(self, ws, capacity_points=None):
         """Rebuild the complete 3.0 body to one shared height for both scopes.
 
         Remove template page boundaries before filling pages in source order.
@@ -2025,7 +2025,7 @@ class MonthlyReportSectionsMixin:
         self._lower_ndt_page_titles(ws, extra_height=35.0)
         self._normalize_ndt_parent_caption_style(ws)
         self._space_ndt_section_caption(ws)
-        self._paginate_reflowed_ndt(ws)
+        self._paginate_reflowed_ndt(ws, capacity_points=capacity_points)
         self._insert_fixed_ndt_top_spacers(ws, reserved_height=20.0)
         self._space_ndt_summary_caption(ws)
 

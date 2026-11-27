@@ -19,8 +19,9 @@ from site_apps.central.src.services.monthly_report_sections_mixin import Monthly
 
 class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMixin):
     # Worksheet row-height points, including the common document header.
-    # Monthly and cumulative reports differ in records, never page capacity.
+    # The cumulative continuation pages need headroom for Excel's print fit.
     NDT_PAGE_HEIGHT = 990.0
+    CUMULATIVE_NDT_PAGE_HEIGHT = 940.0
     WELDER_NAMES = {
         'W-2024-A-03': '김진철',
         'W-2026-A-03': '김충환',
@@ -1324,7 +1325,8 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
         self._trim_trailing_blank_print_pages(ws)
         self._complete_ndt_quantity_totals(ws)
         self._annotate_ndt_overruns(ws)
-        self._layout_ndt_pages(ws)
+        page_capacity = self.CUMULATIVE_NDT_PAGE_HEIGHT if report_scope == "cumulative" else None
+        self._layout_ndt_pages(ws, capacity_points=page_capacity)
         # Build photo pages only after every dynamic 3.0 row operation. Images
         # are drawing anchors rather than cells; creating them earlier makes
         # later row deletion/insertion detach them from their page headers.
@@ -1351,6 +1353,7 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
         self._normalize_all_report_header_logos(ws, reference_toc=True)
         self._center_enlarge_report_logos(ws)
         self._ensure_valid_print_area(ws)
+        self._fit_blank_photo_page_overflow(ws)
         if progress is not None:
             progress("파일 저장 중…")
         record_stage("최종 페이지 정리")
