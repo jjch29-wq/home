@@ -12,6 +12,7 @@ import json
 import datetime
 from collections import defaultdict
 import re
+from time import perf_counter
 
 from site_apps.central.src.services.monthly_report_pagination_mixin import MonthlyReportPaginationMixin
 from site_apps.central.src.services.monthly_report_sections_mixin import MonthlyReportSectionsMixin
@@ -83,6 +84,16 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
     def generate_report(self, history_path, target_ym, output_path, doc_num="01",
                         create_date=None, owner_report_path=None,
                         report_scope="month", progress=None):
+
+        started = perf_counter()
+        last_stage = started
+        timings = []
+
+        def record_stage(label):
+            nonlocal last_stage
+            now = perf_counter()
+            timings.append(f"{label} {now - last_stage:.2f}초")
+            last_stage = now
 
         self._history_path = history_path
 
@@ -320,7 +331,9 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
         # 2. 엑셀 쓰기 준비
         if progress is not None:
             progress("엑셀 작성 중…")
+        record_stage("이력 읽기 및 집계")
         wb = openpyxl.load_workbook(self.template_path)
+        record_stage("양식 열기")
 
         # 엑셀 열 때 '명명된 범위' 복구 창이 뜨는 것을 방지하기 위해 불필요한 이름 정의 삭제
         if hasattr(wb, 'defined_names'):
@@ -1168,74 +1181,77 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
             '분 당 사 업 소': "중 앙 지 사"
         }
         for sheet in wb.worksheets:
-            for row in sheet.iter_rows():
-                for cell in row:
-                    if cell.value:
+            # Walk populated cells in row order without materializing blank cells.
+            text_cells = sorted(
+                (position, cell) for position, cell in sheet._cells.items()
+                if isinstance(cell.value, str) and cell.value
+            )
+            for _, cell in text_cells:
+                val_str = str(cell.value)
+
+                if isinstance(cell.value, str):
+                    # Normalize the current central-branch contract
+                    # wording even when the template already contains
+                    # a non-placeholder 2026 title.
+                    central_branch = '2026\ub144 \uc911\uc559\uc9c0\uc0ac'
+                    ndt_contract = '\ube44\ud30c\uad34\uac80\uc0ac\uc6a9\uc5ed \ub2e8\uac00\uacc4\uc57d'
+                    heat_pipe = '\uc5f4\ubc30\uad00'
+                    heat_transport_pipe = '\uc5f4\uc218\uc1a1\uad00'
+                    if (
+                        central_branch in val_str
+                        and ndt_contract in val_str
+                        and heat_pipe in val_str
+                    ):
+                        cell.value = val_str.replace(
+                            heat_pipe, heat_transport_pipe
+                        )
                         val_str = str(cell.value)
+                    for k, v in replacements.items():
+                        if k in val_str:
+                            cell.value = val_str.replace(k, str(v))
+                            val_str = str(cell.value)
 
-                        if isinstance(cell.value, str):
-                            # Normalize the current central-branch contract
-                            # wording even when the template already contains
-                            # a non-placeholder 2026 title.
-                            central_branch = '2026\ub144 \uc911\uc559\uc9c0\uc0ac'
-                            ndt_contract = '\ube44\ud30c\uad34\uac80\uc0ac\uc6a9\uc5ed \ub2e8\uac00\uacc4\uc57d'
-                            heat_pipe = '\uc5f4\ubc30\uad00'
-                            heat_transport_pipe = '\uc5f4\uc218\uc1a1\uad00'
-                            if (
-                                central_branch in val_str
-                                and ndt_contract in val_str
-                                and heat_pipe in val_str
-                            ):
-                                cell.value = val_str.replace(
-                                    heat_pipe, heat_transport_pipe
-                                )
-                                val_str = str(cell.value)
-                            for k, v in replacements.items():
-                                if k in val_str:
-                                    cell.value = val_str.replace(k, str(v))
-                                    val_str = str(cell.value)
+                # 타이틀 텍스트 무조건 포맷 강제 적용 (모든 페이지의 제목 칸 타겟)
+                val_no_spaces = val_str.replace(' ', '').replace('\xa0', '').replace('\n', '')
 
-                        # 타이틀 텍스트 무조건 포맷 강제 적용 (모든 페이지의 제목 칸 타겟)
-                        val_no_spaces = val_str.replace(' ', '').replace('\xa0', '').replace('\n', '')
-
-                        is_title = False
-                        if ('단가계약' in val_no_spaces or '계약명' in val_no_spaces) and ('월간용역' in val_no_spaces or '보고서' in val_no_spaces):
+                is_title = False
+                if ('단가계약' in val_no_spaces or '계약명' in val_no_spaces) and ('월간용역' in val_no_spaces or '보고서' in val_no_spaces):
+                    is_title = True
+                elif cell.column == 6 and isinstance(cell.value, str) and val_no_spaces.startswith('='):
+                    # 수식으로 제목을 참조하는 경우 (예: =F41, =F$41, =$F$41 등)
+                    match = re.search(r'\$?F\$?(\d+)', val_no_spaces, re.IGNORECASE)
+                    if match:
+                        ref_row = int(match.group(1))
+                        # 참조된 셀의 실제 값이 제목 키워드를 포함하는지 확인
+                        ref_val = str(sheet.cell(row=ref_row, column=6).value or '').replace(' ', '').replace('\xa0', '').replace('\n', '')
+                        if ('단가계약' in ref_val or '계약명' in ref_val) and ('월간용역' in ref_val or '보고서' in ref_val):
                             is_title = True
-                        elif cell.column == 6 and isinstance(cell.value, str) and val_no_spaces.startswith('='):
-                            # 수식으로 제목을 참조하는 경우 (예: =F41, =F$41, =$F$41 등)
-                            match = re.search(r'\$?F\$?(\d+)', val_no_spaces, re.IGNORECASE)
-                            if match:
-                                ref_row = int(match.group(1))
-                                # 참조된 셀의 실제 값이 제목 키워드를 포함하는지 확인
-                                ref_val = str(sheet.cell(row=ref_row, column=6).value or '').replace(' ', '').replace('\xa0', '').replace('\n', '')
-                                if ('단가계약' in ref_val or '계약명' in ref_val) and ('월간용역' in ref_val or '보고서' in ref_val):
-                                    is_title = True
-                                # 참조 셀에 값이 없는 경우 행 번호 패턴으로 폴백 (41, 81, 121... 등 40행 간격)
-                                elif ref_row % 40 == 1:
-                                    is_title = True
+                        # 참조 셀에 값이 없는 경우 행 번호 패턴으로 폴백 (41, 81, 121... 등 40행 간격)
+                        elif ref_row % 40 == 1:
+                            is_title = True
 
-                        if is_title:
-                            contract_name = replacements.get('[[계약명]]', '2026년 중앙지사 열수송관 비파괴검사용역 단가계약')
-                            # 무조건 괄호와 줄바꿈이 포함된 포맷으로 강제 덮어쓰기 (수식도 문자열로 덮어씌움)
-                            cell.value = f"【{contract_name}】\n월 간 용 역 진 도 보 고 서"
+                if is_title:
+                    contract_name = replacements.get('[[계약명]]', '2026년 중앙지사 열수송관 비파괴검사용역 단가계약')
+                    # 무조건 괄호와 줄바꿈이 포함된 포맷으로 강제 덮어쓰기 (수식도 문자열로 덮어씌움)
+                    cell.value = f"【{contract_name}】\n월 간 용 역 진 도 보 고 서"
 
-                            # Alignment and Font are imported at module level.
-                            import copy
+                    # Alignment and Font are imported at module level.
+                    import copy
 
-                            title_font = Font(name='맑은 고딕', size=9, bold=True)
-                            title_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                            cell.font = title_font
-                            cell.alignment = title_align
+                    title_font = Font(name='맑은 고딕', size=9, bold=True)
+                    title_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                    cell.font = title_font
+                    cell.alignment = title_align
 
-                            for r_idx in range(cell.row, cell.row + 4):
-                                for c_idx in range(1, 30):
-                                    c = sheet.cell(row=r_idx, column=c_idx)
-                                    if c.alignment:
-                                        new_align = copy.copy(c.alignment)
-                                        new_align.wrap_text = True
-                                        c.alignment = new_align
-                                    else:
-                                        c.alignment = Alignment(wrap_text=True)
+                    for r_idx in range(cell.row, cell.row + 4):
+                        for c_idx in range(1, 30):
+                            c = sheet.cell(row=r_idx, column=c_idx)
+                            if c.alignment:
+                                new_align = copy.copy(c.alignment)
+                                new_align.wrap_text = True
+                                c.alignment = new_align
+                            else:
+                                c.alignment = Alignment(wrap_text=True)
 
 
         # [표지] 시트 병합 셀 강제 복구 (openpyxl 버그 방지)
@@ -1312,7 +1328,9 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
         # Build photo pages only after every dynamic 3.0 row operation. Images
         # are drawing anchors rather than cells; creating them earlier makes
         # later row deletion/insertion detach them from their page headers.
+        record_stage("표 작성 및 페이지 구성")
         self._populate_process_photo_pages(ws, process_photos, doc_num=doc_num)
+        record_stage("공정사진 페이지 작성")
         self._renumber_ndt_status_pages(ws)
         self._normalize_ndt_header_logos(ws)
         self._normalize_all_report_header_logos(
@@ -1335,4 +1353,8 @@ class MonthlyReportManager(MonthlyReportPaginationMixin, MonthlyReportSectionsMi
         self._ensure_valid_print_area(ws)
         if progress is not None:
             progress("파일 저장 중…")
-        return self._save_workbook_with_fallback(wb, output_path)
+        record_stage("최종 페이지 정리")
+        result = self._save_workbook_with_fallback(wb, output_path)
+        record_stage("파일 저장")
+        print(f"[월간진도보고서] 총 {perf_counter() - started:.2f}초 | " + " | ".join(timings))
+        return result
