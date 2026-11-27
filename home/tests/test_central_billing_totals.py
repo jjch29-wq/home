@@ -54,7 +54,7 @@ class BillingTotalsTest(unittest.TestCase):
         self.assertEqual(rows[0]['subtotal'], 2061747)
 
     def test_export_to_excel_uses_bulk_range_writes_and_calculation_control(self):
-        source = Path(__file__).resolve().parents[1] / 'src/site_apps/central/src/ndt_billing_tab.py'
+        source = Path(__file__).resolve().parents[1] / 'src/site_apps/central/src/services/ndt_billing_excel_exporter.py'
         text = source.read_text(encoding='utf-8')
         tree = ast.parse(text)
         method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'export_to_excel')
