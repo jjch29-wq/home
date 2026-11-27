@@ -224,10 +224,18 @@ class DailyWorkLogTab(ttk.Frame):
         self._build_right_pane(self.right_frame)
 
         # 재시작할 때 좌우 작업영역을 화면 중앙에서 동일한 폭으로 시작한다.
-        self.after(200, self._apply_initial_pane_layout)
-        
-        # Initial load for today's date
-        self.after(100, self.on_date_change)
+        initial_jobs = {
+            self.after(200, self._apply_initial_pane_layout),
+            self.after(100, self.on_date_change),
+        }
+
+        def cancel_initial_jobs(event):
+            if event.widget is self:
+                for job in initial_jobs:
+                    self.after_cancel(job)
+                initial_jobs.clear()
+
+        self.bind("<Destroy>", cancel_initial_jobs, add="+")
 
     @staticmethod
     def _bind_scroll_region(canvas):

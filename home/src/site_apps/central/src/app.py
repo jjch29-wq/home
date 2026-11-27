@@ -70,6 +70,36 @@ from site_apps.central.src.views.components import *
 # Auto-install additional dependencies
 from tkcalendar import DateEntry, Calendar
 
+_original_date_entry_init = DateEntry.__init__
+
+
+def _date_entry_init_with_theme_cleanup(self, *args, **kwargs):
+    _original_date_entry_init(self, *args, **kwargs)
+    theme_job = None
+
+    def refresh_theme():
+        nonlocal theme_job
+        theme_job = None
+        self._on_theme_change()
+
+    def schedule_theme(_event):
+        nonlocal theme_job
+        if theme_job is not None:
+            self.after_cancel(theme_job)
+        theme_job = self.after(10, refresh_theme)
+
+    def cancel_theme(event):
+        nonlocal theme_job
+        if event.widget is self and theme_job is not None:
+            self.after_cancel(theme_job)
+            theme_job = None
+
+    self.bind("<<ThemeChanged>>", schedule_theme)
+    self.bind("<Destroy>", cancel_theme, add="+")
+
+
+DateEntry.__init__ = _date_entry_init_with_theme_cleanup
+
 # [FIX] Patch tkcalendar for stability in ko_KR locale / Python 3.14.
 # 각 패치를 독립적으로 적용 - 한 패치 실패가 나머지를 무효화하지 않도록 분리.
 import tkinter as _tk_ref
@@ -93,7 +123,13 @@ try:
             if hasattr(self, '_header_year'):
                 try: self._header_year.configure(width=10)
                 except: pass
-        self.after_idle(widen)
+        widen_job = self.after_idle(widen)
+
+        def cancel_widen(event):
+            if event.widget is self:
+                self.after_cancel(widen_job)
+
+        self.bind("<Destroy>", cancel_widen, add="+")
         self._widen_headers = widen
     Calendar.__init__ = _patched_cal_init
 except Exception:

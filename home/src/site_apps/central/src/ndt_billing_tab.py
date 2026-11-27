@@ -2578,14 +2578,28 @@ class NDTCalculatorTab(ttk.Frame):
             # --- 실제 시공업체 매핑 ---
             # target_records의 'company'가 '한국지역난방공사' 등으로 일괄 지정되어 있으므로,
             # daily_work_history.json의 ndt_results에서 해당 일자/검사방법의 실제 업체를 찾아 매핑합니다.
-            import json
+            from site_apps.central.src.rt_quantities import corrected_rt_history, rt_counts
             history_path = get_history_path()
             history_data = {}
-            if os.path.exists(history_path):
+            history_data_corr = {}
+            history_warning = None
+            if target_records:
                 try:
                     with open(history_path, 'r', encoding='utf-8') as f:
                         history_data = json.load(f)
-                except: pass
+                    if not isinstance(history_data, dict) or any(
+                        not isinstance(day, dict) for day in history_data.values()
+                    ):
+                        raise ValueError("작업일보 이력 형식이 올바르지 않습니다.")
+                    history_data_corr = corrected_rt_history(history_data)
+                except (OSError, ValueError, TypeError, AttributeError, ArithmeticError) as error:
+                    history_data = {}
+                    history_warning = (
+                        "작업일보 이력을 읽지 못해 업체별 요약의 섹션·라인번호를 "
+                        "연결하지 못했습니다. 청구 금액은 기성 기록을 기준으로 저장했습니다.\n"
+                        f"{error}"
+                    )
+
 
             from site_apps.central.src.services.billing_summary import build_company_summaries
             company_summaries = build_company_summaries(target_records, history_data, self.contract_vars)
@@ -2818,19 +2832,10 @@ class NDTCalculatorTab(ttk.Frame):
             
             cont_row = 5
             
-            import json
-            history_path = get_history_path()
-            history_data = {}
-            if os.path.exists(history_path):
-                try:
-                    with open(history_path, 'r', encoding='utf-8') as f:
-                        history_data = json.load(f)
-                except: pass
+
                 
             target_dates = set(r["date"] for r in target_records)
             all_ndt_results = []
-            from site_apps.central.src.rt_quantities import corrected_rt_history, rt_counts
-            history_data = corrected_rt_history(history_data)
             source_rows = {}
             legacy_dates = set()
             for record in target_records:
@@ -2839,9 +2844,9 @@ class NDTCalculatorTab(ttk.Frame):
                 else:
                     legacy_dates.add(record['date'])
             for t_date in target_dates:
-                if t_date in history_data and "ndt_results" in history_data[t_date]:
+                if t_date in history_data_corr and "ndt_results" in history_data_corr[t_date]:
                     all_ndt_results.extend(
-                        detail for index, detail in enumerate(history_data[t_date]['ndt_results'])
+                        detail for index, detail in enumerate(history_data_corr[t_date]['ndt_results'])
                         if t_date in legacy_dates or index in source_rows.get(t_date, set())
                     )
                     
@@ -3006,7 +3011,10 @@ class NDTCalculatorTab(ttk.Frame):
             wb.Close()
             excel.Quit()
             
-            messagebox.showinfo("저장 완료", f"엑셀 기성청구 내역서가 성공적으로 생성되었습니다.\n{filepath}")
+            if history_warning:
+                messagebox.showwarning("저장 완료 · 작업일보 연결 실패", f"{history_warning}\n\n{filepath}")
+            else:
+                messagebox.showinfo("저장 완료", f"엑셀 기성청구 내역서가 성공적으로 생성되었습니다.\n{filepath}")
             os.startfile(filepath)
             
         except Exception as e:
