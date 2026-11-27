@@ -251,9 +251,10 @@ def update_stock_view_impl(self):
     
     row_idx = 1 # [UX IMPROVEMENT] 순차 번호 (No.) 부여
     
-    # Pre-setup tags for equipment status highlighting
-    self.stock_tree.tag_configure('deployed', background='#FFF9C4') # Light Yellow for "Field"
-    self.stock_tree.tag_configure('in_stock', background='') # Default
+    # Pre-setup tags for equipment status highlighting across main and detached trees
+    for tree in active_trees:
+        tree.tag_configure('deployed', background='#FFF9C4') # Light Yellow for "Field"
+        tree.tag_configure('in_stock', background='') # Default
     
     for _, mat in self.materials_df.iterrows():
         mat_id = mat['MaterialID']

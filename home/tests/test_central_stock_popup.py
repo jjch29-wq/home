@@ -39,5 +39,44 @@ class StockPopupTests(unittest.TestCase):
         self.assertEqual(popup.set(item,'공급업체'),'supplier')
         self.assertEqual(popup.column('재고수량','width'),123)
 
+    def test_lazy_stock_tab_initializes_filters_and_widths_when_opened_after_startup(self):
+        root = tk.Tk()
+        root.withdraw()
+        self.addCleanup(root.destroy)
+        source = Path(__file__).resolve().parents[1] / 'src/site_apps/central/src/app.py'
+        fn = next(n for n in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
+                  if isinstance(n, ast.FunctionDef) and n.name == '_initialize_stock_tab')
+        ns = {}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(source), 'exec'), ns)
+
+        call_order = []
+        app = SimpleNamespace(tab_config={'stock_col_widths': {'자재명': 240}})
+
+        def fake_setup():
+            call_order.append('setup_stock_tab')
+            tree = ttk.Treeview(root, columns=('No.', '자재명'), show='headings')
+            tree.column('No.', width=50)
+            tree.column('자재명', width=160)
+            app.stock_tree = tree
+            app.cb_filter_name = ttk.Combobox(root)
+
+        def fake_update_combos():
+            call_order.append('update_registration_combos')
+            app.cb_filter_name['values'] = ['전체', 'Carestream T200-3⅓*6"']
+            app.cb_filter_name.set('전체')
+
+        def fake_update_view():
+            call_order.append('update_stock_view')
+
+        app.setup_stock_tab = fake_setup
+        app.update_registration_combos = fake_update_combos
+        app.update_stock_view = fake_update_view
+
+        ns['_initialize_stock_tab'](app)
+        self.assertEqual(call_order, ['setup_stock_tab', 'update_registration_combos', 'update_stock_view'])
+        self.assertEqual(app.stock_tree.column('자재명', 'width'), 240)
+        self.assertEqual(tuple(app.cb_filter_name['values']), ('전체', 'Carestream T200-3⅓*6"'))
+        self.assertEqual(app.cb_filter_name.get(), '전체')
+
 
 if __name__ == '__main__': unittest.main()

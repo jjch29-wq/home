@@ -1334,6 +1334,8 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                 continue
             if width > 0:
                 self.stock_tree.column(column, width=width, minwidth=20, stretch=False)
+        if hasattr(self, 'update_registration_combos'):
+            self.update_registration_combos()
         self.update_stock_view()
     
     def show_low_stock(self):
