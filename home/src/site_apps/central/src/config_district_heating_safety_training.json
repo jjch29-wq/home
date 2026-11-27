@@ -3,8 +3,8 @@
   "instructor": "",
   "processes": {
     "RT": false,
-    "PAUT": true,
-    "PT": false,
+    "PAUT": false,
+    "PT": true,
     "MT": false
   }
 }

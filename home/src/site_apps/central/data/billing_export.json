@@ -37,7 +37,7 @@
     "열배관_일반_MT_MT": {
         "contract_qty": 26.0,
         "prev_qty": 0.0,
-        "current_qty": 45.8402
+        "current_qty": 58.7382
     },
     "열배관_일반_PT_PT": {
         "contract_qty": 26.0,
@@ -47,7 +47,7 @@
     "열배관_야간_PAUT_300A 이상": {
         "contract_qty": 624.0,
         "prev_qty": 0.0,
-        "current_qty": 8.9369
+        "current_qty": 29.0456
     },
     "열배관_야간_PAUT_250A": {
         "contract_qty": 1.0,
