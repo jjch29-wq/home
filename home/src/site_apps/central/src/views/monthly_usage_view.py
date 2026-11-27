@@ -49,7 +49,7 @@ def setup_monthly_usage_tab_impl(self):
     self.cb_filter_method_monthly.set('전체')
 
     ttk.Label(filter_frame, text="📦 자재명:").pack(side='left', padx=(5, 2))
-    self.cb_filter_material_monthly = ttk.Combobox(filter_frame, width=20)
+    self.cb_filter_material_monthly = ttk.Combobox(filter_frame, width=25)
     self.cb_filter_material_monthly.pack(side='left', padx=(0, 5))
     self.cb_filter_material_monthly.set('전체')
     
@@ -247,9 +247,9 @@ def update_monthly_usage_view_impl(self, force=False):
     # Get filter values
     filter_year = self.cb_filter_year.get() if hasattr(self, 'cb_filter_year') else ''
     filter_month = self.cb_filter_month.get() if hasattr(self, 'cb_filter_month') else ''
-    filter_site = self.cb_filter_site_monthly.get() if hasattr(self, 'cb_filter_site_monthly') else '전체'
-    filter_method = self.cb_filter_method_monthly.get() if hasattr(self, 'cb_filter_method_monthly') else '전체'
-    filter_material = self.cb_filter_material_monthly.get() if hasattr(self, 'cb_filter_material_monthly') else '전체'
+    filter_site = (self.cb_filter_site_monthly.get().strip() if hasattr(self, 'cb_filter_site_monthly') else '') or '전체'
+    filter_method = (self.cb_filter_method_monthly.get().strip() if hasattr(self, 'cb_filter_method_monthly') else '') or '전체'
+    filter_material = (self.cb_filter_material_monthly.get().strip() if hasattr(self, 'cb_filter_material_monthly') else '') or '전체'
     
     # Return if daily usage data is empty
     if not hasattr(self, 'daily_usage_df') or self.daily_usage_df is None or self.daily_usage_df.empty:
@@ -326,16 +326,62 @@ def update_monthly_usage_view_impl(self, force=False):
         df = df[df['검사방법'].astype(str).str.strip().str.upper() == filter_method.strip().upper()]
 
     if filter_material != '전체':
-        # Get matching MaterialIDs for the selected item name
-        matching_ids = {self.normalize_id(value) for value in self.materials_df[self.materials_df['품목명'] == filter_material]['MaterialID'].tolist()}
-        matching_ids.discard('')
-        if matching_ids:
-            df = df[df['MaterialID'].apply(self.normalize_id).isin(matching_ids)]
+        q = filter_material.strip()
+        q_low = q.lower()
+        q_compact = q_low.replace(' ', '')
+        q_base = re.sub(r'\s*\[[^\]]*\]\s*$', '', q).strip()
+        q_base = re.sub(r'\s*\([^)]*\)\s*$', '', q_base).strip().lower()
+
+        if q_compact in ('mt약품', 'pt약품'):
+            target_m = 'MT' if q_compact.startswith('mt') else 'PT'
+            df = df[df.get('검사방법', pd.Series('', index=df.index)).astype(str).str.strip().str.upper() == target_m]
+            if df.empty:
+                self._last_monthly_cache_key = current_cache_key
+                self._monthly_view_dirty = False
+                return
+        elif q_low.startswith('id:'):
+            raw_id = self.normalize_id(q[3:].strip())
+            df = df[df['MaterialID'].apply(self.normalize_id) == raw_id] if raw_id else df.iloc[0:0]
+            if df.empty:
+                self._last_monthly_cache_key = current_cache_key
+                self._monthly_view_dirty = False
+                return
         else:
-            # If no material found in master list, clear and return (though this shouldn't happen with sync)
-            self._last_monthly_cache_key = current_cache_key
-            self._monthly_view_dirty = False
-            return
+            exact_ids = set()
+            partial_ids = set()
+            if hasattr(self, 'materials_df') and self.materials_df is not None and not self.materials_df.empty:
+                disp_fn = getattr(self, 'get_material_display_name', None)
+                for _, m_row in self.materials_df.iterrows():
+                    mid_norm = self.normalize_id(m_row.get('MaterialID', ''))
+                    if not mid_norm:
+                        continue
+                    item_nm = '' if pd.isna(m_row.get('품목명')) else str(m_row.get('품목명', '')).strip()
+                    model_nm = '' if pd.isna(m_row.get('모델명')) else str(m_row.get('모델명', '')).strip()
+                    spec_nm = '' if pd.isna(m_row.get('규격')) else str(m_row.get('규격', '')).strip()
+                    disp_nm = disp_fn(m_row.get('MaterialID')) if callable(disp_fn) else ''
+                    candidates = {c.lower() for c in (
+                        item_nm,
+                        model_nm,
+                        disp_nm,
+                        f"{item_nm} [{spec_nm}]" if item_nm and spec_nm else '',
+                        f"{item_nm} ({model_nm})" if item_nm and model_nm else '',
+                    ) if c}
+                    if q_low in candidates or (q_base and item_nm.lower() == q_base):
+                        exact_ids.add(mid_norm)
+                    elif any(q_low in cand for cand in candidates):
+                        partial_ids.add(mid_norm)
+
+            matching_ids = exact_ids or partial_ids
+            norm_series = df['MaterialID'].apply(self.normalize_id)
+            raw_series = df['MaterialID'].fillna('').astype(str).str.strip().str.lower()
+            mask = norm_series.isin(matching_ids) if matching_ids else pd.Series(False, index=df.index)
+            if not matching_ids:
+                mask = raw_series.str.contains(re.escape(q_low), na=False)
+            df = df[mask]
+            if df.empty:
+                self._last_monthly_cache_key = current_cache_key
+                self._monthly_view_dirty = False
+                return
     
     # [NEW] Return early if filtered df is empty to avoid ValueError during assignment
     if df.empty:
@@ -365,26 +411,31 @@ def update_monthly_usage_view_impl(self, force=False):
     
     # Populate material filter options from data
     if hasattr(self, 'cb_filter_material_monthly'):
-        # Get unique material names from materials_df based on MaterialIDs in daily_usage_df
-        # Note: MaterialID column name itself might have spaces in self.daily_usage_df
         m_id_col = 'MaterialID' if 'MaterialID' in self.daily_usage_df.columns else 'MaterialID'
         unique_mat_ids = self.daily_usage_df[m_id_col].dropna().unique()
         material_names = []
+        equip_tokens = ('SCANNER', '스캐너', 'YOKE', '장비', 'CRAWLER', 'PAUT')
         for mat_id in unique_mat_ids:
-            # [ROBUST] Use same lookup logic for filters
-            try:
-                m_id_f = float(mat_id)
-                matches = self.materials_df[pd.to_numeric(self.materials_df['MaterialID'], errors='coerce') == m_id_f]
+            norm_mid = self.normalize_id(mat_id)
+            if not norm_mid or norm_mid.lower() in ('nan', 'none', '0', '0.0'):
+                continue
+            m_label = ''
+            if not self.materials_df.empty:
+                matches = self.materials_df[
+                    self.materials_df['MaterialID'].notna()
+                    & (self.materials_df['MaterialID'].apply(self.normalize_id) == norm_mid)
+                ]
                 if not matches.empty:
-                    material_names.append(str(matches.iloc[0]['품목명']))
-                else:
-                    material_names.append(f"ID: {mat_id}")
-            except:
-                matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == str(mat_id)]
-                if not matches.empty:
-                    material_names.append(str(matches.iloc[0]['품목명']))
-                else:
-                    material_names.append(f"ID: {mat_id}")
+                    raw_nm = matches.iloc[0].get('품목명', '')
+                    m_label = '' if pd.isna(raw_nm) else str(raw_nm).strip()
+            if m_label and not any(tok in m_label.upper() for tok in equip_tokens):
+                material_names.append(m_label)
+        if '검사방법' in self.daily_usage_df.columns:
+            methods_present = set(self.daily_usage_df['검사방법'].dropna().astype(str).str.strip().str.upper())
+            if 'MT' in methods_present:
+                material_names.append('MT약품')
+            if 'PT' in methods_present:
+                material_names.append('PT약품')
         unique_materials = ['전체'] + sorted(set(material_names))
         self.cb_filter_material_monthly['values'] = unique_materials
         if not self.cb_filter_material_monthly.get():
@@ -630,10 +681,6 @@ def update_monthly_usage_view_impl(self, force=False):
                 mat_name = "PT약품"
             else:
                 mat_name = "-"
-        
-        # Apply material filter
-        if filter_material != '전체' and mat_name != filter_material:
-            continue
         
         # Get aggregated values from clean columns
         work_count = entry.get('WorkerCount', 0.0)
@@ -1207,21 +1254,47 @@ def _populate_monthly_summary_trees_impl(self, df, has_note=None):
                                 ('OT_H', 'hours'), ('A_Day', 'day_amount'), ('A_Night', 'night_amount'),
                                 ('A_Holiday', 'holiday_amount'), ('OT_A', 'amount')):
                 worker_df[column] = calculated.map(lambda result: result[key])
-            # [FIXED] Parse fractional work counts from ShiftType (e.g., "0.5주간" -> 0.5)
-            def parse_work_count(val):
+            # 시계 문자열(09:00~18:00 등)은 제외하고 일자 기준으로 공수 산정 (예: "0.5주간" -> 0.5)
+            def parse_explicit_work_count(val):
                 s = str(val).strip()
-                if not s: return 1.0
+                if not s:
+                    return (1.0, False)
+                cleaned = re.sub(r'\d{1,2}:\d{2}', '', s)
+                cleaned = re.sub(r'\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?', '', cleaned)
                 try:
-                    # Extract first float/int found in string
-                    match = re.search(r'([0-9\.]+)', s)
-                    if match: return float(match.group(1))
-                except: pass
-                return 1.0
+                    match = re.search(r'(\d+(?:\.\d+)?)\s*(?:공수|일|주간|야간|휴일)', cleaned)
+                    if match:
+                        return (float(match.group(1)), True)
+                    if re.fullmatch(r'\d+(?:\.\d+)?', cleaned.strip()):
+                        return (float(cleaned.strip()), True)
+                except (ValueError, TypeError):
+                    pass
+                return (1.0, False)
 
-            worker_df['Count'] = worker_df['ShiftType'].apply(parse_work_count)
-            # [REVERTED] Back to entry-based count
+            worker_df['_date_key'] = [
+                d if d else f"__nodate_{idx}"
+                for idx, d in enumerate(
+                    worker_df['Date'].apply(lambda v: self._safe_format_datetime(v, '%Y-%m-%d'))
+                )
+            ]
+            worker_df['_parsed_count'] = worker_df['ShiftType'].apply(parse_explicit_work_count)
+
+            def calc_worker_mandays(sub_df):
+                total_days = 0.0
+                for _, day_grp in sub_df.groupby('_date_key', sort=False):
+                    explicit_vals = [cnt for cnt, is_exp in day_grp['_parsed_count'] if is_exp]
+                    if explicit_vals:
+                        total_days += max(max(explicit_vals), min(1.0, sum(explicit_vals)))
+                    else:
+                        total_days += 1.0
+                return total_days
+
+            manday_map = {
+                w_name: calc_worker_mandays(w_grp)
+                for w_name, w_grp in worker_df.groupby('WorkerName', sort=False)
+            }
+
             worker_summary = worker_df.groupby('WorkerName').agg({
-                'Count': 'sum',
                 'H_Day': 'sum',
                 'H_Night': 'sum',
                 'H_Holiday': 'sum',
@@ -1231,6 +1304,7 @@ def _populate_monthly_summary_trees_impl(self, df, has_note=None):
                 'A_Holiday': 'sum',
                 'OT_A': 'sum'
             }).reset_index()
+            worker_summary['Count'] = worker_summary['WorkerName'].map(manday_map).fillna(0.0)
 
             for _, row in worker_summary.iterrows():
                 # Track active columns using robust is_active helper

@@ -1407,7 +1407,8 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
 
     def open_detached_stock_view(self):
         """현재 재고 현황을 별도의 팝업창(모니터링 창)으로 엽니다."""
-        self._initialize_stock_tab()
+        if hasattr(self, '_initialize_stock_tab'):
+            self._initialize_stock_tab()
         if hasattr(self, 'detached_windows') and 'stock' in self.detached_windows and self.detached_windows['stock']['window'].winfo_exists():
             self.detached_windows['stock']['window'].lift()
             return
@@ -3761,7 +3762,20 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             if hasattr(self, 'cb_daily_filter_site'):
                 self.cb_daily_filter_site['values'] = ['전체'] + unique_sites
             if hasattr(self, 'cb_filter_material_monthly'):
-                self.cb_filter_material_monthly['values'] = ['전체'] + unique_materials
+                monthly_mat_names = set()
+                equip_tokens = ('SCANNER', '스캐너', 'YOKE', '장비', 'CRAWLER', 'PAUT')
+                if not self.daily_usage_df.empty and 'MaterialID' in self.daily_usage_df.columns:
+                    for mat_id in self.daily_usage_df['MaterialID'].dropna().unique():
+                        m_only = self.get_material_name_only(mat_id)
+                        if m_only and not m_only.startswith('(미등록)') and not any(tok in m_only.upper() for tok in equip_tokens):
+                            monthly_mat_names.add(m_only)
+                if not self.daily_usage_df.empty and '검사방법' in self.daily_usage_df.columns:
+                    methods_present = set(self.daily_usage_df['검사방법'].dropna().astype(str).str.strip().str.upper())
+                    if 'MT' in methods_present:
+                        monthly_mat_names.add('MT약품')
+                    if 'PT' in methods_present:
+                        monthly_mat_names.add('PT약품')
+                self.cb_filter_material_monthly['values'] = ['전체'] + sorted(monthly_mat_names)
 
             # 3. Equipment dropdown
             if hasattr(self, 'cb_daily_filter_equipment'):

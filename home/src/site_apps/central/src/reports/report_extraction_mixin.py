@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
+from pathlib import Path
 import glob
 import math
 import traceback
@@ -20,20 +21,10 @@ import io
 import base64
 import time
 import copy
-from site_apps.central.src.reports.photo_log_manager import PhotoLogMixin
-from site_apps.central.src.reports.report_sheet_styler import ReportSheetStylerMixin
-from site_apps.central.src.reports.ndt_report_runners import NDTReportRunnersMixin
-from site_apps.central.src.reports.report_preview_view import ReportPreviewViewMixin
-from site_apps.central.src.reports.report_table_controller import ReportTableControllerMixin
 
 
 
 
-try:
-    from ctypes import windll
-    windll.shcore.SetProcessDpiAwareness(1)
-except:
-    pass
 
 # --- Versioning ---
 APP_VERSION = "v260404.03"
@@ -227,347 +218,6 @@ DEFAULT_SITCO_LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAAE4AAAAxCAYAAAB03p8JAAAAAXNSR0
 
 
 class ReportExtractionMixin:
-    # --- PMI 재질별 표준 화학성분 스펙 및 판정 DB ---
-    PMI_MATERIAL_SPECS = {
-        "A312-TP304": {
-            "name": "A312-TP304",
-            "title": "ASTM A312 TP304",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "A312-TP304: Cr:18.00 ~ 20.00%, Ni:8.00 ~ 11.00%",
-                "ER308L: Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
-                "A182-F304: Cr:18.00 ~ 20.00%, Ni:8.00 ~ 11.00%"
-            ],
-            "limits": {"Cr": (18.0, 20.0), "Ni": (8.0, 11.0), "Mo": (0.0, 0.5)}
-        },
-        "A312-TP304L": {
-            "name": "A312-TP304L",
-            "title": "ASTM A312 TP304L",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "A312-TP304L: Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%",
-                "ER308L: Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
-                "A182-F304L: Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%"
-            ],
-            "limits": {"Cr": (18.0, 20.0), "Ni": (9.0, 13.0), "Mo": (0.0, 0.5)}
-        },
-        "A312-TP316": {
-            "name": "A312-TP316",
-            "title": "ASTM A312 TP316",
-            "elements": ["Ni", "Cr", "Mo", "-", "-"],
-            "specs": [
-                "A312-TP316: Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%",
-                "ER316: Ni:11.00 ~ 14.00%, Cr:18.00 ~ 20.00%, Mo:2.00 ~ 3.00%",
-                "A182-F316: Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%"
-            ],
-            "limits": {"Ni": (10.0, 14.0), "Cr": (16.0, 18.0), "Mo": (2.0, 3.0)}
-        },
-        "A312-TP316L": {
-            "name": "A312-TP316L",
-            "title": "ASTM A312 TP316L",
-            "elements": ["Ni", "Cr", "Mo", "-", "-"],
-            "specs": [
-                "A312- Ni:10.0 ~ 14.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%",
-                "ER316L- Ni:11.0 ~ 14.0%, Cr:18.0 ~ 20.0%, Mo:2.0 ~ 3.0%",
-                "A182-Ni:10.0 ~ 15.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%"
-            ],
-            "limits": {"Ni": (10.0, 14.0), "Cr": (16.0, 18.0), "Mo": (2.0, 3.0)}
-        },
-        "A312-TP321": {
-            "name": "A312-TP321",
-            "title": "ASTM A312 TP321",
-            "elements": ["Ni", "Cr", "Ti", "-", "-"],
-            "specs": [
-                "A312-TP321: Ni:9.00 ~ 12.00%, Cr:17.00 ~ 19.00%, Ti:0.35 ~ 0.70%",
-                "ER321: Ni:9.00 ~ 11.00%, Cr:18.50 ~ 20.50%, Ti:0.30 ~ 0.75%",
-                "A182-F321: Ni:9.00 ~ 12.00%, Cr:17.00 ~ 19.00%, Ti:0.35 ~ 0.70%"
-            ],
-            "limits": {"Ni": (9.0, 12.0), "Cr": (17.0, 19.0), "Ti": (0.35, 0.70)}
-        },
-        "A312-TP347": {
-            "name": "A312-TP347",
-            "title": "ASTM A312 TP347",
-            "elements": ["Ni", "Cr", "Nb", "-", "-"],
-            "specs": [
-                "A312-TP347: Ni:9.00 ~ 13.00%, Cr:17.00 ~ 19.00%, Nb:0.80 ~ 1.00%",
-                "ER347: Ni:9.00 ~ 11.00%, Cr:19.00 ~ 21.50%, Nb:0.75 ~ 1.00%",
-                "A182-F347: Ni:9.00 ~ 13.00%, Cr:17.00 ~ 19.00%, Nb:0.80 ~ 1.00%"
-            ],
-            "limits": {"Ni": (9.0, 13.0), "Cr": (17.0, 19.0), "Nb": (0.80, 1.00)}
-        },
-        "DUPLEX (S31803)": {
-            "name": "DUPLEX (S31803)",
-            "title": "ASTM A790 S31803",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "S31803: Cr:21.00 ~ 23.00%, Ni:4.50 ~ 6.50%, Mo:2.50 ~ 3.50%",
-                "ER2209: Cr:21.50 ~ 23.50%, Ni:7.50 ~ 9.50%, Mo:2.50 ~ 3.50%",
-                "A182-F51: Cr:21.00 ~ 23.00%, Ni:4.50 ~ 6.50%, Mo:2.50 ~ 3.50%"
-            ],
-            "limits": {"Cr": (21.0, 23.0), "Ni": (4.5, 6.5), "Mo": (2.5, 3.5)}
-        },
-        "INCONEL 625": {
-            "name": "INCONEL 625",
-            "title": "ASTM B444 N06625",
-            "elements": ["Ni", "Cr", "Mo", "Nb", "-"],
-            "specs": [
-                "Inconel 625: Ni:min 58.0%, Cr:20.0 ~ 23.0%, Mo:8.0 ~ 10.0%, Nb:3.15 ~ 4.15%",
-                "ERNiCrMo-3: Ni:min 58.0%, Cr:20.0 ~ 23.0%, Mo:8.0 ~ 10.0%, Nb:3.15 ~ 4.15%",
-                "B564-N06625: Ni:min 58.0%, Cr:20.0 ~ 23.0%, Mo:8.0 ~ 10.0%, Nb:3.15 ~ 4.15%"
-            ],
-            "limits": {"Ni": (58.0, 100.0), "Cr": (20.0, 23.0), "Mo": (8.0, 10.0), "Nb": (3.15, 4.15)}
-        },
-        # --- 구조용 강재 (COLUMN, GIRDER, BEAM / H-BEAM) ---
-        "ASTM A992": {
-            "name": "ASTM A992",
-            "title": "ASTM A992 (BEAM / COLUMN)",
-            "elements": ["Mn", "Si", "V", "Cu", "Cr"],
-            "specs": [
-                "ASTM A992: Mn:0.50 ~ 1.60%, Si:0.15 ~ 0.40%, V:≤0.15%",
-                "WELD (E7018): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
-                "A992 (Residual): Cu:≤0.60%, Ni:≤0.45%, Cr:≤0.35%"
-            ],
-            "limits": {"Mn": (0.50, 1.60), "Si": (0.15, 0.40), "V": (0.00, 0.15)}
-        },
-        "ASTM A572 Gr.50": {
-            "name": "ASTM A572 Gr.50",
-            "title": "ASTM A572 Gr.50 (GIRDER / PLATE)",
-            "elements": ["Mn", "Si", "V", "Nb", "Cr"],
-            "specs": [
-                "A572 Gr.50: Mn:≤1.35%, Si:0.15 ~ 0.40%, V:0.01 ~ 0.15%",
-                "WELD (E7018): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
-                "A572 Gr.50: Nb(Cb):0.005 ~ 0.05%, Cu:≤0.50%"
-            ],
-            "limits": {"Mn": (0.50, 1.35), "Si": (0.15, 0.40), "V": (0.01, 0.15)}
-        },
-        "SM355 (SM490)": {
-            "name": "SM355 (SM490)",
-            "title": "KS D 3515 SM355 (용접구조용)",
-            "elements": ["Mn", "Si", "P", "S", "Cu"],
-            "specs": [
-                "SM355: Mn:≤1.60%, Si:≤0.55%, P:≤0.030%",
-                "WELD (E7018/YGW11): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
-                "SM355: S:≤0.030%, Ceq:≤0.44%"
-            ],
-            "limits": {"Mn": (0.50, 1.60), "Si": (0.10, 0.55)}
-        },
-        "SN355": {
-            "name": "SN355",
-            "title": "KS D 3866 SN355 (건축구조용 H형강)",
-            "elements": ["Mn", "Si", "P", "S", "Cr"],
-            "specs": [
-                "SN355: Mn:≤1.60%, Si:≤0.55%, P:≤0.030%",
-                "WELD (E7018/YGW11): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
-                "SN355: S:≤0.015%, Ceq:≤0.45%"
-            ],
-            "limits": {"Mn": (0.50, 1.60), "Si": (0.10, 0.55)}
-        },
-        "ASTM A36": {
-            "name": "ASTM A36",
-            "title": "ASTM A36 (탄소 구조강)",
-            "elements": ["Mn", "Si", "Cu", "P", "S"],
-            "specs": [
-                "ASTM A36: Mn:0.60 ~ 1.20%, Si:≤0.40%",
-                "WELD (E6013/E7018): Mn:0.40 ~ 1.25%, Si:≤0.60%",
-                "ASTM A36: P:≤0.030%, S:≤0.030%"
-            ],
-            "limits": {"Mn": (0.40, 1.20), "Si": (0.10, 0.40)}
-        },
-        "SS275 (SS400)": {
-            "name": "SS275 (SS400)",
-            "title": "KS D 3503 SS275 (일반구조용)",
-            "elements": ["Mn", "Si", "P", "S", "-"],
-            "specs": [
-                "SS275: Mn:≤1.40%, Si:≤0.45%",
-                "WELD (E4313/E7016): Mn:0.40 ~ 1.20%, Si:≤0.50%",
-                "SS275: P:≤0.040%, S:≤0.040%"
-            ],
-            "limits": {"Mn": (0.30, 1.40), "Si": (0.05, 0.45)}
-        },
-        # --- Project PROVIDENCE 현장 공식 성분표 규격 (SA-351 / SA-403 / SFA-5.9) ---
-        "A351-CF8M": {
-            "name": "A351-CF8M",
-            "title": "ASTM A351 CF8M (316 VALVE)",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "A351-CF8M (Valve): Cr:18.00 ~ 21.00%, Ni:9.00 ~ 12.00%, Mo:2.00 ~ 3.00%",
-                "ER316L (Weld): Cr:18.00 ~ 20.00%, Ni:11.00 ~ 14.00%, Mo:2.00 ~ 3.00%",
-                "A182-F316L (Flange): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 15.00%, Mo:2.00 ~ 3.00%"
-            ],
-            "limits": {"Cr": (16.0, 21.0), "Ni": (9.0, 15.0), "Mo": (2.0, 3.0)}
-        },
-        "A351-CF3M": {
-            "name": "A351-CF3M",
-            "title": "ASTM A351 CF3M (316L VALVE)",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "A351-CF3M (Valve): Cr:17.00 ~ 21.00%, Ni:9.00 ~ 13.00%, Mo:2.00 ~ 3.00%",
-                "ER316L (Weld): Cr:18.00 ~ 20.00%, Ni:11.00 ~ 14.00%, Mo:2.00 ~ 3.00%",
-                "A182-F316L (Flange): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 15.00%, Mo:2.00 ~ 3.00%"
-            ],
-            "limits": {"Cr": (16.0, 21.0), "Ni": (9.0, 15.0), "Mo": (2.0, 3.0)}
-        },
-        "A351-CF8": {
-            "name": "A351-CF8",
-            "title": "ASTM A351 CF8 (304 VALVE)",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "A351-CF8 (Valve): Cr:18.00 ~ 21.00%, Ni:8.00 ~ 11.00%, Mo:≤0.50%",
-                "ER308L (Weld): Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
-                "A182-F304 (Flange): Cr:18.00 ~ 20.00%, Ni:8.00 ~ 11.00%"
-            ],
-            "limits": {"Cr": (18.0, 22.0), "Ni": (8.0, 11.0), "Mo": (0.0, 0.75)}
-        },
-        "A403-WP316L": {
-            "name": "A403-WP316L",
-            "title": "ASTM A403 WP316L (FITTINGS)",
-            "elements": ["Ni", "Cr", "Mo", "-", "-"],
-            "specs": [
-                "A403-WP316L (Fitting): Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%",
-                "ER316L (Weld): Ni:11.00 ~ 14.00%, Cr:18.00 ~ 20.00%, Mo:2.00 ~ 3.00%",
-                "A312-TP316L (Pipe): Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%"
-            ],
-            "limits": {"Ni": (10.0, 14.0), "Cr": (16.0, 20.0), "Mo": (2.0, 3.0)}
-        },
-        "A403-WP304L": {
-            "name": "A403-WP304L",
-            "title": "ASTM A403 WP304L (FITTINGS)",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "A403-WP304L (Fitting): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%",
-                "ER308L (Weld): Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
-                "A312-TP304L (Pipe): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%"
-            ],
-            "limits": {"Cr": (18.0, 20.0), "Ni": (9.0, 13.0), "Mo": (0.0, 0.5)}
-        },
-        "A182-F316L": {
-            "name": "A182-F316L",
-            "title": "ASTM A182 F316L (FLANGE)",
-            "elements": ["Ni", "Cr", "Mo", "-", "-"],
-            "specs": [
-                "A182-F316L (Flange): Ni:10.00 ~ 15.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%",
-                "ER316L (Weld): Ni:11.00 ~ 14.00%, Cr:18.00 ~ 20.00%, Mo:2.00 ~ 3.00%",
-                "A312-TP316L (Pipe): Ni:10.00 ~ 14.00%, Cr:16.00 ~ 18.00%, Mo:2.00 ~ 3.00%"
-            ],
-            "limits": {"Ni": (10.0, 15.0), "Cr": (16.0, 18.0), "Mo": (2.0, 3.0)}
-        },
-        "A182-F304L": {
-            "name": "A182-F304L",
-            "title": "ASTM A182 F304L (FLANGE)",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "A182-F304L (Flange): Cr:18.00 ~ 20.00%, Ni:8.00 ~ 13.00%",
-                "ER308L (Weld): Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
-                "A312-TP304L (Pipe): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%"
-            ],
-            "limits": {"Cr": (18.0, 20.0), "Ni": (8.0, 13.0), "Mo": (0.0, 0.5)}
-        },
-        "ER309L (이재질)": {
-            "name": "ER309L (이재질)",
-            "title": "AWS A5.9 ER309L (DISSIMILAR WELD)",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "ER309L (Weld): Cr:23.00 ~ 25.00%, Ni:12.00 ~ 14.00%, Mo:≤0.75%",
-                "A312-TP316L / TP304L: Cr:16.00 ~ 20.00%, Ni:10.00 ~ 14.00%",
-                "Carbon Steel (Base): Fe:Balance, Mn:≤1.60%"
-            ],
-            "limits": {"Cr": (16.0, 25.0), "Ni": (8.0, 14.0)}
-        },
-        # --- 용접봉 및 용접재 단독 규격 (AWS A5.9 / A5.18 / ASME SFA-5.9) ---
-        "ER316L": {
-            "name": "ER316L",
-            "title": "AWS A5.9 ER316L (WELD)",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "ER316L (Weld): Cr:18.00 ~ 20.00%, Ni:11.00 ~ 14.00%, Mo:2.00 ~ 3.00%",
-                "A312-TP316L (Pipe): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 14.00%, Mo:2.00 ~ 3.00%",
-                "A182-F316L (Flange): Cr:16.00 ~ 18.00%, Ni:10.00 ~ 15.00%, Mo:2.00 ~ 3.00%"
-            ],
-            "limits": {"Cr": (18.0, 20.0), "Ni": (11.0, 14.0), "Mo": (2.0, 3.0)}
-        },
-        "ER308L": {
-            "name": "ER308L",
-            "title": "AWS A5.9 ER308L (WELD)",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "ER308L (Weld): Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%, Mo:≤0.75%",
-                "A312-TP304L (Pipe): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%",
-                "A182-F304L (Flange): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%"
-            ],
-            "limits": {"Cr": (19.5, 22.0), "Ni": (9.0, 11.0), "Mo": (0.0, 0.75)}
-        },
-        "ER2209": {
-            "name": "ER2209",
-            "title": "AWS A5.9 ER2209 (DUPLEX WELD)",
-            "elements": ["Cr", "Ni", "Mo", "-", "-"],
-            "specs": [
-                "ER2209 (Duplex Weld): Cr:21.50 ~ 23.50%, Ni:7.50 ~ 9.50%, Mo:2.50 ~ 3.50%",
-                "S31803 / S32205 (Pipe): Cr:21.00 ~ 23.00%, Ni:4.50 ~ 6.50%, Mo:2.50 ~ 3.50%",
-                "A182-F51 (Flange): Cr:21.00 ~ 23.00%, Ni:4.50 ~ 6.50%, Mo:2.50 ~ 3.50%"
-            ],
-            "limits": {"Cr": (21.5, 23.5), "Ni": (7.5, 9.5), "Mo": (2.5, 3.5)}
-        },
-        "ER70S-6": {
-            "name": "ER70S-6",
-            "title": "AWS A5.18 ER70S-6 / E7018 (WELD)",
-            "elements": ["Mn", "Si", "P", "S", "Cu"],
-            "specs": [
-                "ER70S-6 (Weld Wire): Mn:1.40 ~ 1.85%, Si:0.80 ~ 1.15%",
-                "E7018 (SMAW): Mn:0.80 ~ 1.60%, Si:0.20 ~ 0.75%",
-                "ASTM A992 / SM355: Mn:0.50 ~ 1.60%, Si:0.15 ~ 0.55%"
-            ],
-            "limits": {"Mn": (0.80, 1.85), "Si": (0.20, 1.15)}
-        }
-    }
-
-    PMI_MATERIAL_ALIASES = {
-        "TP304": "A312-TP304", "SUS304": "A312-TP304", "SS304": "A312-TP304", "304": "A312-TP304",
-        "TP304L": "A312-TP304L", "SUS304L": "A312-TP304L", "SS304L": "A312-TP304L", "304L": "A312-TP304L",
-        "TP316": "A312-TP316", "SUS316": "A312-TP316", "SS316": "A312-TP316", "316": "A312-TP316",
-        "TP316L": "A312-TP316L", "SUS316L": "A312-TP316L", "SS316L": "A312-TP316L", "316L": "A312-TP316L",
-        "TP321": "A312-TP321", "SUS321": "A312-TP321", "SS321": "A312-TP321", "321": "A312-TP321",
-        "TP347": "A312-TP347", "SUS347": "A312-TP347", "SS347": "A312-TP347", "347": "A312-TP347",
-        "DUPLEX": "DUPLEX (S31803)", "S31803": "DUPLEX (S31803)", "S32205": "DUPLEX (S31803)",
-        "INCONEL": "INCONEL 625", "INCONEL625": "INCONEL 625",
-        "A992": "ASTM A992", "WBEAM": "ASTM A992", "HBEAM": "ASTM A992", "BEAM": "ASTM A992", "COLUMN": "ASTM A992", "GIRDER": "ASTM A992",
-        "A572": "ASTM A572 Gr.50", "A572GR50": "ASTM A572 Gr.50", "GR50": "ASTM A572 Gr.50",
-        "SM355": "SM355 (SM490)", "SM490": "SM355 (SM490)", "SM355A": "SM355 (SM490)", "SM355B": "SM355 (SM490)",
-        "SN355": "SN355", "SN490": "SN355", "SHN355": "SN355",
-        "A36": "ASTM A36",
-        "SS275": "SS275 (SS400)", "SS400": "SS275 (SS400)",
-        "CF8M": "A351-CF8M", "CF3M": "A351-CF3M", "CF8": "A351-CF8", "CF3": "A351-CF8", "VALVE": "A351-CF8M", "351": "A351-CF8M",
-        "WP316L": "A403-WP316L", "WP316": "A403-WP316L", "WP304L": "A403-WP304L", "WP304": "A403-WP304L", "FITTING": "A403-WP316L",
-        "ELBOW": "A403-WP316L", "TEE": "A403-WP316L", "REDUCER": "A403-WP316L",
-        "엘보": "A403-WP316L", "티": "A403-WP316L", "레듀샤": "A403-WP316L",
-        "ER309L": "ER309L (이재질)", "309L": "ER309L (이재질)", "309": "ER309L (이재질)", "이재질": "ER309L (이재질)",
-        "ER316L": "ER316L", "E316L": "ER316L", "316LWELD": "ER316L", "ER316": "ER316L",
-        "ER308L": "ER308L", "E308L": "ER308L", "308L": "ER308L", "ER308": "ER308L",
-        "ER2209": "ER2209", "2209": "ER2209", "E2209": "ER2209",
-        "ER70S6": "ER70S-6", "ER70S-6": "ER70S-6", "YGW11": "ER70S-6", "YGW12": "ER70S-6", "E7018": "ER70S-6", "WELD": "ER316L",
-        "F316L": "A182-F316L", "F316": "A182-F316L", "F304L": "A182-F304L", "F304": "A182-F304L", "FLANGE": "A182-F316L", "A182": "A182-F316L"
-    }
-
-    # 기준 1 / 2 / 3 전용 빠른 선택 목록 (선택한 자재에 맞춰 모든 기준에서 자유롭게 선택 가능)
-    PMI_COMMON_SPEC_OPTIONS = [
-        "(공란 / 비움)",
-        # 배관 (PIPE)
-        "A312-TP316L", "A312-TP304L", "A312-TP316", "A312-TP304",
-        "A312-TP321", "A312-TP347", "DUPLEX (S31803)", "INCONEL 625",
-        # 피팅 (ELBOW / TEE / REDUCER)
-        "A403-WP316L (피팅/엘보)", "A403-WP304L (피팅/엘보)",
-        # 플랜지 (FLANGE)
-        "A182-F316L (플랜지)", "A182-F304L (플랜지)",
-        # 밸브 (VALVE)
-        "A351-CF8M (주조 밸브)", "A351-CF3M (밸브)", "A351-CF8 (304 밸브)",
-        # 용접봉 (WELD)
-        "ER316L (용접봉)", "ER308L (용접봉)", "ER309L (이재질)", "ER2209", "ER70S-6", "ERNiCrMo-3",
-        # 구조용강 (BEAM)
-        "ASTM A992", "ASTM A572 Gr.50", "SM355 (SM490)", "SN355", "ASTM A36", "SS275 (SS400)"
-    ]
-    PMI_SPEC1_OPTIONS = PMI_COMMON_SPEC_OPTIONS
-    PMI_SPEC2_OPTIONS = PMI_COMMON_SPEC_OPTIONS
-    PMI_SPEC3_OPTIONS = PMI_COMMON_SPEC_OPTIONS
-
     def _lookup_pmi_material_spec(self, mat_str):
         if not mat_str: return None
         raw = str(mat_str).strip().upper().replace(" ", "").replace("-", "").replace("_", "")
@@ -599,7 +249,7 @@ class ReportExtractionMixin:
         """새로 선택된 재질/스펙이 들어갈 최적의 기준 슬롯(1, 2, 3)을 순차적으로 결정"""
         m_name = spec["name"]
         is_weld = any(k in m_name for k in ["ER316", "ER308", "ER309", "ER2209", "ER70S", "ERNICRMO", "E7018", "WELD", "용접"])
-
+        
         # 현재 슬롯별 상태 확인 (공란 여부)
         s1 = self.pmi_chem_specs[0].get().strip() if len(self.pmi_chem_specs) > 0 else ""
         s2 = self.pmi_chem_specs[1].get().strip() if len(self.pmi_chem_specs) > 1 else ""
@@ -639,12 +289,12 @@ class ReportExtractionMixin:
     def apply_pmi_material_preset(self, mat_name, fill_all_specs=False):
         spec = self._lookup_pmi_material_spec(mat_name)
         if not spec: return False
-
+        
         # 1. Chemical elements (Ni, Cr, Mo...)
         for idx, elem in enumerate(spec["elements"]):
             if idx < len(self.pmi_chem_elements):
                 self.pmi_chem_elements[idx].set(elem)
-
+                
         # 2. Chemical specs (기준 1, 2, 3 차례대로 스마트 순차 자동 입력)
         m_name = spec["name"]
         target_slot = self._determine_pmi_target_slot(spec)
@@ -673,7 +323,7 @@ class ReportExtractionMixin:
                     raw_s3 = spec["specs"][2].split(":")[0].strip()
                     matched_s3 = next((opt for opt in self.PMI_SPEC3_OPTIONS if raw_s3 in opt or opt in raw_s3), raw_s3)
                     self.pmi_spec3_mat.set(matched_s3)
-
+                
         # 3. element_filters (Min ~ Max)
         if hasattr(self, 'element_filters'):
             self.element_filters.clear()
@@ -686,57 +336,17 @@ class ReportExtractionMixin:
                     'max': tk.StringVar(value=max_str)
                 })
             self._update_pmi_filter_ui()
-
+            
         self._update_pmi_spec_labels()
         self.save_settings()
         self.log(f"📋 PMI 재질 기준 적용: {spec['name']}")
         return True
-
+        
         # 4. If extracted data exists, re-evaluate automatically
         if getattr(self, 'extracted_data', None):
             self.evaluate_pmi_data_compliance(show_msg=False)
-
+            
         return True
-
-    # --- 품명(형태)별 추천 재질 및 기본 프리셋 매핑 ---
-    PMI_ITEM_PRESETS = {
-        "PIPE": {
-            "default_material": "A312-TP316L",
-            "materials": ["A312-TP316L", "A312-TP304L", "A312-TP316", "A312-TP304", "A312-TP321", "A312-TP347", "DUPLEX (S31803)", "INCONEL 625"]
-        },
-        "FLANGE": {
-            "default_material": "A182-F316L",
-            "materials": ["A182-F316L", "A182-F304L"]
-        },
-        "VALVE": {
-            "default_material": "A351-CF8M",
-            "materials": ["A351-CF8M", "A351-CF3M", "A351-CF8"]
-        },
-        "ELBOW": {
-            "default_material": "A403-WP316L",
-            "materials": ["A403-WP316L", "A403-WP304L"]
-        },
-        "TEE": {
-            "default_material": "A403-WP316L",
-            "materials": ["A403-WP316L", "A403-WP304L"]
-        },
-        "REDUCER": {
-            "default_material": "A403-WP316L",
-            "materials": ["A403-WP316L", "A403-WP304L"]
-        },
-        "FITTING": {
-            "default_material": "A403-WP316L",
-            "materials": ["A403-WP316L", "A403-WP304L"]
-        },
-        "WELD": {
-            "default_material": "ER316L",
-            "materials": ["ER316L", "ER308L", "ER309L (이재질)", "ER2209", "ER70S-6"]
-        },
-        "BEAM/COLUMN": {
-            "default_material": "ASTM A992",
-            "materials": ["ASTM A992", "ASTM A572 Gr.50", "SM355 (SM490)", "SN355", "ASTM A36", "SS275 (SS400)"]
-        }
-    }
 
     def _on_pmi_item_changed(self, event=None):
         """품명 변경 시 해당 품명 형태(파이프, 엘보, 티, 레듀샤, 단조품, 주물, 피팅, 용접봉 등)에 맞는 재질 드롭다운 재정렬 및 기본 재질 자동 연동"""
@@ -928,7 +538,7 @@ class ReportExtractionMixin:
 
         s_hdr = tk.Frame(container, background="#ffffff")
         s_hdr.pack(fill='x', pady=(2, 1))
-
+        
         lbl = tk.Label(s_hdr, text=f"기준 {slot_idx}:", background="#ffffff", font=("Malgun Gothic", 8, "bold"))
         lbl.pack(side='left')
         setattr(self, f'pmi_spec{slot_idx}_lbl', lbl)
@@ -964,7 +574,7 @@ class ReportExtractionMixin:
             if show_msg:
                 messagebox.showinfo("알림", "갑지 성적서 1페이지 인쇄 규격상 기준 슬롯은 최대 6개까지 지원됩니다.")
             return None
-
+        
         new_idx = cur_count + 1
         new_spec_var = tk.StringVar(value=self.config.get(f'PMI_CHEM_SPEC_{new_idx}', ""))
         new_mat_var = tk.StringVar(value=self.config.get(f'PMI_SPEC{new_idx}_MAT', ''))
@@ -972,7 +582,7 @@ class ReportExtractionMixin:
         setattr(self, f'pmi_spec{new_idx}_mat', new_mat_var)
         self.setting_vars[f'PMI_CHEM_SPEC_{new_idx}'] = new_spec_var
         self.setting_vars[f'PMI_SPEC{new_idx}_MAT'] = new_mat_var
-
+        
         if hasattr(self, 'pmi_specs_container') and self.pmi_specs_container.winfo_exists():
             self._create_pmi_spec_slot_ui(new_idx, self.pmi_specs_container)
             self._update_pmi_spec_labels()
@@ -988,14 +598,14 @@ class ReportExtractionMixin:
         cur_total = len(self.pmi_chem_specs)
         if idx <= 3 or idx > cur_total:
             return
-
+        
         # 중간 슬롯 삭제 시 뒤쪽 슬롯 값들을 앞으로 한 칸씩 당김
         for s in range(idx, cur_total):
             next_s = s + 1
             cur_spec = self.pmi_chem_specs[next_s - 1].get()
             cur_mat = getattr(self, f'pmi_spec{next_s}_mat', None)
             cur_mat_val = cur_mat.get() if cur_mat else ""
-
+            
             self.pmi_chem_specs[s - 1].set(cur_spec)
             target_mat = getattr(self, f'pmi_spec{s}_mat', None)
             if target_mat: target_mat.set(cur_mat_val)
@@ -1009,7 +619,7 @@ class ReportExtractionMixin:
             if slot_data.get('entry') and slot_data['entry'].winfo_exists():
                 slot_data['entry'].destroy()
             del self.pmi_spec_slots_ui[last_idx]
-
+        
         self.pmi_chem_specs.pop()
         self.setting_vars.pop(f'PMI_CHEM_SPEC_{last_idx}', None)
         self.setting_vars.pop(f'PMI_SPEC{last_idx}_MAT', None)
@@ -1560,7 +1170,6 @@ class ReportExtractionMixin:
             ws['A38'] = '* Tolerance ±10%'
             _style_range(ws, 'A38:T38', font=f_note, alignment=align_c, border=b_thin)
 
-
     def evaluate_pmi_data_compliance(self, show_msg=True):
         """추출된 PMI 측정 데이터를 현재 재질 기준(또는 element_filters)과 비교하여 합/부(ALL MATCH / MISMATCH) 자동 판정"""
         if not getattr(self, 'extracted_data', None):
@@ -1631,10 +1240,10 @@ class ReportExtractionMixin:
                 for k, v in item.items():
                     if k not in ignore_keys and isinstance(v, (int, float)) and v > 0:
                         detected_elements.add(k)
-
+        
         common_elements = ["Ni", "Cr", "Mo", "Ti", "Nb", "Mn", "Si", "Cu", "V", "W", "Co", "Fe", "Al", "C", "P", "S"]
         ordered_candidates = [e for e in common_elements if e in detected_elements] + [e for e in detected_elements if e not in common_elements] + [e for e in common_elements if e not in detected_elements]
-
+        
         dialog = tk.Toplevel(self.root)
         dialog.title("PMI 출력 원소 선택")
         dialog.geometry("450x340")
@@ -1642,20 +1251,20 @@ class ReportExtractionMixin:
         dialog.configure(background="#f9fafb")
         dialog.transient(self.root)
         dialog.grab_set()
-
+        
         main_f = ttk.Frame(dialog, padding=15)
         main_f.pack(fill='both', expand=True)
-
+        
         # 1. 상단 안내
         top_f = ttk.Frame(main_f)
         top_f.pack(fill='x', pady=(0, 10))
         ttk.Label(top_f, text="🔬 성적서 출력 원소 선택 (최대 5개)", font=("Malgun Gothic", 10, "bold")).pack(anchor='w', pady=(0, 3))
         ttk.Label(top_f, text="출력할 화학 원소를 체크하세요. (선택된 순서대로 성적서에 반영됩니다)", font=("Malgun Gothic", 8), foreground="#6b7280").pack(anchor='w')
-
+        
         # 2. 하단 버튼 영역 (창 크기와 무관하게 항상 보이도록 side='bottom'으로 먼저 패킹)
         btn_f = ttk.Frame(main_f)
         btn_f.pack(side='bottom', fill='x', pady=(10, 0))
-
+        
         def apply_selected():
             chosen = [e for e, v in check_vars.items() if v.get()]
             if not chosen:
@@ -1664,15 +1273,15 @@ class ReportExtractionMixin:
             if len(chosen) > 5:
                 messagebox.showwarning("경고", f"성적서 양식상 최대 5개 원소까지만 선택 가능합니다.\n(현재 {len(chosen)}개 선택됨)")
                 return
-
+                
             for idx in range(5):
                 val = chosen[idx] if idx < len(chosen) else "-"
                 self.pmi_chem_elements[idx].set(val)
-
+                
             self.save_settings()
             self.log(f"✅ PMI 출력 원소 설정 완료: {', '.join(chosen)}")
             dialog.destroy()
-
+            
         ttk.Button(btn_f, text=" 적용 (Apply) ", command=apply_selected, width=14).pack(side='right', padx=5)
         ttk.Button(btn_f, text=" 취소 (Cancel) ", command=dialog.destroy, width=14).pack(side='right')
 
@@ -1698,13 +1307,13 @@ class ReportExtractionMixin:
         ni = self.to_float(self._get_val_ci(row_data, 'Ni'))
         mo = self.to_float(self._get_val_ci(row_data, 'Mo'))
         mn = self.to_float(self._get_val_ci(row_data, 'Mn'))
-
+        
         margin = 0.1 # 10% 여유
-
+        
         # 1. SUS 316 (Cr:16~18 / Ni:10~14 / Mo:2~3)
         if (16.0*(1-margin) <= cr <= 18.0*(1+margin)) and (10.0*(1-margin) <= ni <= 14.0*(1+margin)) and (2.0*(1-margin) <= mo <= 3.0*(1+margin)):
             return "SS316"
-
+        
         # 2. Duplex (Cr:22~23 / Mo:3~3.5 / Ni:4.5~6.5 / Mn:2.0이하)
         if (22.0*(1-margin) <= cr <= 23.0*(1+margin)) and (4.5*(1-margin) <= ni <= 6.5*(1+margin)) and (3.0*(1-margin) <= mo <= 3.5*(1+margin)) and (mn <= 2.2):
             return "DUPLEX"
@@ -1730,8 +1339,6 @@ class ReportExtractionMixin:
         except: pass
         return s_val.lower()
 
-    # --- Excel Helper Logic ---
-
     def find_image_smart(self, keyword, exclude_keyword=None):
         def _search_in_folder(folder_path):
             if not folder_path or not os.path.exists(folder_path): return None
@@ -1747,10 +1354,10 @@ class ReportExtractionMixin:
                     return path
             for path in candidates:
                 fname = os.path.basename(path).upper(); ext = os.path.splitext(path)[1].upper()
-                if ext not in valid_extensions: continue
+                if ext not in valid_extensions: continue 
                 if keyword.upper() in fname:
                     if exclude_keyword and exclude_keyword.upper() in fname: continue
-                    return path
+                    return path 
             return None
 
         # 1. UI에서 설정한 폴더에서 먼저 검색
@@ -1770,35 +1377,35 @@ class ReportExtractionMixin:
             found = _search_in_folder(resource_dir)
             if found:
                 return found
-
+        
         # 2. PyInstaller 묶음(실행파일 내부 임시 폴더)에서 검색 (Standalone 지원)
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
             found = _search_in_folder(sys._MEIPASS)
             if found: return found
-
+            
         return None
 
     def place_image_freely(self, ws, img_path, anchor_cell_str, w, h, x_offset, y_offset):
         try:
             if not img_path or not os.path.exists(img_path): return
-
+            
             # [ENHANCED] Robust image processing with terminal & UI logging
             original = PILImage.open(img_path).convert("RGBA")
             w_px = max(5, int(float(w))); h_px = max(5, int(float(h)))
-
+            
             temp_name = f"temp_{int(time.time())}_{os.path.basename(img_path)}.png"
             temp_full_path = os.path.join(tempfile.gettempdir(), temp_name)
-
+            
             resized = original.resize((w_px, h_px), PILImage.Resampling.LANCZOS)
             resized.save(temp_full_path, "PNG")
-
+            
             from openpyxl.drawing.image import Image as XLImage
             img = XLImage(temp_full_path)
             img.width = w_px; img.height = h_px
             from openpyxl.utils import column_index_from_string
             from openpyxl.utils.cell import coordinate_from_string
             from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker, XDRPositiveSize2D
-
+            
             # [FIX] Handle 'None' or empty anchor string
             if not anchor_cell_str or str(anchor_cell_str).strip() == "None" or len(str(anchor_cell_str).strip()) < 2:
                 anchor_cell_str = "A1"
@@ -1806,25 +1413,25 @@ class ReportExtractionMixin:
             try:
                 col_str, row_num = coordinate_from_string(anchor_cell_str)
                 col_idx = max(0, column_index_from_string(col_str) - 1)
-                row_idx = max(0, row_num - 1)
+                row_idx = max(0, row_num - 1) 
             except Exception as e:
                 col_idx, row_idx = 0, 0
                 anchor_cell_str = "A1"
-
+            
             # [STABLE] Use OneCellAnchor instead of AbsoluteAnchor for better Excel compatibility (prevents corruption)
             # 1 Pixel = 9525 EMU (Standard 96 DPI)
             final_emu_x = max(0, int(float(x_offset) * 9525))
             final_emu_y = max(0, int(float(y_offset) * 9525))
             emu_w = max(9525, int(float(w_px) * 9525))
             emu_h = max(9525, int(float(h_px) * 9525))
-
+            
             # [FIX] Use AnchorMarker (cell + offset) for stable positioning
             marker = AnchorMarker(col=col_idx, colOff=final_emu_x, row=row_idx, rowOff=final_emu_y)
             size = XDRPositiveSize2D(cx=emu_w, cy=emu_h)
-
+            
             img.anchor = OneCellAnchor(_from=marker, ext=size)
             ws.add_image(img)
-
+            
             msg = f"[SUCCESS] 로고 배치 완료: {os.path.basename(img_path)}"
             self.log(f"   {msg}")
         except Exception as e:
@@ -1972,18 +1579,21 @@ class ReportExtractionMixin:
                 elif "PAUT" in main_tab: mode = "PAUT"
                 else: mode = "PMI"
             except: mode = "PMI"
-
+            
             from site_apps.central.src.reports.ndt_history_import import select_history_rows
             ndt_list = select_history_rows(self.root, mode)
             if not ndt_list:
                 return
             tree, idx_map, data, keys_attr = self._get_mode_info(mode)
-
+            
             # Map NDT data to the tree columns
             source_site = ndt_list[0]['_source_site']
             if data and any(row.get('_source_site') != source_site for row in data):
-                if not messagebox.askyesno('사업장 확인',
-                    f'현재 보고서에 다른 사업장 또는 출처 미확인 자료가 있습니다.\n{source_site} 자료를 함께 추가할까요?'):
+                if not messagebox.askyesno(
+                    '사업장 확인',
+                    f'현재 보고서에 다른 사업장 또는 출처 미확인 자료가 있습니다.\n{source_site} 자료를 함께 추가할까요?',
+                    parent=self.root,
+                ):
                     return
             existing_ids = {row.get('_source_id') for row in data if row.get('_source_id')}
             added_count = 0
@@ -2005,19 +1615,19 @@ class ReportExtractionMixin:
                 # 중앙지사 작업/감독일보의 '구간'은 RT의 SEC 값이다.
                 if mode in ("RT", "KOGAS"):
                     new_row["Sec"] = r.get("구간", "")
-
+                 
                 # 라인번호 / ISO / Dwg
                 dwg = r.get("라인번호", "")
                 if "ISO" in keys_attr: new_row["ISO"] = dwg
                 elif "Line No." in keys_attr: new_row["Line No."] = dwg
                 elif "Dwg" in keys_attr: new_row["Dwg"] = dwg
                 elif "Drawing No." in keys_attr: new_row["Drawing No."] = dwg
-
+                
                 # Joint No.
                 joint = r.get("Joint No.", "")
                 if "Joint" in keys_attr: new_row["Joint"] = joint
                 elif "Joint No." in keys_attr: new_row["Joint No."] = joint
-
+                
                 # 관경 / Size / T / Th'k
                 size = r.get("관경", "")
                 thickness = r.get("두께", "")
@@ -2026,19 +1636,30 @@ class ReportExtractionMixin:
                 if "Th'k(mm)" in keys_attr: new_row["Th'k(mm)"] = thickness
                 if not thickness and any(k in keys_attr for k in ('T', "Th'k(mm)")):
                     new_row['Remarks'] = '두께 확인 필요'
-
+                if any(k in keys_attr for k in ('Material', 'Mat')):
+                    from site_apps.central.src.reports.pipe_material_spec import infer_row_pipe_material
+                    inferred_mat = infer_row_pipe_material(
+                        {'Size': size, 'Line No.': dwg},
+                        item_name=self._mode_item_name(mode) if hasattr(self, '_mode_item_name') else '',
+                    )
+                    if inferred_mat:
+                        if 'Material' in keys_attr and not new_row.get('Material'):
+                            new_row['Material'] = inferred_mat
+                        if 'Mat' in keys_attr and not new_row.get('Mat'):
+                            new_row['Mat'] = inferred_mat
+                
                 # 용접사 / Welder
                 welder = self._normalize_daily_photo_welder(
                     r.get("용접사", "")
                 )
                 if "Welder" in keys_attr: new_row["Welder"] = welder
-
+                
                 # 검사길이 / Tested Length
                 test_len = r.get("검사길이", "")
                 if not test_len and mode in ["PAUT", "MT", "PT"]:
                     test_len = r.get(mode, "")
                 if "Tested Length" in keys_attr: new_row["Tested Length"] = test_len
-
+                
                 # 구간 / Loc
                 # RT의 Film Location은 중앙지사 작업/감독일보
                 # '2. 비파괴검사결과서'의 '구간정보' 값을 사용한다.
@@ -2051,7 +1672,7 @@ class ReportExtractionMixin:
                 if mode in ("RT", "KOGAS"):
                     from site_apps.central.src.reports.ndt_history_import import rt_film_findings
                     new_row.update(rt_film_findings(r.get("구간정보", "")))
-
+                
                 # 결과 / Result / Acc / Rej
                 if mode == "PAUT":
                     from site_apps.central.src.reports.ndt_history_import import paut_flaw_findings
@@ -2068,27 +1689,28 @@ class ReportExtractionMixin:
                 elif res == "불합격":
                     if "Rej" in keys_attr: new_row["Rej"] = "X"
                     if "Evaluation" in keys_attr: new_row["Evaluation"] = "Rej"
-
+                
                 new_row["selected"] = True
                 new_row["_status"] = "new"
                 if "No" in keys_attr: new_row["No"] = str(len(data) + 1)
-
+                
                 data.append(new_row)
                 if r.get('_source_id'):
                     existing_ids.add(r['_source_id'])
-
+                
                 row_vals = [new_row.get(k, "") for k in keys_attr]
                 row_tags = []
                 if new_row.get("Result") == "불합격" or new_row.get("Evaluation") == "Rej":
                     row_tags.append("fail")
                 elif new_row.get("Result") == "합격" or new_row.get("Evaluation") == "Acc":
                     row_tags.append("pass")
-
+                
                 tree.insert("", "end", values=tuple(row_vals), tags=tuple(row_tags))
                 idx_map.append(len(data) - 1)
                 added_count += 1
-
+                
             self.update_date_listbox(mode=mode)
+            getattr(self, '_last_auto_material_sig', {}).pop(mode, None)
             if mode == 'PAUT':
                 companies = {row.get('업체', '').strip() for row in ndt_list if row.get('업체', '').strip()}
                 if len(companies) == 1 and hasattr(self, 'paut_contractor'):
@@ -2096,14 +1718,22 @@ class ReportExtractionMixin:
                     self.config['PAUT_CONTRACTOR'] = self.paut_contractor.get()
                     self.save_settings()
                 self.populate_preview(data, switch_tab=False, mode=mode)
-            elif mode in ('MT', 'RT', 'KOGAS'):
+            elif mode in ('PT', 'MT', 'RT', 'KOGAS'):
                 self.populate_preview(data, switch_tab=False, mode=mode)
-            messagebox.showinfo("완료", f"{ndt_list[0]['_source_site']} 작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.")
-
+            messagebox.showinfo(
+                "완료",
+                f"{ndt_list[0]['_source_site']} 작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.",
+                parent=self.root,
+            )
+            self.root.after_idle(self.root.focus_set)
+            
         except Exception as e:
             import traceback
             traceback.print_exc()
-            messagebox.showerror("오류", f"일보 불러오기 중 오류가 발생했습니다:\n{e}")
+            messagebox.showerror(
+                "오류", f"일보 불러오기 중 오류가 발생했습니다:\n{e}",
+                parent=self.root,
+            )
 
     def extract_only(self, show_msg=True):
         """데이터만 추출하여 리스트와 미리보기에 반영 (PMI/RT 대응)"""
@@ -2135,32 +1765,32 @@ class ReportExtractionMixin:
             target_file_str = self.kogas_target_file_path.get()
         else:
             target_file_str = self.target_file_path.get()
-
+            
         if not target_file_str:
             messagebox.showwarning("파일 미선택", f"{mode} 데이터 파일을 선택해주세요.")
             return False
-
+            
         target_files = target_file_str.split('|') if '|' in target_file_str else [target_file_str]
-
+        
         if not target_files: return False
-
+        
         success_count = 0
         for i, tf in enumerate(target_files):
             if not tf.strip(): continue
             is_last = (i == len(target_files) - 1)
             if self._extract_single_file(mode, tf.strip(), show_msg=(show_msg and is_last)):
                 success_count += 1
-
+                
         return success_count > 0
 
     def _extract_single_file(self, mode, target_file, show_msg=True):
         self.log(f"🔍 {mode} 데이터 추출 시작: {os.path.basename(target_file)}")
-
+        
         # [NEW] Extract date from filename
         fname = os.path.basename(target_file)
         date_match = re.search(r'(\d{4}[-._]\d{2}[-._]\d{2}|\d{2}[-._]\d{2}[-._]\d{2}|\d{8}|\d{6})', fname)
         extracted_date = date_match.group(0) if date_match else ""
-
+        
         # Standardize formatting
         if extracted_date:
             clean_date = re.sub(r'[-._]', '', extracted_date)
@@ -2168,7 +1798,7 @@ class ReportExtractionMixin:
                 extracted_date = f"{clean_date[:4]}-{clean_date[4:6]}-{clean_date[6:]}"
             elif len(clean_date) == 6:
                 extracted_date = f"20{clean_date[:2]}-{clean_date[2:4]}-{clean_date[4:]}"
-
+        
         if not extracted_date:
             extracted_date = datetime.datetime.now().strftime("%Y-%m-%d")
             self.log(f"⚠️ 파일명에서 날짜를 찾지 못해 오늘 날짜({extracted_date})로 설정합니다.")
@@ -2190,14 +1820,14 @@ class ReportExtractionMixin:
         self.progress['value'] = 0
         all_extracted_data = []
 
-        # [AUTO COLUMN ADDITION]
+        # [AUTO COLUMN ADDITION] 
         if mode == "PMI" and hasattr(self, 'element_filters') and self.element_filters:
             new_keys = []
             for f_item in self.element_filters:
                 f_k = f_item['key'].get().strip()
                 if f_k and f_k.upper() not in ["CR", "NI", "MO", "MN"] and f_k.capitalize() not in self.column_keys and f_k.upper() not in self.column_keys and f_k not in self.column_keys:
                     new_keys.append(f_k)
-
+            
             if new_keys:
                 self.column_keys.extend(new_keys)
                 current_cols = list(self.preview_tree["columns"])
@@ -2215,17 +1845,17 @@ class ReportExtractionMixin:
                 for k in new_keys:
                     if k not in current_cols: current_cols.append(k)
                     if k not in current_display: current_display.append(k)
-
+                
                 self.preview_tree["columns"] = tuple(current_cols)
                 self.preview_tree["displaycolumns"] = tuple(current_display)
-
+                
                 # Re-apply all configs + new keys setup
                 for c in current_cols:
                     header_txt = configs.get(c, {}).get("text", c)
                     w = configs.get(c, {}).get("width", 80)
                     self.preview_tree.heading(c, text=header_txt, anchor='center', command=lambda _c=c: self.sort_by_column(_c, mode="PMI"))
                     self.preview_tree.column(c, width=w, anchor='center', stretch=False)
-
+        
         def _find_col(df, keywords, exclude=None):
             cleaned_keywords = [re.sub(r'\s+', '', k).upper() for k in keywords]
             # 1. Exact match by keyword priority
@@ -2244,7 +1874,7 @@ class ReportExtractionMixin:
                         return col
             return None
 
-        def _get_kw(k):
+        def _get_kw(k): 
             if hasattr(self, 'rt_extract_mappings') and k in self.rt_extract_mappings:
                 return [x.strip().upper() for x in self.rt_extract_mappings[k].get().split(',')]
             return []
@@ -2252,15 +1882,15 @@ class ReportExtractionMixin:
         try:
             target_input = self.sequence_filter.get().strip()
             target_no_list = [x.strip() for x in target_input.replace(',', ' ').split() if target_input and x.strip()] if target_input else []
-
+            
             with pd.ExcelFile(target_file) as xls:
                 for s_idx, sheet_name in enumerate(xls.sheet_names):
                     self.log(f"📄 시트 스캔: {sheet_name}")
                     try: temp_df = pd.read_excel(xls, sheet_name=sheet_name, header=None, nrows=50)
                     except: continue
-
+                    
                     # [지능형 시트 내 날짜 추출]
-                    # 의뢰서의 L5, L6 셀(머지된 영역)을 직접 파싱하여
+                    # 의뢰서의 L5, L6 셀(머지된 영역)을 직접 파싱하여 
                     # 파일명 날짜보다 우선하여 해당 시트의 기본 날짜(sheet_level_date)로 활용합니다.
                     sheet_level_date = extracted_date
                     try:
@@ -2284,10 +1914,10 @@ class ReportExtractionMixin:
                                             break
                             if sheet_level_date != extracted_date: break
                     except: pass
-
+                    
                     if sheet_level_date != extracted_date:
                         self.log(f"   📅 의뢰서 헤더(L5/L6 셀)에서 날짜 파싱 성공: {sheet_level_date}")
-
+                        
                     # [지능형 시트 내 도면번호 추출]
                     # 의뢰서의 C5, C6 셀(머지된 영역)을 직접 파싱하여
                     # 해당 시트의 기본 도면번호(sheet_level_dwg)로 활용합니다.
@@ -2331,7 +1961,7 @@ class ReportExtractionMixin:
 
                     if sheet_level_dwg:
                         self.log(f"   📐 의뢰서 헤더(C5/C6 셀)에서 도면번호 파싱 성공: {sheet_level_dwg}")
-
+                    
                     header_idx = None
                     is_fixed_range = False
                     # [NEW] KOGAS 고정 영역 처리 (A9:AB13 헤더, A14:AB25 데이터)
@@ -2350,9 +1980,9 @@ class ReportExtractionMixin:
                             else:
                                 if ("CR" in row_str and "NI" in row_str) or ("CHROMIUM" in row_str):
                                     header_idx = i; break
-
+                    
                     if header_idx is None: continue
-
+                    
                     df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
                     if df.empty: continue
 
@@ -2373,13 +2003,13 @@ class ReportExtractionMixin:
                         # [STANDARD] 다중 헤더 병합 (최대 2행까지 지원)
                         row0_str = " ".join([str(x).upper() for x in df.iloc[0] if pd.notna(x)]) if len(df) > 0 else ""
                         row1_str = " ".join([str(x).upper() for x in df.iloc[1] if pd.notna(x)]) if len(df) > 1 else ""
-
+                        
                         merge_count = 0
                         if any(k in row1_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
                             merge_count = 2
                         elif any(k in row0_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
                             merge_count = 1
-
+                            
                         if merge_count > 0:
                             self.log(f"   ℹ️ [자동] 다중 헤더 병합 ({merge_count}행) (시트: {sheet_name})")
                             new_cols = []
@@ -2404,8 +2034,8 @@ class ReportExtractionMixin:
                                     idx = self.col_to_num(c_idx_str)
                                     if 1 <= idx <= len(df.columns):
                                         candidate = df.columns[idx - 1]
-
-                                        # [지능형 자동 매핑 우선 정책]
+                                        
+                                        # [지능형 자동 매핑 우선 정책] 
                                         # 오직 사용자가 설정을 변경하지 않고 '기본값' 상태일 때만, 헤더 매칭이 틀렸을 경우 자동 매핑을 시도합니다.
                                         # 사용자가 명시적으로 컬럼을 직접 변경한 경우는 설정을 100% 신뢰하여 그대로 사용합니다.
                                         DEFAULT_COLUMNS = {
@@ -2424,14 +2054,14 @@ class ReportExtractionMixin:
                                                 is_default = (self.col_to_num(c_idx_str) == self.col_to_num(default_val))
                                             except:
                                                 is_default = (c_idx_str == default_val)
-
+                                                
                                         if is_default:
                                             cand_clean = re.sub(r'\s+', '', str(candidate)).upper()
                                             cleaned_keywords = [re.sub(r'\s+', '', k).upper() for k in search_keywords]
                                             if search_keywords and not any(k in cand_clean for k in cleaned_keywords):
                                                 found = _find_col(df, search_keywords)
                                                 if found: return found
-
+                                                
                                         return candidate
                                 except: pass
                             return _find_col(df, search_keywords)
@@ -2455,7 +2085,7 @@ class ReportExtractionMixin:
                         col_rej = _get_col(f"{col_prefix}_COL_REJ", _get_kw('Rej') or ["REJ", "불합격"])
                         col_deg = _get_col(f"{col_prefix}_COL_DEG", _get_kw('Deg') or ["DEG", "물성", "수정브랜드", "GRADE"])
                         col_result = _get_col(f"{col_prefix}_COL_RES", _get_kw('Result') or ["RESULT", "판정"])
-
+                        
                         defect_cols = {}
                         for i in range(1, 16):
                             defect_cols[f"D{i}"] = _get_col(f"{col_prefix}_COL_D{i}", [f"D{i}", f"DEFECT{i}", chr(9311 + i), f"{i}"])
@@ -2474,7 +2104,7 @@ class ReportExtractionMixin:
                         # of the file name/header-level fallback date.
                         col_date = _find_col(df, ["TEST DATE", "REQUEST DATE", "DATE", "검사일자", "일자"])
                         col_report_no = _find_col(df, ["REPORT NO", "REPORT"])
-                        col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"])
+                        col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
                         col_joint = _find_col(df, ["JOINT NO", "JOINT NUMBER"], exclude=["ISO", "LINE", "ITEM"])
                         if not col_joint:
                             col_joint = _find_col(df, ["JOINT", "WELD"], exclude=["ISO", "LINE", "ITEM", "WPS", "REPORT", "DATE", "TYPE"])
@@ -2485,7 +2115,7 @@ class ReportExtractionMixin:
                         col_wtype = _find_col(df, ["WELD TYPE", "WELDTYPE", "W.TYPE", "TYPE"], exclude=["JOINT"])
                         col_result = _find_col(df, ["RESULT", "결과", "판정"])
                     # Placeholder for Loc to maintain structure
-                        col_loc = None
+                        col_loc = None 
                     else:
                         col_cr = _find_col(df, ["CR", "CHROMIUM"]); col_ni = _find_col(df, ["NI", "NICKEL"])
                         col_mo = _find_col(df, ["MO", "MOLYBDENUM"]); col_mn = _find_col(df, ["MN", "MANGANESE"])
@@ -2499,7 +2129,7 @@ class ReportExtractionMixin:
                         col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
                         col_report_no = _find_col(df, ["REPORT NO", "REPORT"])
                         col_grade_orig = _find_col(df, ["GRADE", "MATERIAL", "SPEC", "TYPE"])
-
+                        
                         # [DYNAMIC] Scan for dynamically added filter elements (e.g., C, P, S)
                         custom_cols = {}
                         if hasattr(self, 'element_filters') and self.element_filters:
@@ -2527,7 +2157,7 @@ class ReportExtractionMixin:
                             # [NEW] Preserve leading zeros for purely numeric strings (e.g. "075")
                             if v_strip.startswith('0') and v_strip.isdigit() and len(v_strip) > 1:
                                 return v_strip
-
+                                
                         try:
                             if isinstance(v, (int, float)) or (isinstance(v, str) and v.replace('.','').isdigit()):
                                 fv = float(v)
@@ -2571,12 +2201,12 @@ class ReportExtractionMixin:
                         v_raw_no = clean_v(row_top[col_no]) if col_no is not None else ""
                         if not v_raw_no and row_bot is not None and col_no is not None:
                             v_raw_no = clean_v(row_bot[col_no])
-
+                        
                         # 만약 NO 컬럼이 지정되어 있는데 값이 완전히 비어있거나 'nan'인 경우, 데이터가 없는 행이므로 건너뜁니다.
                         if col_no is not None and (not v_raw_no or v_raw_no == 'nan'):
                             r_idx += 2
                             continue
-
+                            
                         # NO 컬럼이 지정되어 있지 않은 경우에만 인덱스 기반으로 번호를 생성합니다.
                         if not v_raw_no or v_raw_no == 'nan':
                             v_raw_no = str((r_idx // 2) + 1)
@@ -2640,7 +2270,7 @@ class ReportExtractionMixin:
                         if row_bot is not None and col_welder is not None:
                             raw_welder_sub = clean_v(row_bot[col_welder])
                         v_welder_sub = process_welder_string(raw_welder_sub)
-
+                        
                         # [NEW] Combine both welders into one string if they are different and not already included
                         v_welder_parts = v_welder.split('/') if v_welder else []
                         if v_welder_sub and v_welder_sub != 'nan':
@@ -2648,7 +2278,7 @@ class ReportExtractionMixin:
                                 if sub_part and sub_part not in v_welder_parts:
                                     v_welder_parts.append(sub_part)
                         v_welder = "/".join(v_welder_parts)
-
+                        
                         v_welder_sub = v_welder
 
                         # 7. 재질 (Mat) 및 Mat_Sub
@@ -2717,11 +2347,11 @@ class ReportExtractionMixin:
                                 for i in range(1, 16):
                                     key = f'D{i}'; c = defect_cols.get(key); val = str(row_top[c]).strip() if c is not None else ''
                                     shot_item[key] = val if (val and val.lower() not in ['nan', ''] and val.lower() in ['v', 'x', 'o', '1', '?']) else ''
-
+                                
                                 # [NEW] Clear repetitive Joint number for 2nd shot and beyond
                                 if shot_idx > 1:
                                     shot_item['Joint'] = ''
-
+                                    
                                 all_extracted_data.append(shot_item)
                         else:
                             all_extracted_data.append(item_data)
@@ -2735,15 +2365,15 @@ class ReportExtractionMixin:
                         if _is_date_like_dwg(raw_dwg):
                             raw_dwg = ""
                         raw_joint = clean_v(row[col_joint]) if col_joint is not None else ""
-
+                        
                         # 행의 주요 데이터가 모두 비어있으면 빈 행으로 간주하여 건너뜀
                         if not v_raw_no and not raw_dwg and not raw_joint:
                             continue
-
+                            
                         # 주요 데이터는 있는데 순번만 비어있으면 자동 부여
                         if not v_raw_no or v_raw_no == "nan":
                             v_raw_no = str(len(all_extracted_data) + 1)
-
+                            
                         if target_no_list and v_raw_no not in target_no_list: continue
 
                         extract_key = self.rt_extract_keyword.get().strip().lower()
@@ -2826,11 +2456,11 @@ class ReportExtractionMixin:
                                     for i in range(1, 16):
                                         key = f'D{i}'; c = defect_cols.get(key); val = str(row[c]).strip() if c is not None else ''
                                         shot_item[key] = '?' if val and val.lower() in ['v', 'x', 'o', '1', '?'] else ''
-
+                                        
                                     # [NEW] Clear repetitive Joint number for 2nd shot and beyond
                                     if shot_idx > 1:
                                         shot_item['Joint'] = ''
-
+                                        
                                     all_extracted_data.append(shot_item)
                             else:
                                 all_extracted_data.append(item_data)
@@ -2862,7 +2492,7 @@ class ReportExtractionMixin:
                                 v_mo = self.to_float(row[col_mo]) if col_mo is not None else 0.0
                                 v_mn = self.to_float(row[col_mn]) if col_mn is not None else 0.0
                                 orig_grade = str(row[col_grade_orig]).strip() if col_grade_orig is not None else ""
-
+                                
                                 final_grade = orig_grade
                                 if self.auto_verify.get():
                                     detected = self.check_material_grade({'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn})
@@ -2871,7 +2501,7 @@ class ReportExtractionMixin:
                                     final_grade = "SS316" if v_mo >= 1.5 else "SS304"
 
                                 pmi_item = {
-                                    'No': v_raw_no,
+                                    'No': v_raw_no, 
                                     'Joint': curr_joint,
                                     'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
                                     'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn,
@@ -2907,7 +2537,7 @@ class ReportExtractionMixin:
                     elif ext_mode == "미분류(기타) 만":
                         known_grades = ["SS304", "SS316", "DUPLEX", "SS310"]
                         all_extracted_data = [d for d in all_extracted_data if d['Grade'] not in known_grades]
-
+                    
                     self.log(f"🔍 필터링 ({ext_mode}): {original_count}개 -> {len(all_extracted_data)}개")
                     if not all_extracted_data:
                         messagebox.showinfo("알림", f"'{ext_mode}'에 해당하는 데이터가 없습니다.")
@@ -2920,7 +2550,7 @@ class ReportExtractionMixin:
                     if not f_key: continue
                     f_min = self.to_float(f_item['min'].get())
                     f_max = self.to_float(f_item['max'].get())
-
+                    
                     if f_min > 0 or f_max > 0:
                         original_count = len(all_extracted_data)
                         all_extracted_data = [d for d in all_extracted_data if (f_min <= d.get(f_key, 0.0) <= (f_max if f_max > 0 else 999.9))]
@@ -2942,12 +2572,13 @@ class ReportExtractionMixin:
                 all_extracted_data.sort(key=lambda x: target_no_list.index(str(x['No'])) if str(x['No']) in target_no_list else 999999)
 
             # [CHANGE] Overwrite -> Accumulate + Auto Sort
+            getattr(self, '_last_auto_material_sig', {}).pop(mode, None)
             if mode == "RT":
                 self.rt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("RT")
                 self._update_rt_preview_columns(mode="RT") # [FIX] 표시 이름 보존을 위해 호출
                 self.rt_sort_col = "" # [NEW] Force Ascending
-                self.sort_by_column("Dwg", mode="RT")
+                self.sort_by_column("Dwg", mode="RT") 
                 total_count = len(self.rt_extracted_data)
             elif mode == "KOGAS":
                 self.kogas_extracted_data.extend(all_extracted_data)
@@ -2961,7 +2592,7 @@ class ReportExtractionMixin:
                 self.update_date_listbox("PT")
                 self.pt_sort_col = ""
                 self.mt_sort_col = ""
-                self.sort_by_column("Dwg", mode="PT")
+                self.sort_by_column("Dwg", mode="PT") 
                 total_count = len(self.pt_extracted_data)
             else:
                 self.extracted_data.extend(all_extracted_data)
@@ -2974,7 +2605,7 @@ class ReportExtractionMixin:
                 # visible widget is updated after all preview redraw callbacks.
                 self.root.after_idle(lambda: self.update_date_listbox("PMI"))
                 total_count = len(self.extracted_data)
-
+            
             self.progress['value'] = 100
             if show_msg:
                 self.log(f"✅ {mode} 데이터 누적 완료 (현재 총 {total_count} 건)")
@@ -3010,11 +2641,11 @@ class ReportExtractionMixin:
                 return
 
             self.log(f"🔄 의뢰서 결과 반영 시작: {os.path.basename(target_file)}")
-
+            
             import openpyxl
             wb = openpyxl.load_workbook(target_file)
             count = 0
-
+            
             # Group items by source row to handle multi-shot joints
             groups = {}
             for item in data:
@@ -3028,48 +2659,48 @@ class ReportExtractionMixin:
                 if sheet_name not in wb.sheetnames: continue
                 ws = wb[sheet_name]
                 src = items[0]['_src']
-
+                
                 # Determine final result (If any item is Rej, result is Rej)
                 final_res = "ACC"
                 all_remarks = []
-
+                
                 if mode == "KOGAS":
                     for it in items:
                         res = str(it.get('Result', '')).upper()
                         if any(x in res for x in ["REJ", "NG", "불합격"]): final_res = "REJ"
                         rem = str(it.get('Remarks', '')).strip()
                         if rem and rem not in all_remarks: all_remarks.append(rem)
-
+                    
                     # KOGAS 비고란은 컬럼 11 (K열)
                     ws.cell(row=row_idx, column=11, value=", ".join(all_remarks) if all_remarks else None)
-
+                    
                     # NDT 의뢰방식 확인 (13:RT, 14:UT, 15:PT)
                     rt_val = ws.cell(row=row_idx, column=13).value
                     ut_val = ws.cell(row=row_idx, column=14).value
                     pt_val = ws.cell(row=row_idx, column=15).value
-
+                    
                     def is_marked(v):
                         if v is None: return False
                         cleaned = str(v).strip().upper()
                         return cleaned in ["O", "V", "X", "●", "합격", "1", "TRUE"]
-
+                    
                     rt_req = is_marked(rt_val)
                     ut_req = is_marked(ut_val)
                     pt_req = is_marked(pt_val)
-
+                    
                     has_rt_films = False
                     for it in items:
                         loc_str = str(it.get('Loc', '')).strip()
                         if re.match(r'^\d+', loc_str):
                             has_rt_films = True
                             break
-
+                    
                     defect_map = {
                         "D1": "C", "D2": "IP", "D3": "LF", "D4": "S", "D5": "P",
                         "D6": "UC", "D7": "RUC", "D8": "BT", "D9": "TI", "D10": "CP",
                         "D11": "RC", "D12": "Mis", "D13": "EP", "D14": "SD", "D15": "Oth"
                     }
-
+                    
                     def get_item_val(it):
                         grade = str(it.get('Deg', '')).strip()
                         if grade.lower() == 'nan':
@@ -3099,13 +2730,13 @@ class ReportExtractionMixin:
                             if film_num and 1 <= film_num <= 7:
                                 val = get_item_val(it)
                                 ws.cell(row=row_idx, column=16 + film_num, value=val)
-
+                                
                     # UT/UP (X: 24) 반영
                     if ut_req:
                         it = items[0] if items else {}
                         val = get_item_val(it)
                         ws.cell(row=row_idx, column=24, value=val)
-
+                        
                     # PT (Y: 25) 반영
                     if pt_req:
                         it = items[0] if items else {}
@@ -3113,14 +2744,14 @@ class ReportExtractionMixin:
                         ws.cell(row=row_idx, column=25, value=val)
                 else:
                     has_defects = {k: False for k in src.get('col_defects', {}).keys()}
-
+                    
                     for it in items:
                         res = str(it.get('Result', '')).upper()
                         if any(x in res for x in ["REJ", "NG", "불합격"]): final_res = "REJ"
-
+                        
                         rem = str(it.get('Remarks', '')).strip()
                         if rem and rem not in all_remarks: all_remarks.append(rem)
-
+                        
                         if src.get('col_defects'):
                             for d_key, col_idx in src['col_defects'].items():
                                 if it.get(d_key) in ["√", "1", "v", "V", "o", "O"]: has_defects[d_key] = True
@@ -3128,15 +2759,15 @@ class ReportExtractionMixin:
                     # Write back to Excel
                     if src.get('col_result'):
                         ws.cell(row=row_idx, column=src['col_result'], value=final_res)
-
+                    
                     if src.get('col_remarks') and all_remarks:
                         ws.cell(row=row_idx, column=src['col_remarks'], value=", ".join(all_remarks))
-
+                    
                     if src.get('col_defects'):
                         for d_key, col_idx in src['col_defects'].items():
                             if has_defects[d_key]:
                                 ws.cell(row=row_idx, column=col_idx, value="√")
-
+                
                 count += 1
 
             wb.save(target_file)
@@ -3155,10 +2786,10 @@ class ReportExtractionMixin:
         """선택된 행들을 복제하여 데이터 리스트에 삽입"""
         selected = self.preview_tree.selection()
         if not selected: return
-
+        
         # 시각적 순서대로 정렬 (위에서부터 복제)
         selected = sorted(list(selected), key=lambda x: self.preview_tree.index(x))
-
+        
         new_items = []
         insert_pos = 0
         for item_id in selected:
@@ -3168,10 +2799,10 @@ class ReportExtractionMixin:
             # No.는 중복 방지를 위해 비우거나 새로 부여 (여기서는 유지 후 나중에 rename 가능)
             new_items.append(new_item)
             insert_pos = actual_idx
-
+            
         for item in reversed(new_items):
             self.extracted_data.insert(insert_pos + 1, item)
-
+             
         self.populate_preview(self.extracted_data, switch_tab=False)
         self.log(f"👯 {len(new_items)}개 행 복제 완료")
 
@@ -3180,7 +2811,7 @@ class ReportExtractionMixin:
         widths = {}
         for col in self.preview_tree["columns"]:
             widths[col] = self.preview_tree.column(col, "width")
-
+        
         self.config["PMI_COL_WIDTHS"] = widths
         self.save_settings()
         self.log("📏 컬럼 너비 설정 저장 완료")
@@ -3192,20 +2823,35 @@ class ReportExtractionMixin:
             val = self.date_listbox.get(i)
             if val.startswith("[v]"):
                 selected_dates.append(val.replace("[v] ", "").strip())
-
+        
         if not selected_dates:
             messagebox.showwarning("필터 오류", "최소 하나 이상의 날짜를 선택해주세요.")
             return
 
         for item in self.extracted_data:
             item['date_filtered'] = (item.get('Date', '') in selected_dates)
-
+        
         self.populate_preview(self.extracted_data, switch_tab=False)
         self.log(f"📅 날짜 필터 적용 완료: {len(selected_dates)}개 날짜 선택됨")
 
-    def show_report_issue_history(self):
+    def show_report_issue_history(self, mode=None):
         from site_apps.central.src.reports.report_issue_history import show_history
-        show_history(self.root)
+
+        def refresh_numbers():
+            if not mode:
+                return
+            mode_info = self._get_mode_info(mode)
+            if not mode_info:
+                return
+            data = mode_info[2]
+            # Imported issue numbers are derived from active issue history.
+            # Clear only source-linked rows so manually entered values survive.
+            for item in data:
+                if item.get('_source_id'):
+                    item.pop('Report No', None)
+            self.populate_preview(data, switch_tab=False, mode=mode)
+
+        show_history(self.root, on_change=refresh_numbers)
 
     def _report_save_path(self, directory, extension, mode=None, choose_directory=True):
         from site_apps.central.src.reports.report_issue_history import report_output_path
@@ -3232,17 +2878,27 @@ class ReportExtractionMixin:
             if cell is None:
                 cell = self.config.get('GAPJI_REPORT_NO_CELL', 'B10')
             report_no = workbook.worksheets[0][cell].value
+            if not messagebox.askyesno(
+                '정식 발행 등록',
+                f'생성한 {mode} 성적서를 정식 발행 이력에 등록할까요?\n\n'
+                f'보고서 번호: {report_no or "(번호 미입력)"}\n'
+                '아니오를 선택하면 파일만 생성되고 일보 항목은 미발행 상태로 유지됩니다.',
+                parent=self.root,
+            ):
+                self.log(f"파일만 생성: {report_no or '(번호 미입력)'} · 발행 이력 미등록")
+                return False
             record_issue(mode, report_no, save_path, items)
             if mode == 'PAUT':
                 self.populate_preview(self.paut_extracted_data, switch_tab=False, mode=mode)
             elif mode in ('MT', 'RT', 'KOGAS'):
                 self.populate_preview(self._get_mode_info(mode)[2], switch_tab=False, mode=mode)
             self.log(f"발행 이력 저장: {report_no or '(번호 미입력)'} · {len(items)}건")
+            return True
         except Exception as exc:
             self.log(f"발행 이력 저장 실패: {exc}")
             messagebox.showwarning('발행 이력 저장 실패',
                 f'보고서 파일은 생성되었으나 발행 이력을 저장하지 못했습니다.\n{save_path}\n\n{exc}')
-
+            return False
 
     def _create_top_action_bar(self, parent, mode):
         """데이터 미리보기 상단에 모던 플랫 액션 툴바 생성"""
@@ -3325,7 +2981,7 @@ class ReportExtractionMixin:
 
     def run_process(self):
         self.save_settings() # [FIX] Ensure UI settings are saved to config before generating
-
+        
         # [NEW] Ensure config values are correct types for comparison (prevent str vs int errors)
         for k in list(self.config.keys()):
             if k.endswith(('_ROW', '_IDX', '_SIZE')) or any(x in k for x in ['START', 'END', 'PAGE']):
@@ -3367,11 +3023,11 @@ class ReportExtractionMixin:
             target_file = self.target_file_path.get()
             template_path = self.template_file_path.get()
             data = self.extracted_data
-
+        
         if not template_path:
             messagebox.showwarning("파일 미선택", f"{mode} 양식(Template) 파일을 선택해주세요.")
             return
-
+            
         if not target_file and not data:
             messagebox.showwarning("파일 미선택", f"{mode} 데이터 파일(Excel)을 선택하거나, 저장된 데이터를 불러와주세요.")
             return
@@ -3381,7 +3037,7 @@ class ReportExtractionMixin:
             messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다:\n{template_path}")
             return
         self.save_settings() # This now captures all setting_vars (Logo X/Y, Print Area, etc.)
-
+        
         # 데이터가 비어있거나 새로 추출이 필요한 경우 수행
         if not data:
             if not self.extract_only(show_msg=False): return
@@ -3391,7 +3047,7 @@ class ReportExtractionMixin:
             elif mode == "RT": data = self.rt_extracted_data
             elif mode == "KOGAS": data = self.kogas_extracted_data
             else: data = self.extracted_data
-
+            
         # [NEW] 체크된 항목만 필터링 (기본값은 True)
         final_list = [
             d for d in data
@@ -3424,16 +3080,3 @@ class ReportExtractionMixin:
                 widget.selection_clear()
             self.root.focus_set()
         except: pass
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = PMIReportApp(root)
-    try:
-        root.mainloop()
-    except KeyboardInterrupt:
-        # Ctrl+C from a terminal is a normal shutdown request, not an app error.
-        try:
-            app.on_closing()
-        except tk.TclError:
-            # The window may already have been destroyed while handling shutdown.
-            pass

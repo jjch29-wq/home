@@ -144,10 +144,21 @@ class SyncResultTests(unittest.TestCase):
     def test_startup_setting_controls_only_immediate_sync(self):
         from site_apps.central import main
 
+        class ImmediateThread:
+            def __init__(self, target=None, args=(), kwargs=None, daemon=None):
+                self._target = target
+                self._args = args
+                self._kwargs = kwargs or {}
+
+            def start(self):
+                if self._target:
+                    self._target(*self._args, **self._kwargs)
+
         for enabled in (False, True):
             with (
                 self.subTest(enabled=enabled),
                 patch.object(main, "is_development", return_value=False),
+                patch.object(main.threading, "Thread", ImmediateThread),
                 patch.object(sync, "load_sync_config", return_value={"auto_sync_on_startup": enabled}),
                 patch.object(sync, "sync_all_central_sources", return_value={"status": "success"}) as run_sync,
             ):
@@ -160,8 +171,17 @@ class SyncResultTests(unittest.TestCase):
                 with patch.object(main.MaterialManager, "__init__", setup_ui):
                     app = main.CentralMaterialManager(root)
 
+                root.after_idle.assert_called_once_with(app._start_periodic_sync, True)
+                scheduled_fn, *scheduled_args = root.after_idle.call_args.args
+                root.after.reset_mock()
+                scheduled_fn(*scheduled_args)
+
                 self.assertEqual(run_sync.call_count, int(enabled))
-                root.after.assert_called_once_with(15000, app._start_periodic_sync)
+                expected_delay = 30000 if enabled else 15000
+                self.assertIn(
+                    ((expected_delay, app._start_periodic_sync), {}),
+                    [ (c.args, c.kwargs) for c in root.after.call_args_list ],
+                )
 
     def setUp(self):
         self._dev_patcher = patch.object(sync, 'is_development', return_value=False)

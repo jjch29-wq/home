@@ -371,31 +371,56 @@ class AppDialogsMixin:
 
                     if worker_rows:
                         w_df = pd.DataFrame(worker_rows)
-                        w_dedup = w_df.drop_duplicates(subset=['Date', 'Worker', 'WorkTime', 'OTValue'])
+                        w_dedup = w_df.drop_duplicates(subset=['Date', 'Worker', 'WorkTime', 'OTValue']).copy()
 
-                        # 공수 파싱 함수
+                        # 시계 문자열(09:00~18:00 등)은 제외하고 일자 기준으로 공수 산정
                         import re as _re
-                        def parse_work_count(val):
+                        def parse_explicit_work_count(val):
                             s = str(val).strip()
-                            if not s: return 1.0
+                            if not s:
+                                return (1.0, False)
+                            cleaned = _re.sub(r'\d{1,2}:\d{2}', '', s)
+                            cleaned = _re.sub(r'\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?', '', cleaned)
                             try:
-                                m = _re.search(r'([0-9\.]+)', s)
-                                if m: return float(m.group(1))
+                                m = _re.search(r'(\d+(?:\.\d+)?)\s*(?:공수|일|주간|야간|휴일)', cleaned)
+                                if m:
+                                    return (float(m.group(1)), True)
+                                if _re.fullmatch(r'\d+(?:\.\d+)?', cleaned.strip()):
+                                    return (float(cleaned.strip()), True)
                             except (ValueError, TypeError):
                                 pass
-                            return 1.0
+                            return (1.0, False)
 
-                        w_dedup['Count'] = w_dedup['WorkTime'].apply(parse_work_count)
+                        w_dedup['_date_key'] = [
+                            d if d else f"__nodate_{idx}"
+                            for idx, d in enumerate(w_dedup['Date'])
+                        ]
+                        w_dedup['_parsed_count'] = w_dedup['WorkTime'].apply(parse_explicit_work_count)
+
+                        def calc_worker_mandays(sub_df):
+                            total_days = 0.0
+                            for _, day_grp in sub_df.groupby('_date_key', sort=False):
+                                explicit_vals = [cnt for cnt, is_exp in day_grp['_parsed_count'] if is_exp]
+                                if explicit_vals:
+                                    total_days += max(max(explicit_vals), min(1.0, sum(explicit_vals)))
+                                else:
+                                    total_days += 1.0
+                            return total_days
+
+                        manday_map = {
+                            w_name: calc_worker_mandays(w_grp)
+                            for w_name, w_grp in w_dedup.groupby('Worker', sort=False)
+                        }
 
                         full_info.append("\n[참여 작업자 종합 요약]")
                         w_summary = w_dedup.groupby('Worker').agg({
-                            'Count': 'sum',
                             'OT_H': 'sum',
                             'OT_A': 'sum',
                             'Day_H': 'sum',
                             'Night_H': 'sum',
                             'Holiday_H': 'sum',
                         }).reset_index()
+                        w_summary['Count'] = w_summary['Worker'].map(manday_map).fillna(0.0)
 
                         for _, w_row in w_summary.iterrows():
                             w_name = w_row['Worker']

@@ -13,12 +13,22 @@ class DraggableMessagebox:
     """A custom draggable replacements for standard tkinter.messagebox"""
     @staticmethod
     def _show(type, title, message, parent=None, **kwargs):
-        root = parent or tk._default_root
-        if not root:
+        base_widget = parent or tk._default_root
+        if not base_widget:
             # Fallback to standard if no root exists yet
             if type == "error": return messagebox.showerror_orig(title, message)
             if type == "warning": return messagebox.showwarning_orig(title, message)
             return messagebox.showinfo_orig(title, message)
+
+        try:
+            root = base_widget.winfo_toplevel()
+        except tk.TclError:
+            root = base_widget
+
+        try:
+            prev_focus = root.focus_get()
+        except (tk.TclError, KeyError):
+            prev_focus = None
 
         dialog = tk.Toplevel(root)
         dialog.overrideredirect(True) # Remove standard title bar for better drag control
@@ -35,8 +45,14 @@ class DraggableMessagebox:
         title_lbl.pack(side="left")
         
         def close_dialog():
-            dialog.grab_release()
-            dialog.destroy()
+            try:
+                dialog.grab_release()
+            except tk.TclError:
+                pass
+            try:
+                dialog.destroy()
+            except tk.TclError:
+                pass
 
         btn_close = tk.Label(title_bar, text="✕", font=("Malgun Gothic", 10), background="#ffffff", padx=10, cursor="hand2")
         btn_close.pack(side="right")
@@ -44,8 +60,7 @@ class DraggableMessagebox:
         btn_close.bind("<Enter>", lambda e: btn_close.config(background="#ef4444", foreground="white"))
         btn_close.bind("<Leave>", lambda e: btn_close.config(background="#ffffff", foreground="black"))
 
-        # Disable main window
-        dialog.transient(root)
+        # Disable main window (avoid transient + overrideredirect combo on Windows which drops Win32 focus)
         dialog.grab_set()
 
         # Dragging logic
@@ -102,7 +117,20 @@ class DraggableMessagebox:
 
         dialog.lift()
         dialog.focus_force()
-        root.wait_window(dialog)
+        btn_ok.focus_set()
+        try:
+            root.wait_window(dialog)
+        finally:
+            try:
+                if root.winfo_exists():
+                    root.lift()
+                    root.focus_force()
+                    if prev_focus is not None and prev_focus.winfo_exists():
+                        prev_focus.focus_set()
+                    else:
+                        root.focus_set()
+            except (tk.TclError, KeyError):
+                pass
 
     @staticmethod
     def showerror(title, message, **kwargs): DraggableMessagebox._show("error", title, message, **kwargs)

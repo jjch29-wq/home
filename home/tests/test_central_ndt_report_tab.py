@@ -279,6 +279,59 @@ class TestCentralNDTReportTab(unittest.TestCase):
             finally:
                 reopened.close()
 
+    def test_report_mixins_have_no_shadowed_duplicate_methods(self):
+        """PMIReportApp과 분리된 Mixin들 사이에 중복 정의(가려짐)된 메서드가 없는지 검증."""
+        from site_apps.central.src.reports.report_mode_ui_mixin import ReportModeUIMixin
+        from site_apps.central.src.reports.report_extraction_mixin import ReportExtractionMixin
+
+        own_methods = {
+            k for k, v in PMIReportApp.__dict__.items()
+            if callable(v) and not k.startswith('__')
+        }
+        ui_methods = {
+            k for k, v in ReportModeUIMixin.__dict__.items()
+            if callable(v) and not k.startswith('__')
+        }
+        ext_methods = {
+            k for k, v in ReportExtractionMixin.__dict__.items()
+            if callable(v) and not k.startswith('__')
+        }
+        self.assertEqual(own_methods & ui_methods, set())
+        self.assertEqual(own_methods & ext_methods, set())
+        self.assertEqual(ui_methods & ext_methods, set())
+        self.assertGreaterEqual(len(ui_methods), 40)
+        self.assertGreaterEqual(len(ext_methods), 44)
+
+    def test_draggable_messagebox_restores_entry_focus_after_close(self):
+        """커스텀 알림창(DraggableMessagebox)을 닫은 뒤 입력칸 포커스가 유실되지 않고 복구되는지 검증."""
+        if not self.has_tk:
+            self.skipTest("Tkinter display not available in current environment")
+        from site_apps.central.src.views.components import DraggableMessagebox
+
+        win = tk.Toplevel(self.root)
+        self.addCleanup(win.destroy)
+        win.geometry("420x200+120+120")
+        frame = ttk.Frame(win)
+        frame.pack(fill="both", expand=True)
+        ent = ttk.Entry(frame)
+        ent.pack(padx=10, pady=10)
+        ent.insert(0, "초기값")
+        win.update()
+        win.focus_force()
+        ent.focus_set()
+        win.update()
+
+        def close_popup():
+            for child in win.winfo_children():
+                if isinstance(child, tk.Toplevel):
+                    child.destroy()
+
+        win.after(40, close_popup)
+        DraggableMessagebox.showinfo("완료", "불러오기 완료", parent=frame)
+        win.update()
+        self.assertEqual(win.focus_get(), ent)
+        self.assertIsNone(win.grab_current())
+
 
 if __name__ == '__main__':
     unittest.main()

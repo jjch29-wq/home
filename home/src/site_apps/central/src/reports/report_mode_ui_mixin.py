@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
+from pathlib import Path
 import glob
 import math
 import traceback
@@ -20,20 +21,10 @@ import io
 import base64
 import time
 import copy
-from site_apps.central.src.reports.photo_log_manager import PhotoLogMixin
-from site_apps.central.src.reports.report_sheet_styler import ReportSheetStylerMixin
-from site_apps.central.src.reports.ndt_report_runners import NDTReportRunnersMixin
-from site_apps.central.src.reports.report_preview_view import ReportPreviewViewMixin
-from site_apps.central.src.reports.report_table_controller import ReportTableControllerMixin
 
 
 
 
-try:
-    from ctypes import windll
-    windll.shcore.SetProcessDpiAwareness(1)
-except:
-    pass
 
 # --- Versioning ---
 APP_VERSION = "v260404.03"
@@ -240,28 +231,28 @@ class ReportModeUIMixin:
                 scrollbar.pack_forget()
             else:
                 scrollbar.pack(side="right", fill="y")
-
+        
         scrollable_frame.bind("<Configure>", _update_scrollregion)
 
         canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         def _on_canvas_configure(e):
             canvas.itemconfig(canvas_window, width=e.width)
         canvas.bind("<Configure>", _on_canvas_configure)
-
+        
         canvas.configure(yscrollcommand=scrollbar.set)
-
+        
         def _on_mousewheel(event):
             # Only allow scrolling if content actually exceeds the visible area
             if canvas.bbox("all")[3] > canvas.winfo_height():
                 canvas.yview_scroll(int(-1*(event.delta/120)), "units")
             return "break"
-
+        
         canvas.bind('<Enter>', lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
         canvas.bind('<Leave>', lambda e: canvas.unbind_all("<MouseWheel>"))
 
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-
+        
         return scrollable_frame
 
     def _setup_pmi_ui(self, parent):
@@ -270,13 +261,14 @@ class ReportModeUIMixin:
         container.pack(fill='both', expand=True)
 
         # --- Dual Pane Layout (PanedWindow) ---
-        self.pmi_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db",
+        self.pmi_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.pmi_paned.pack(fill='both', expand=True)
 
         # [LEFT] Filter/Settings Sidebar
         left_container = tk.Frame(self.pmi_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.pmi_paned.add(left_container, width=425)
+        self._add_sidebar_toggle(self.pmi_paned, left_container)
 
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
@@ -284,15 +276,15 @@ class ReportModeUIMixin:
         # FIXED FLOATING Header (Lifts over scrollable area)
         header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
         header_frame.place(x=0, y=0, relwidth=1, height=40)
-
+        
         inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
         inner_header.pack(fill='both', expand=True, pady=(5, 0))
-
-        tk.Label(inner_header, text="🔬 PMI 관리", font=("Malgun Gothic", 15, "bold"),
+        
+        tk.Label(inner_header, text="🔬 PMI 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
-        tk.Label(inner_header, text=f"v{APP_VERSION}", font=("Arial", 8),
+        tk.Label(inner_header, text=f"v{APP_VERSION}", font=("Arial", 8), 
                  background="#f1f5f9", foreground="#64748b", padx=5, pady=0).pack(side='left', padx=10)
-
+        
         # Bottom separator
         tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
         header_frame.lift() # Ensure it's on top
@@ -314,7 +306,7 @@ class ReportModeUIMixin:
 
         _add_very_compact_row(file_container, "데이터:", self.target_file_path, 0, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
         _add_very_compact_row(file_container, "양식:", self.template_file_path, 1, types=[("Excel Template", "*.xlsx;*.xlsm")])
-
+        
         # [NEW] Template Config Save Button
         btn_frame = tk.Frame(file_container, background="#f0f0f0")
         btn_frame.grid(row=2, column=1, sticky='ew', pady=2)
@@ -338,7 +330,7 @@ class ReportModeUIMixin:
         tab_rows = ttk.Frame(self.pmi_tab_notebook, padding=5)
         tab_cols = ttk.Frame(self.pmi_tab_notebook, padding=5)
         tab_filter = ttk.Frame(self.pmi_tab_notebook, padding=10)  # 내부 호환용 위젯 유지 (노트북 탭 미노출)
-
+        
         # [CRITICAL] Allow children to expand within tabs
         for t in [tab_cover, tab_data, tab_rows, tab_cols]: t.columnconfigure(0, weight=1)
 
@@ -361,7 +353,7 @@ class ReportModeUIMixin:
         self._create_margin_settings(tab_cover, "PMI_COVER", use_pack=False)
         self._create_margin_settings(tab_data, "PMI_DATA", use_pack=False)
         self._create_row_settings(tab_rows, mode="PMI")
-
+        
         pmi_items = [
             ("No:", "PMI_COL_NO", 13, "PMI_NAME_NO", "No", "No"),
             ("Drawing No:", "PMI_COL_DWG", 1, "PMI_NAME_DWG", "Drawing No.", "Dwg"),
@@ -373,7 +365,7 @@ class ReportModeUIMixin:
             ("판정 결과:", "PMI_COL_RES", 13, "PMI_NAME_RES", "Result", "Result")
         ]
         self._create_column_mapping_ui(tab_cols, "PMI", pmi_items)
-
+        
         # Spacer for tabs
         tk.Frame(tab_rows, background="#f9fafb").pack(fill='x')
 
@@ -382,7 +374,7 @@ class ReportModeUIMixin:
         filter_box = tk.Frame(tab_filter, background="#f9fafb")
         filter_box.pack(fill='x', pady=2)
         ttk.Label(filter_box, text="🔍 성분 필터:", background="#f9fafb", font=("Malgun Gothic", 9, "bold")).pack(side='left', padx=(0, 5))
-
+        
         def add_filter():
             self.element_filters.append({'key': tk.StringVar(value=''), 'min': tk.StringVar(value=''), 'max': tk.StringVar(value='')})
             self._update_pmi_filter_ui()
@@ -441,14 +433,14 @@ class ReportModeUIMixin:
 
         # 툴바와 데이터 화면 사이 구분선
         tk.Frame(right_container, height=1, background="#e2e8f0").pack(fill='x', pady=(0, 4))
-
+        
         # [DATA ONLY] 갑지 탭 제거 -> 100% 데이터 미리보기 전용 화면으로 쾌적화
         tab_data = tk.Frame(right_container, background="#ffffff")
         tab_data.pack(fill='both', expand=True)
-
+        
         self._create_preview_ui(tab_data)
         self._apply_sash_ratio("PMI")
-
+        
         self.template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("PMI"))
 
     def _update_pmi_ratio(self):
@@ -477,7 +469,7 @@ class ReportModeUIMixin:
         """Redraws the element filter tags in a modern, elastic style."""
         for widget in self.filter_container.winfo_children():
             widget.destroy()
-
+        
         def remove_filter(idx):
             self.element_filters.pop(idx)
             self._update_pmi_filter_ui()
@@ -486,36 +478,36 @@ class ReportModeUIMixin:
         cols_per_row = 1
         for i, f_item in enumerate(self.element_filters):
             self.filter_container.columnconfigure(0, weight=1)
-
-            # Create an "Elastic Tag"
-            tag = tk.Frame(self.filter_container, background="#eff6ff", highlightthickness=1,
+            
+            # Create an "Elastic Tag" 
+            tag = tk.Frame(self.filter_container, background="#eff6ff", highlightthickness=1, 
                             highlightbackground="#bfdbfe", padx=2, pady=1)
             tag.grid(row=i, column=0, sticky='ew', padx=2, pady=2)
-
+            
             # Inner grid for tag components
             tag.columnconfigure(0, weight=1, minsize=0) # Key
             tag.columnconfigure(2, weight=1, minsize=0) # Min
             tag.columnconfigure(4, weight=1, minsize=0) # Max
-
+            
             # Key
-            e_key = tk.Entry(tag, textvariable=f_item['key'], width=1, font=("Arial", 8),
+            e_key = tk.Entry(tag, textvariable=f_item['key'], width=1, font=("Arial", 8), 
                              relief='flat', background="#eff6ff", justify='center')
             e_key.grid(row=0, column=0, sticky='ew')
             tk.Label(tag, text=":", background="#eff6ff", font=("Arial", 8)).grid(row=0, column=1)
-
+            
             # Min
-            e_min = tk.Entry(tag, textvariable=f_item['min'], width=1, font=("Arial", 8),
+            e_min = tk.Entry(tag, textvariable=f_item['min'], width=1, font=("Arial", 8), 
                              relief='flat', background="#eff6ff", justify='center')
             e_min.grid(row=0, column=2, sticky='ew')
             tk.Label(tag, text="~", background="#eff6ff", font=("Arial", 8)).grid(row=0, column=3)
-
+            
             # Max
-            e_max = tk.Entry(tag, textvariable=f_item['max'], width=1, font=("Arial", 8),
+            e_max = tk.Entry(tag, textvariable=f_item['max'], width=1, font=("Arial", 8), 
                              relief='flat', background="#eff6ff", justify='center')
             e_max.grid(row=0, column=4, sticky='ew')
-
+            
             # Delete button (Small)
-            btn_del = tk.Button(tag, text="×", command=lambda idx=i: remove_filter(idx),
+            btn_del = tk.Button(tag, text="×", command=lambda idx=i: remove_filter(idx), 
                                 relief='flat', background="#eff6ff", foreground="#3b82f6", font=("Arial", 9, "bold"),
                                 activebackground="#dbeafe", cursor="hand2", padx=0, pady=0)
             btn_del.grid(row=0, column=5, padx=(2, 0))
@@ -526,19 +518,20 @@ class ReportModeUIMixin:
         container.pack(fill='both', expand=True)
 
         # --- Dual Pane Layout (PanedWindow) ---
-        self.rt_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db",
+        self.rt_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.rt_paned.pack(fill='both', expand=True)
 
         # [LEFT] Settings Sidebar
         left_container = tk.Frame(self.rt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.rt_paned.add(left_container, width=425)
+        self._add_sidebar_toggle(self.rt_paned, left_container)
         left_pane = self._create_scrollable_sidebar(left_container)
 
         # FIXED Header
         header_frame = tk.Frame(left_container, background="#f9fafb")
         header_frame.place(x=0, y=0, relwidth=1, height=40)
-        tk.Label(header_frame, text="🔬 RT 성적서 통합 관리", font=("Malgun Gothic", 15, "bold"),
+        tk.Label(header_frame, text="🔬 RT 성적서 통합 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left', padx=20, pady=5)
         tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
         tk.Frame(left_pane, height=40, background="#f9fafb").pack(fill='x')
@@ -547,23 +540,23 @@ class ReportModeUIMixin:
         mode_select_f = tk.Frame(left_pane, background="#f9fafb")
         mode_select_f.pack(fill='x', pady=(0, 10))
         self.rt_sub_mode = tk.StringVar(value="RT")
-
+        
         style = ttk.Style()
         style.configure("Mode.TRadiobutton", font=("Malgun Gothic", 9, "bold"))
-
-        ttk.Radiobutton(mode_select_f, text=" 🔬 표준 RT ", variable=self.rt_sub_mode, value="RT",
+        
+        ttk.Radiobutton(mode_select_f, text=" 🔬 표준 RT ", variable=self.rt_sub_mode, value="RT", 
                         style="Mode.TRadiobutton", command=self._on_rt_sub_mode_change).pack(side='left', padx=5)
-        ttk.Radiobutton(mode_select_f, text=" 🇰🇷 가스공사 ", variable=self.rt_sub_mode, value="KOGAS",
+        ttk.Radiobutton(mode_select_f, text=" 🇰🇷 가스공사 ", variable=self.rt_sub_mode, value="KOGAS", 
                         style="Mode.TRadiobutton", command=self._on_rt_sub_mode_change).pack(side='left', padx=5)
 
         # 1. File Selection (Adaptive)
         self.rt_file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
         self.rt_file_frame.pack(fill='x', pady=(0, 10))
-
+        
         # We need to show different path entries based on mode
         self.rt_path_container = tk.Frame(self.rt_file_frame)
         self.rt_path_container.pack(fill='x')
-
+        
         def _add_file_row(p, lbl, var, r, is_dir=False, types=None):
             p.columnconfigure(1, weight=1)
             ttk.Label(p, text=lbl, font=("Malgun Gothic", 8)).grid(row=r, column=0, sticky='e', padx=2, pady=2)
@@ -594,13 +587,13 @@ class ReportModeUIMixin:
         # 3. Actions
         action_f = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
         action_f.pack(fill='x', pady=(0, 10))
-
+        
         # Row 1: Sequence Filter
         r1 = tk.Frame(action_f, background="#ffffff")
         r1.pack(fill='x', pady=2)
         ttk.Label(r1, text="📊 특정순번 필터:", background="#ffffff").pack(side='left')
         ttk.Entry(r1, textvariable=self.sequence_filter, width=15).pack(side='left', padx=5, fill='x', expand=True)
-
+        
         # Row 2: Keyword Filter
         r2 = tk.Frame(action_f, background="#ffffff")
         r2.pack(fill='x', pady=2)
@@ -612,19 +605,19 @@ class ReportModeUIMixin:
         # [RIGHT] Multi-Preview (Sub-tabs)
         right_f = tk.Frame(self.rt_paned, background="#f3f4f6")
         self.rt_paned.add(right_f, stretch="always")
-
+        
         self._create_top_action_bar(right_f, "RT")
         self.rt_preview_nb = ttk.Notebook(right_f)
         self.rt_preview_nb.pack(fill='both', expand=True)
-
+        
         t_std = tk.Frame(self.rt_preview_nb, background="#ffffff")
         t_kogas = tk.Frame(self.rt_preview_nb, background="#ffffff")
         t_gapji = tk.Frame(self.rt_preview_nb, background="#ffffff")
-
+        
         self.rt_preview_nb.add(t_std, text=" 🔬 표준 미리보기 ")
         self.rt_preview_nb.add(t_kogas, text=" 🇰🇷 가스공사 미리보기 ")
         self.rt_preview_nb.add(t_gapji, text=" 📄 갑지 미리보기 ")
-
+        
         # Link Preview Tab to Mode Switch
         def _on_rt_preview_tab_changed(event):
             tab_text = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
@@ -639,7 +632,7 @@ class ReportModeUIMixin:
         self._create_rt_preview_ui(t_std, mode="RT")
         self._create_rt_preview_ui(t_kogas, mode="KOGAS")
         self._create_gapji_preview_ui(t_gapji, "RT") # Gapji uses current sub-mode context internally
-
+        
         self._apply_sash_ratio("RT")
         self.rt_pane_ratio = self.config.get('RT_SASH_RATIO', 0.5)
         self.rt_paned.bind("<Configure>", self._on_rt_paned_configure)
@@ -663,7 +656,7 @@ class ReportModeUIMixin:
         _add_file_row(self.rt_path_container, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
         _add_file_row(self.rt_path_container, f"{mode} 데이터:", v_target, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
         _add_file_row(self.rt_path_container, f"{mode} 양식:", v_template, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
-
+        
         btn_f = tk.Frame(self.rt_path_container, background="#f0f0f0")
         btn_f.grid(row=3, column=1, sticky='ew', pady=2)
         ttk.Button(btn_f, text="💾 전용 설정 저장", command=lambda: self.save_template_specific_config(mode)).pack(side='left', padx=2)
@@ -676,26 +669,26 @@ class ReportModeUIMixin:
         t_logo = self.rt_tabs["로고"]
         t_rows = self.rt_tabs["행 설정"]
         t_cols = self.rt_tabs["컬럼 설정"]
-
+        
         for t in [t_rows, t_cols, t_logo, t_cover, t_data]:
             for w in t.winfo_children(): w.destroy()
-
+        
         # Meta & Margins (Cover/Data)
         self._create_gapji_meta_ui(t_cover, use_pack=False, mode="RT")
         ctx_cover = f"{mode}_COVER"
         ctx_data = f"{mode}_DATA"
         self._create_margin_settings(t_cover, ctx_cover, use_pack=False)
         self._create_margin_settings(t_data, ctx_data, use_pack=False)
-
+        
         # Logos
         tk.Label(t_logo, text="🚩 [갑지] 로고", font=("Malgun Gothic", 9, "bold"), background="#f9fafb").grid(row=0, column=0, sticky='w')
         r_next = self._create_setting_grid(t_logo, ctx_cover)
         tk.Label(t_logo, text="🚩 [을지] 로고", font=("Malgun Gothic", 9, "bold"), background="#f9fafb").grid(row=r_next+1, column=0, sticky='w', pady=(10, 0))
         self._create_setting_grid(t_logo, ctx_data)
-
+        
         # Row Settings
         self._create_row_settings(t_rows, mode=mode)
-
+        
         # Column Mapping (Ordered by current preview keys)
         all_possible = {
             "No": ("No:", f"{mode}_COL_NO", 1, f"{mode}_NAME_NO", "No", "No"),
@@ -730,16 +723,16 @@ class ReportModeUIMixin:
             "Welder": ("용접사:", f"{mode}_COL_WELDER", 29, f"{mode}_NAME_WELDER", "Welder No", "Welder"),
             "Remarks": ("비고:", f"{mode}_COL_REM", 30, f"{mode}_NAME_REM", "Remarks", "Remarks")
         }
-
+        
         keys_attr = "rt_column_keys" if mode == "RT" else "kogas_column_keys"
         current_keys = getattr(self, keys_attr)
-
+        
         # 1. Start with items that are currently visible/ordered
         rt_items = []
         for k in current_keys:
             if k in all_possible:
                 rt_items.append(all_possible[k])
-
+        
         # 2. Add remaining items at the end (so they remain configurable even if hidden)
         for k, v in all_possible.items():
             if v not in rt_items:
@@ -763,21 +756,21 @@ class ReportModeUIMixin:
         self.rt_kogas_mode.set(mode == "KOGAS")
         self._sub_mode_switching = False
         self.log(f"🔄 RT 서브 모드 전환: {mode}")
-
+        
         # 1. 오른쪽 미리보기 탭 동기화 (라디오 버튼으로 바꾼 경우)
         if not from_tab:
             target_idx = 0 if mode == "RT" else 1
             if self.rt_preview_nb.index("current") != target_idx:
                 self.rt_preview_nb.select(target_idx)
-
+        
         # 2. 왼쪽 사이드바 UI 갱신 (파일 경로 및 세부 설정 탭)
         self._update_rt_path_ui()
         self._refresh_rt_config_tabs()
-
+        
         # 3. 템플릿 로드 트리거 [FIX] Pass correct path and avoid forced tab switch
         t_path = self.rt_template_file_path.get() if mode == "RT" else self.kogas_template_file_path.get()
         self.load_template_specific_config(t_path, mode)
-
+        
         # 4. 갑지 미리보기 갱신
         self._update_gapji_preview(mode)
 
@@ -811,7 +804,7 @@ class ReportModeUIMixin:
             data_dir = os.path.join(BASE_DIR, "Na-aba", "home", "data")
             if not os.path.exists(data_dir):
                 data_dir = os.path.join(os.getcwd(), "Na-aba", "home", "data")
-
+            
             kogas_template = os.path.join(data_dir, "가스공사 의뢰서.xlsx")
             if os.path.exists(kogas_template):
                 self.kogas_template_file_path.set(kogas_template)
@@ -823,12 +816,12 @@ class ReportModeUIMixin:
             data_dir = os.path.join(BASE_DIR, "Na-aba", "home", "data")
             if not os.path.exists(data_dir):
                 data_dir = os.path.join(os.getcwd(), "Na-aba", "home", "data")
-
+                
             ks_template = os.path.join(data_dir, "RT KS양식.xlsx")
             if os.path.exists(ks_template):
                 self.rt_template_file_path.set(ks_template)
                 self.log("💡 일반 KS 양식 템플릿으로 복구되었습니다.")
-
+        
         # [NEW] 미리보기 컬럼 구성 업데이트
         self._update_rt_preview_columns("KOGAS" if self.rt_kogas_mode.get() else "RT")
 
@@ -836,17 +829,17 @@ class ReportModeUIMixin:
         """모드 여부에 따라 RT 미리보기 컬럼을 동적으로 변경 (사용자 설정 키 준수)"""
         tree = getattr(self, "rt_preview_tree", None) if mode == "RT" else getattr(self, "kogas_preview_tree", None)
         if not tree: return
-
+        
         # [DYNAMIC] 고정된 리스트 대신 사용자가 설정한 키(rt_column_keys 등)를 사용
         keys_attr = "rt_column_keys" if mode == "RT" else "kogas_column_keys"
         current_cols = list(getattr(self, keys_attr))
         if 'Report No' not in current_cols:
             current_cols.insert(current_cols.index('Date') + 1 if 'Date' in current_cols else 2, 'Report No')
         setattr(self, keys_attr, current_cols)
-
+            
         tree["columns"] = tuple(current_cols)
         tree["displaycolumns"] = tuple(current_cols)
-
+        
         # [NEW] 기본 표시 이름 맵핑
         default_names = {
             "selected": "V", "No": "No", "Date": "Date", "Report No": "Report No", "Sec": "SEC", "Dwg": "Drawing No.",
@@ -858,20 +851,20 @@ class ReportModeUIMixin:
             "D6": "⑥ U/C", "D7": "⑦ RUC", "D8": "⑧ BT", "D9": "⑨ TI", "D10": "⑩ CP",
             "D11": "⑪ RC", "D12": "⑫ Mis", "D13": "⑬ EP", "D14": "⑭ SD", "D15": "⑮ Oth"
         }
-
+        
         saved_widths = self.config.get(f"{mode}_COL_WIDTHS", {})
         default_widths = {
-            "selected": 40, "No": 50, "Date": 90, "Sec": 90, "Dwg": 300, "Joint": 120, "Loc": 100,
+            "selected": 40, "No": 50, "Date": 90, "Sec": 90, "Dwg": 300, "Joint": 120, "Loc": 100, 
             "Report No": 220,
             "Acc": 40, "Rej": 40, "Deg": 40, "Welder": 100, "Remarks": 120,
             "Dwg_Sub": 200, "Welder_Sub": 100, "Mat_Sub": 100
         }
-
+        
         # [NEW] 내부 컬럼 ID와 설정 Key(rt_items 정의) 간의 맵핑
         key_map = {
             "T": "THK", "Remarks": "REM", "Result": "RES"
         }
-
+        
         for col in current_cols:
             suffix = key_map.get(col, col.upper())
             if mode == "KOGAS":
@@ -879,17 +872,17 @@ class ReportModeUIMixin:
             else:
                 name_key = f"{mode}_NAME_{suffix}"
             if col == "selected": name_key = None
-
+            
             display_text = None
             if name_key:
                 # 1. 현재 UI 입력값 확인 (최우선)
                 if name_key in self.setting_vars:
                     display_text = self.setting_vars[name_key].get()
-
+                
                 # 2. 설정 파일(config) 확인
                 if not display_text:
                     display_text = self.config.get(name_key)
-
+                
                 # 3. 보조 키 형식 확인 (소문자 등 대비)
                 if not display_text:
                     if mode == "KOGAS":
@@ -904,11 +897,11 @@ class ReportModeUIMixin:
             fallback_name = default_names.get(col, col)
             if not display_text:
                 display_text = fallback_name
-
+                
             tree.heading(col, text=display_text, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode=mode))
             w = saved_widths.get(col, default_widths.get(col, 80))
             tree.column(col, width=w, anchor='center', stretch=False)
-
+        
         # 데이터가 이미 있다면 리프레시
         data = self.rt_extracted_data if mode == "RT" else self.kogas_extracted_data
         if data:
@@ -922,27 +915,28 @@ class ReportModeUIMixin:
         container.pack(fill='both', expand=True)
 
         # --- Dual Pane Layout (PanedWindow) ---
-        self.pt_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db",
+        self.pt_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.pt_paned.pack(fill='both', expand=True)
 
         # [LEFT] Settings Sidebar
         left_container = tk.Frame(self.pt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.pt_paned.add(left_container, width=425)
-
+        self._add_sidebar_toggle(self.pt_paned, left_container)
+        
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
 
         # FIXED FLOATING Header
         header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
         header_frame.place(x=0, y=0, relwidth=1, height=40)
-
+        
         inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
         inner_header.pack(fill='both', expand=True, pady=(5, 0))
-
-        tk.Label(inner_header, text="🔬 PT 성적서 관리", font=("Malgun Gothic", 15, "bold"),
+        
+        tk.Label(inner_header, text="🔬 PT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
-
+        
         tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
         header_frame.lift()
 
@@ -963,7 +957,7 @@ class ReportModeUIMixin:
         _add_file_row(file_frame, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
         _add_file_row(file_frame, "PT 데이터:", self.pt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
         _add_file_row(file_frame, "PT 양식:", self.pt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
-
+        
         # [NEW] Template Config Save Button
         btn_frame = tk.Frame(file_frame, background="#f0f0f0")
         btn_frame.grid(row=3, column=1, sticky='ew', pady=2)
@@ -980,7 +974,7 @@ class ReportModeUIMixin:
         pt_tab_data = ttk.Frame(self.pt_tab_notebook, padding=5)
         pt_tab_rows = ttk.Frame(self.pt_tab_notebook, padding=5)
         pt_tab_cols = ttk.Frame(self.pt_tab_notebook, padding=5)
-
+        
         # [CRITICAL] Allow children to expand
         for t in [pt_tab_cover, pt_tab_data, pt_tab_rows, pt_tab_cols]: t.columnconfigure(0, weight=1)
 
@@ -997,7 +991,7 @@ class ReportModeUIMixin:
         self._create_margin_settings(pt_tab_cover, "PT_COVER", use_pack=False)
         self._create_margin_settings(pt_tab_data, "PT_DATA", use_pack=False)
         self._create_row_settings(pt_tab_rows, mode="PT")
-
+        
         pt_items = [
             ("순번(No):", "PT_COL_NO", 1, "PT_NAME_NO", "No", "No"),
             ("ISO/Dwg:", "PT_COL_DWG", 2, "PT_NAME_DWG", "Dwg", "Dwg"),
@@ -1010,7 +1004,7 @@ class ReportModeUIMixin:
             ("판정 결과:", "PT_COL_RES", 11, "PT_NAME_RES", "Result", "Result")
         ]
         self._create_column_mapping_ui(pt_tab_cols, "PT", pt_items)
-
+        
 
         # 3. Action Section
         action_frame = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
@@ -1026,22 +1020,22 @@ class ReportModeUIMixin:
         # [RIGHT] Multi-Preview Pane (Data & Gapji)
         right_container = tk.Frame(self.pt_paned, background="#f3f4f6")
         self.pt_paned.add(right_container, stretch="always")
-
+        
         self._create_top_action_bar(right_container, "PT")
         if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
         nb = ttk.Notebook(right_container)
         nb.pack(fill='both', expand=True)
         self.preview_notebooks["PT"] = nb
-
+        
         tab_data = tk.Frame(nb, background="#ffffff")
         tab_gapji = tk.Frame(nb, background="#ffffff")
         nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
         nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
-
+        
         self._create_pt_preview_ui(tab_data)
         self._create_gapji_preview_ui(tab_gapji, "PT")
         self._apply_sash_ratio("PT")
-
+        
         self.pt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("PT"))
 
         # Adaptive Resizing Bindings
@@ -1050,34 +1044,34 @@ class ReportModeUIMixin:
         self.pt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_pt_ratio))
         self.root.after(500, lambda: self._on_pt_paned_configure(None))
 
-
     def _setup_mt_ui(self, parent):
         # [FORCE] Ensure parent (pt_mode_frame) allows expansion
         container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
         # --- Dual Pane Layout (PanedWindow) ---
-        self.mt_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db",
+        self.mt_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.mt_paned.pack(fill='both', expand=True)
 
         # [LEFT] Settings Sidebar
         left_container = tk.Frame(self.mt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.mt_paned.add(left_container, width=425)
-
+        self._add_sidebar_toggle(self.mt_paned, left_container)
+        
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
 
         # FIXED FLOATING Header
         header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
         header_frame.place(x=0, y=0, relwidth=1, height=40)
-
+        
         inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
         inner_header.pack(fill='both', expand=True, pady=(5, 0))
-
-        tk.Label(inner_header, text="🔬 MT 성적서 관리", font=("Malgun Gothic", 15, "bold"),
+        
+        tk.Label(inner_header, text="🔬 MT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
-
+        
         tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
         header_frame.lift()
 
@@ -1098,7 +1092,7 @@ class ReportModeUIMixin:
         _add_file_row(file_frame, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
         _add_file_row(file_frame, "MT 데이터:", self.mt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
         _add_file_row(file_frame, "MT 양식:", self.mt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
-
+        
         # [NEW] Template Config Save Button
         btn_frame = tk.Frame(file_frame, background="#f0f0f0")
         btn_frame.grid(row=3, column=1, sticky='ew', pady=2)
@@ -1115,7 +1109,7 @@ class ReportModeUIMixin:
         pt_tab_data = ttk.Frame(self.mt_tab_notebook, padding=5)
         pt_tab_rows = ttk.Frame(self.mt_tab_notebook, padding=5)
         pt_tab_cols = ttk.Frame(self.mt_tab_notebook, padding=5)
-
+        
         # [CRITICAL] Allow children to expand
         for t in [pt_tab_cover, pt_tab_data, pt_tab_rows, pt_tab_cols]: t.columnconfigure(0, weight=1)
 
@@ -1132,7 +1126,7 @@ class ReportModeUIMixin:
         self._create_margin_settings(pt_tab_cover, "MT_COVER", use_pack=False)
         self._create_margin_settings(pt_tab_data, "MT_DATA", use_pack=False)
         self._create_row_settings(pt_tab_rows, mode="MT")
-
+        
         pt_items = [
             ("순번(No):", "MT_COL_NO", 1, "MT_NAME_NO", "No", "No"),
             ("ISO/Dwg:", "MT_COL_DWG", 2, "MT_NAME_DWG", "Dwg", "Dwg"),
@@ -1145,7 +1139,7 @@ class ReportModeUIMixin:
             ("판정 결과:", "MT_COL_RES", 11, "MT_NAME_RES", "Result", "Result")
         ]
         self._create_column_mapping_ui(pt_tab_cols, "MT", pt_items)
-
+        
 
         # 3. Action Section
         action_frame = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
@@ -1161,22 +1155,22 @@ class ReportModeUIMixin:
         # [RIGHT] Multi-Preview Pane (Data & Gapji)
         right_container = tk.Frame(self.mt_paned, background="#f3f4f6")
         self.mt_paned.add(right_container, stretch="always")
-
+        
         self._create_top_action_bar(right_container, "MT")
         if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
         nb = ttk.Notebook(right_container)
         nb.pack(fill='both', expand=True)
         self.preview_notebooks["MT"] = nb
-
+        
         tab_data = tk.Frame(nb, background="#ffffff")
         tab_gapji = tk.Frame(nb, background="#ffffff")
         nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
         nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
-
+        
         self._create_mt_preview_ui(tab_data)
         self._create_gapji_preview_ui(tab_gapji, "MT")
         self._apply_sash_ratio("MT")
-
+        
         self.mt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config(self.mt_template_file_path.get(), "MT"))
 
         # Adaptive Resizing Bindings
@@ -1194,7 +1188,6 @@ class ReportModeUIMixin:
                 self.config['PT_SASH_RATIO'] = self.pt_pane_ratio
                 self.save_settings()
         except: pass
-
 
     def _update_mt_ratio(self):
         try:
@@ -1215,7 +1208,6 @@ class ReportModeUIMixin:
                     self.pt_paned.sash_place(0, new_pos, 0)
         except: pass
 
-
     def _on_mt_paned_configure(self, event):
         try:
             total_w = self.mt_paned.winfo_width()
@@ -1231,27 +1223,28 @@ class ReportModeUIMixin:
         container.pack(fill='both', expand=True)
 
         # --- Dual Pane Layout (PanedWindow) ---
-        self.paut_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db",
+        self.paut_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.paut_paned.pack(fill='both', expand=True)
 
         # [LEFT] Settings & Manual Eval Pane
         left_container = tk.Frame(self.paut_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.paut_paned.add(left_container, width=425)
-
+        self._add_sidebar_toggle(self.paut_paned, left_container)
+        
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
 
         # FIXED FLOATING Header
         header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
         header_frame.place(x=0, y=0, relwidth=1, height=40)
-
+        
         inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
         inner_header.pack(fill='both', expand=True, pady=(5, 0))
-
-        tk.Label(inner_header, text="🔬 PAUT (ASME B31.1) 관리", font=("Malgun Gothic", 15, "bold"),
+        
+        tk.Label(inner_header, text="🔬 PAUT (ASME B31.1) 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
-
+        
         tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
         header_frame.lift()
 
@@ -1294,31 +1287,31 @@ class ReportModeUIMixin:
         self.paut_tab_notebook.add(tab_data, text="을지")
         self.paut_tab_notebook.add(tab_rows, text="행 설정")
         self.paut_tab_notebook.add(tab_cols, text="컬럼 설정")
-
+        
         # [NEW] PAUT Equipment Settings
         tab_equip_outer = ttk.Frame(self.paut_tab_notebook, padding=0)
         self.paut_tab_notebook.add(tab_equip_outer, text="장비/설정")
-
+        
         equip_canvas = tk.Canvas(tab_equip_outer, background="#f9fafb", highlightthickness=0)
         equip_scrollbar = ttk.Scrollbar(tab_equip_outer, orient="vertical", command=equip_canvas.yview)
         tab_equip = ttk.Frame(equip_canvas, padding=5)
-
+        
         tab_equip.bind("<Configure>", lambda e: equip_canvas.configure(scrollregion=equip_canvas.bbox("all")))
-
+        
         # We don't force canvas width to avoid squeezing the Entry fields to 0 width.
         equip_canvas.create_window((0, 0), window=tab_equip, anchor="nw")
-
+        
         # Use existing mousewheel binding if available
         if hasattr(self, '_bind_mousewheel_recursive'):
             self._bind_mousewheel_recursive(tab_equip)
-
+            
         equip_canvas.configure(yscrollcommand=equip_scrollbar.set)
         equip_canvas.pack(side="left", fill="both", expand=True)
         equip_scrollbar.pack(side="right", fill="y")
-
+        
         for col_idx in [1, 3]: # 2 columns layout
             tab_equip.columnconfigure(col_idx, weight=1)
-
+        
         self.paut_equip_vars = {}
         self.paut_equip_map = {
             'equip': ('검사장비', 'A12', 'OmniScan MX2'),
@@ -1364,7 +1357,7 @@ class ReportModeUIMixin:
             'set1_stop': ('Gr.1 Stop Ang', 'H27', '75°'),
             'set1_ang_res': ('Gr.1 Ang Res', 'O27', '1°'),
             'set1_law': ('Gr.1 Law Config', 'V27', 'Sectorial'),
-
+            
             'set2_qty': ('Gr.2 Used Elem', 'A30', '16'),
             'set2_first': ('Gr.2 First Elem', 'H30', '49'),
             'set2_last': ('Gr.2 Last Elem', 'O30', '64'),
@@ -1375,7 +1368,7 @@ class ReportModeUIMixin:
             'set2_ang_res': ('Gr.2 Ang Res', 'O32', '1°'),
             'set2_law': ('Gr.2 Law Config', 'V32', 'Sectorial')
         }
-
+        
         equip_r, equip_c = 0, 0
         paut_standard_revision = "CENTRAL_PAUT_20260910"
         apply_new_standard = (
@@ -1393,7 +1386,7 @@ class ReportModeUIMixin:
             ent.grid(row=equip_r, column=equip_c*2+1, sticky='ew', padx=5, pady=5)
             ent.bind("<FocusOut>", lambda e: self.save_settings())
             ent.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
-
+            
             equip_c += 1
             if equip_c > 1: # 2 columns layout
                 equip_c = 0
@@ -1408,7 +1401,7 @@ class ReportModeUIMixin:
         self._create_margin_settings(tab_cover, "PAUT_COVER", use_pack=False)
         self._create_margin_settings(tab_data, "PAUT_DATA", use_pack=False)
         self._create_row_settings(tab_rows, mode="PAUT")
-
+        
         paut_items = [
             ("순번(No):", "PAUT_COL_NO", 1, "PAUT_COL_NO_NAME", "No", "No"),
             ("촬영일자(Date):", "PAUT_COL_DATE", 0, "PAUT_NAME_DATE", "Date", "Date"),
@@ -1436,11 +1429,11 @@ class ReportModeUIMixin:
         # [NEW] PAUT Column Settings Notebook for different templates
         self.paut_col_nb = ttk.Notebook(tab_cols)
         self.paut_col_nb.pack(fill='both', expand=True, padx=2, pady=2)
-
+        
         for template_name in ["지역난방", "ASME", "KS", "AWS"]:
             frame = ttk.Frame(self.paut_col_nb)
             self.paut_col_nb.add(frame, text=template_name)
-
+            
             # Localize the keys
             localized_items = []
             for item in paut_items:
@@ -1448,13 +1441,13 @@ class ReportModeUIMixin:
                 name_key = item[3].replace("PAUT_", f"PAUT_{template_name}_")
                 default_col = (23 if template_name == "지역난방" else 0) if item[1] == "PAUT_COL_TCG" else item[2]
                 localized_items.append((item[0], col_key, default_col, name_key, item[4], item[5]))
-
+                
             self._create_column_mapping_ui(frame, f"PAUT_{template_name}", localized_items)
 
         # --- 3. Manual Evaluation Content (Inside tab_eval) ---
         manual_container = tk.Frame(tab_eval, background="#f9fafb")
         manual_container.pack(fill='both', expand=True)
-
+        
         # [NEW] Evaluation Mode Selector
         mode_frame = tk.Frame(manual_container, background="#f9fafb")
         mode_frame.pack(fill='x', pady=(0, 5))
@@ -1465,7 +1458,7 @@ class ReportModeUIMixin:
         # Sizing Helper Row
         calc_frame = tk.Frame(manual_container, background="#f1f5f9", padx=10, pady=8, highlightbackground="#cbd5e1", highlightthickness=1)
         calc_frame.pack(fill='x', pady=(0, 10))
-
+        
         # Row 0: H-Calc Settings
         h_set_row = tk.Frame(calc_frame, background="#f1f5f9")
         h_set_row.pack(fill='x')
@@ -1475,7 +1468,7 @@ class ReportModeUIMixin:
         tk.Entry(h_set_row, textvariable=self.paut_manual_vars['db'], width=4).pack(side='left', padx=2)
         ttk.Label(h_set_row, text="dB ->", background="#f1f5f9").pack(side='left', padx=2)
         ttk.Label(h_set_row, textvariable=self.paut_manual_vars['target_fsh'], background="#f1f5f9", foreground="#ef4444", font=("Arial", 8, "bold")).pack(side='left', padx=2)
-
+        
         # Row 1: H-Calc Data
         h_data_row = tk.Frame(calc_frame, background="#f1f5f9")
         h_data_row.pack(fill='x', pady=2)
@@ -1497,8 +1490,8 @@ class ReportModeUIMixin:
         # Input Grid
         input_grid = tk.Frame(manual_container, background="#f9fafb")
         input_grid.pack(fill='x', pady=5)
-
-        m_inputs = [("두께(T):", "t"), ("높이(H):", "h"), ("길이(L):", "l"), ("깊이(d):", "d"),
+        
+        m_inputs = [("두께(T):", "t"), ("높이(H):", "h"), ("길이(L):", "l"), ("깊이(d):", "d"), 
                     ("시작(S):", "L1"), ("종료(E):", "L2"), ("상단(Up):", "D_Upper"), ("하단(Low):", "D_Lower")]
         for i, (lbl, key) in enumerate(m_inputs):
             grid_row = i // 2
@@ -1515,7 +1508,7 @@ class ReportModeUIMixin:
         ttk.Combobox(nature_row, textvariable=self.paut_manual_vars['nature'], values=["Crack", "LOF", "IP", "Slag", "Porosity", "Others"], width=9).pack(side='left', padx=2)
         ttk.Label(nature_row, text="위치:").pack(side='left', padx=2)
         ttk.Label(nature_row, textvariable=self.paut_manual_vars['loc'], foreground="#3b82f6", font=("Arial", 9, "bold")).pack(side='left', padx=2)
-
+        
         btn_row = tk.Frame(manual_container, background="#f9fafb")
         btn_row.pack(fill='x', pady=2)
         ttk.Button(btn_row, text="판정", width=8, command=self._run_manual_paut_eval).pack(side='left', expand=True, fill='x', padx=2)
@@ -1534,7 +1527,7 @@ class ReportModeUIMixin:
         self.paut_photo_pages_var.trace_add(
             "write", lambda *_: self._sync_paut_photo_page_numbers()
         )
-
+        
         # Core Actions moved to right Top Action Bar
         paut_photo_btn_row = tk.Frame(left_pane, background="#f9fafb")
         paut_photo_btn_row.pack(fill='x', pady=(0, 2))
@@ -1548,18 +1541,18 @@ class ReportModeUIMixin:
         # [RIGHT] Multi-Preview Pane (Data & Gapji)
         right_container = tk.Frame(self.paut_paned, background="#f3f4f6")
         self.paut_paned.add(right_container, stretch="always")
-
+        
         self._create_top_action_bar(right_container, "PAUT")
         if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
         nb = ttk.Notebook(right_container)
         nb.pack(fill='both', expand=True)
         self.preview_notebooks["PAUT"] = nb
-
+        
         tab_data = tk.Frame(nb, background="#ffffff")
         tab_gapji = tk.Frame(nb, background="#ffffff")
         nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
         nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
-
+        
         self._create_paut_preview_ui(tab_data)
         self._create_gapji_preview_ui(tab_gapji, "PAUT")
         self._apply_sash_ratio("PAUT")
@@ -1615,7 +1608,7 @@ class ReportModeUIMixin:
             db = float(self.paut_manual_vars['db'].get() or 6)
             z1 = float(self.paut_manual_vars['z1'].get() or 0)
             z2 = float(self.paut_manual_vars['z2'].get() or 0)
-
+            
             # Calculate Target FSH: Peak * 10^(-dB/20)
             drop_factor = pow(10, -db / 20)
             target_fsh = peak * drop_factor
@@ -1623,12 +1616,12 @@ class ReportModeUIMixin:
 
             h_calc = abs(z1 - z2)
             self.paut_manual_vars['h'].set(f"{h_calc:.2f}")
-
+            
             # [NEW] D: 중간값, UP: 낮은값, LOW: 높은값 자동 기입
             d_mid = (z1 + z2) / 2
             d_min = min(z1, z2)
             d_max = max(z1, z2)
-
+            
             self.paut_manual_vars['d'].set(f"{d_mid:.2f}")
             self.paut_manual_vars['D_Upper'].set(f"{d_min:.2f}")
             self.paut_manual_vars['D_Lower'].set(f"{d_max:.2f}")
@@ -1671,7 +1664,7 @@ class ReportModeUIMixin:
             # Run evaluation logic to get the result
             eval_mode = self.paut_eval_mode.get()
             res, loc = self.evaluate_paut_flaw(t, h, l, d, nat, mode=eval_mode)
-
+            
             al = f"{h/l:.3f}" if l > 0 and h > 0 else ""
             at = f"{h/t:.3f}" if t > 0 and h > 0 else ""
 
@@ -1695,13 +1688,13 @@ class ReportModeUIMixin:
                     item['Evaluation'] = f"{res} ({loc})"
                     item['a/l'] = al
                     item['a/t'] = at
-
+            
             self.populate_preview(data_list, mode="PAUT", switch_tab=False)
             self.log(f"💾 선택된 {len(selected_ids)}개 행에 수동 판정 결과 저장 완료.")
-
+            
             # [NEW] 저장 후 입력 필드 초기화
             self._reset_paut_manual_inputs()
-
+            
         except Exception as e:
             messagebox.showerror("저장 오류", f"입력값을 확인해주세요: {e}")
 
@@ -1713,7 +1706,7 @@ class ReportModeUIMixin:
             d = float(self.paut_manual_vars['d'].get() or 0)
             nat = self.paut_manual_vars['nature'].get()
             eval_mode = self.paut_eval_mode.get()
-
+            
             res, loc = self.evaluate_paut_flaw(t, h, l, d, nat, mode=eval_mode)
             self.paut_manual_vars['loc'].set(loc)
             if res == "Accept":
@@ -1728,33 +1721,33 @@ class ReportModeUIMixin:
             if not hasattr(self, 'photo_listbox') or self.photo_listbox.size() == 0:
                 messagebox.showwarning("경고", "사진대장 탭에 로드된 사진이 없습니다.")
                 return
-
+            
             photo_list = self.photo_listbox.get(0, tk.END)
             self.paut_extracted_data = []
-
+            
             for i, photo_path in enumerate(photo_list):
                 filename = os.path.basename(photo_path)
                 name_without_ext = os.path.splitext(filename)[0]
-
+                
                 # parsing logic: DT2024-016-101-0-1-600A_R04
                 line_no = ""
                 size = ""
                 joint_no = ""
-
+                
                 if "_" in name_without_ext:
                     parts = name_without_ext.rsplit("_", 1)
                     line_no = parts[0] # DT2024-016-101-0-1-600A
                     joint_no = parts[1] # R04
-
+                    
                     if "-" in line_no:
                         size = line_no.rsplit("-", 1)[1] # 600A
                 else:
                     line_no = name_without_ext
-
+                    
                 if i == 0:
                     messagebox.showinfo("첫번째 사진 파싱 확인", f"원본 파일명: {filename}\n추출된 Line No: {line_no}\n추출된 Size: {size}\n추출된 Joint No: {joint_no}")
 
-
+                    
                 item = {
                     'selected': True,
                     'Line No.': line_no,
@@ -1774,17 +1767,18 @@ class ReportModeUIMixin:
                     'Evaluation': "",
                     'Remarks': ""
                 }
-
+                
                 item_full = dict(item)
                 for k in self.paut_column_keys:
                     if k not in item_full and k != "selected":
                         item_full[k] = ""
                 self.paut_extracted_data.append(item_full)
-
+                
             self.log(f"✅ 사진 목록에서 PAUT 데이터 생성 완료: {len(self.paut_extracted_data)} 건")
+            getattr(self, '_last_auto_material_sig', {}).pop('PAUT', None)
             self.populate_preview(self.paut_extracted_data, mode="PAUT")
             self.update_date_listbox("PAUT")
-
+            
         except Exception as e:
             self.log(f"❌ 사진에서 PAUT 데이터 추출 중 오류: {e}")
             messagebox.showerror("오류", f"오류가 발생했습니다:\n{e}")
@@ -1794,14 +1788,14 @@ class ReportModeUIMixin:
         if not file_path:
             messagebox.showwarning("파일 미선택", "PAUT 데이터 엑셀 파일을 먼저 선택해주세요.")
             return
-
+            
         try:
             self.log(f"📂 PAUT 데이터 불러오는 중: {os.path.basename(file_path)}")
             self.progress['value'] = 20
-
+            
             df = pd.read_excel(file_path)
             cols = df.columns.tolist()
-
+            
             mapping = {
                 "date": next((c for c in cols if any(x in str(c).upper() for x in ["DATE", "일자", "날짜"])), None),
                 "t": next((c for c in cols if any(x in c.upper() for x in ["THK", "두께", "TH'K", "THICKNESS"])), None),
@@ -1824,16 +1818,16 @@ class ReportModeUIMixin:
                 "size": next((c for c in cols if any(x in str(c).upper() for x in ["SIZE", "크기", "관경"])), None),
                 "remarks": next((c for c in cols if any(x in c.upper() for x in ["REMARK", "REMAKER", "비고"])), None)
             }
-
+            
             if not all([mapping["t"], mapping["h"], mapping["l"], mapping["d"]]):
                 self.log("⚠️ 필수 컬럼을 모두 찾을 수 없어 자동 매핑에 일부 실패했습니다.")
-
+                
             self.paut_extracted_data = []
             for _, row in df.iterrows():
                 acc_raw = str(row.get(mapping["acc"], "")) if mapping["acc"] else ""
                 rej_raw = str(row.get(mapping["rej"], "")) if mapping["rej"] else ""
                 eval_raw = str(row.get(mapping["eval"], "")) if mapping["eval"] else ""
-
+                
                 # Derive ACC/REJ from '합부' if explicit ACC/REJ columns are missing
                 if not acc_raw and not rej_raw and eval_raw:
                     if "합격" in eval_raw and "불합격" not in eval_raw:
@@ -1859,7 +1853,7 @@ class ReportModeUIMixin:
                 # [NEW] Format Size (Append 'A' if missing)
                 size_val = str(row.get(mapping["size"], "")) if mapping["size"] else ""
                 size_val = str(size_val).replace('.0', '').strip() if pd.notna(size_val) else ""
-
+                
                 # [NEW] Auto-map Thickness based on Size if Th'k is missing
                 thk_val = str(row.get(mapping["t"], "")) if mapping["t"] else ""
                 if not thk_val or str(thk_val).lower() == "nan":
@@ -1874,7 +1868,7 @@ class ReportModeUIMixin:
                     }
                     lookup_key = size_val.replace("A", "").strip()
                     thk_val = thk_mapping.get(lookup_key, "")
-
+                
                 if size_val and size_val[-1].isdigit():
                     size_val += "A"
 
@@ -1918,12 +1912,13 @@ class ReportModeUIMixin:
                     if k not in item_full and k != "selected":
                         item_full[k] = ""
                 self.paut_extracted_data.append(item_full)
-
+            
             self.progress['value'] = 100
+            getattr(self, '_last_auto_material_sig', {}).pop('PAUT', None)
             self.sort_by_column("ISO/DWG", mode="PAUT") # Auto sort for PAUT
             self.update_date_listbox("PAUT") # [FIX] Populate date filter
             self.log(f"✅ PAUT 데이터 추출 완료: {len(self.paut_extracted_data)} 건")
-
+            
         except Exception as e:
             self.log(f"❌ PAUT 데이터 추출 오류: {e}")
 
@@ -1931,10 +1926,10 @@ class ReportModeUIMixin:
         if not self.paut_extracted_data:
             messagebox.showwarning("데이터 없음", "먼저 데이터를 추출해주세요.")
             return
-
+            
         self.log("🚀 PAUT 일괄 판정 시작...")
         count_ok, count_ng = 0, 0
-
+        
         for item in self.paut_extracted_data:
             t = self.to_float(item.get('Th\'k(mm)', 0))
             h = self.to_float(item.get('Height(mm)', 0))
@@ -1942,7 +1937,7 @@ class ReportModeUIMixin:
             d = self.to_float(item.get('Upper', 0))
             nat = item.get('Type of Flaw', 'Slag')
             eval_mode = self.paut_eval_mode.get()
-
+            
             res, loc = self.evaluate_paut_flaw(t, h, l, d, nat, mode=eval_mode)
             item['Evaluation'] = f"{res} ({loc})"
             # a/l, a/t calculation
@@ -1950,16 +1945,16 @@ class ReportModeUIMixin:
             else: item['a/l'] = ""
             if t > 0 and h > 0: item['a/t'] = f"{h/t:.3f}"
             else: item['a/t'] = ""
-
-            if res == "Accept":
+            
+            if res == "Accept": 
                 count_ok += 1
                 # [NEW] 합격 시 결함 정보 지우기
                 item['Type of Flaw'] = ""
                 item['a/l'] = ""
                 item['a/t'] = ""
-            else:
+            else: 
                 count_ng += 1
-
+            
         self.populate_preview(self.paut_extracted_data, mode="PAUT")
         self.log(f"✅ 판정 완료: 총 {len(self.paut_extracted_data)} 건 (합격: {count_ok}, 불합격: {count_ng})")
 
@@ -2017,7 +2012,7 @@ class ReportModeUIMixin:
             self.save_settings()
         self.log(f"🚀 PAUT 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
-
+        
         try:
             # keep_vba=True forces openpyxl to write a macro-enabled workbook
             # content type.  When the selected template is a normal .xlsx file,
@@ -2026,21 +2021,21 @@ class ReportModeUIMixin:
             template_ext = os.path.splitext(template_path)[1].lower()
             keep_vba = template_ext == '.xlsm'
             wb = openpyxl.load_workbook(template_path, keep_vba=keep_vba)
-
+            
             # [NEW] Find "을" sheet for data entry
             target_ws = None
             for sheet in wb.worksheets:
                 if "을" in sheet.title:
                     target_ws = sheet
                     break
-
+                    
             if not target_ws:
                 target_ws = wb.worksheets[0]
-
+                
             ws = target_ws
             ws.title = f"PAUT_Report_001"
             self._prepare_paut_data_stamp(ws)
-
+            
             # [NEW] Write Cover (Gapji) metadata if there is a cover sheet
             if len(wb.worksheets) > 1:
                 first_item = final_list[0] if final_list else None
@@ -2068,7 +2063,7 @@ class ReportModeUIMixin:
                 if not str(ws0["AA5"].value or "").strip():
                     self.safe_set_value(ws0, "AA5", "SIT/GI-JY-SRJ-PAUT-001")
                 self._prepare_paut_cover_identity(ws0)
-
+                
                 # 갑지의 AA4, AA5, AA6 내용을 을지의 Y4, Y5, Y6에 복사
                 try:
                     self.safe_set_value(ws, 'Y4', ws0['AA4'].value)
@@ -2076,15 +2071,15 @@ class ReportModeUIMixin:
                     self.safe_set_value(ws, 'Y6', ws0['AA6'].value)
                 except Exception as e:
                     self.log(f"[WARNING] 갑지 데이터 복사 실패: {e}")
-
+            
             self.force_print_settings(ws, context="DATA")
-
+            
             start_row = int(self.config.get('PAUT_START_ROW', 11))
             end_row = int(self.config.get('PAUT_DATA_END_ROW', 40))
-
+            
             curr_row = start_row
             data_font = Font(size=9)
-
+            
             try:
                 active_tab_id = self.paut_col_nb.select()
                 active_template = self.paut_col_nb.tab(active_tab_id, "text")
@@ -2095,7 +2090,7 @@ class ReportModeUIMixin:
                 if curr_row > end_row:
                     ws = self.prepare_next_paut_sheet(wb, ws.title, i//(end_row-start_row+1))
                     curr_row = start_row
-
+                
                 def _get_col(key, default):
                     localized_key = key.replace("PAUT_", f"PAUT_{active_template}_")
                     val = str(self.config.get(localized_key, '')).strip()
@@ -2120,17 +2115,17 @@ class ReportModeUIMixin:
 
                 # [NEW] Respect user's UI column configuration while providing standard defaults
                 mapping = {
-                    _get_col('PAUT_COL_NO', 'A'): i+1,
-                    _get_col('PAUT_COL_LINE', 'B'): item.get('Line No.', ''),
+                    _get_col('PAUT_COL_NO', 'A'): i+1, 
+                    _get_col('PAUT_COL_LINE', 'B'): item.get('Line No.', ''), 
                     _get_col('PAUT_COL_JOINT', 'C'): item.get('Joint No.', ''),
                     _get_col('PAUT_COL_SIZE', 'D'): item.get('Size', ''),
-                    _get_col('PAUT_COL_THK', 'E'): item.get('Th\'k(mm)', ''),
+                    _get_col('PAUT_COL_THK', 'E'): item.get('Th\'k(mm)', ''), 
                     _get_col('PAUT_COL_ACC', 'F'): acc_rej_combined,
                     _get_col('PAUT_COL_START', 'G'): item.get('Start', ''),
                     _get_col('PAUT_COL_END', 'H'): item.get('End', ''),
                     _get_col('PAUT_COL_L', 'I'): item.get('Length(mm)', ''),
-                    _get_col('PAUT_COL_UP', 'J'): item.get('Upper', ''),
-                    _get_col('PAUT_COL_H', 'K'): item.get('Height(mm)', ''),
+                    _get_col('PAUT_COL_UP', 'J'): item.get('Upper', ''), 
+                    _get_col('PAUT_COL_H', 'K'): item.get('Height(mm)', ''), 
                     _get_col('PAUT_COL_TCG', 'W' if active_template == '지역난방' else 'L'): item.get('TCG MAX(%)', ''),
                     _get_col('PAUT_COL_WELDER', 'M'): item.get('Welder', ''),
                     _get_col('PAUT_COL_TESTED_LEN', 'N'): item.get('Tested Length', ''),
@@ -2139,25 +2134,25 @@ class ReportModeUIMixin:
                     _get_col('PAUT_COL_EVAL', '0'): item.get('Evaluation', ''),
                     _get_col('PAUT_COL_REM', '0'): item.get('Remarks', '')
                 }
-
+                
                 # [NEW] Explicitly write "NO RECORDABLE INDICATION" to column N if there is no defect
                 if is_no_defect:
                     mapping[self.col_to_num('N')] = "NO RECORDABLE INDICATION"
-
+                
                 for col_key, val in mapping.items():
                     try:
                         col_idx = self.col_to_num(col_key)
                         if col_idx < 1: continue # Skip if 0 or invalid
-
+                        
                         cell = ws.cell(row=curr_row, column=col_idx, value=val)
                         cell.font = data_font
                         cell.alignment = Alignment(horizontal='center', vertical='center')
                     except Exception:
                         continue
-
+                
                 curr_row += 1
                 self.progress['value'] = (i+1) / len(final_list) * 100
-
+                
             # [NEW] Add "- 이 하 여 백 -" at the row following the last data row
             if curr_row <= end_row:
                 try:
@@ -2167,28 +2162,28 @@ class ReportModeUIMixin:
                     blank_cell.alignment = Alignment(horizontal='center', vertical='center')
                 except Exception as e:
                     self.log(f"이하 여백 삽입 오류: {e}")
-
+                
             # [NEW] Add Tested Length Summary at the end
             total_org_m = 0.0
             total_rep_m = 0.0
             processed_joints = set()
-
+            
             for item in final_list:
                 try:
                     joint_no = str(item.get('Joint No.', '')).strip().upper()
                     if not joint_no or joint_no in processed_joints:
                         continue
-
+                    
                     val_str = str(item.get('Tested Length', '0')).replace(',', '').strip()
                     num_match = re.search(r"[\d\.]+", val_str)
                     if num_match:
                         val = float(num_match.group())
                         processed_joints.add(joint_no) # Mark as processed only if we successfully parsed length
-
+                        
                         acc_val = 'ACC' if item.get('Acc', '') in ['√', 'ACC'] else ''
                         rej_val = 'REJ' if item.get('Rej', '') in ['√', 'REJ'] else ''
                         acc_rej_combined = acc_val if acc_val else rej_val
-
+                        
                         # Use ACC/REJ to distinguish Original vs Repair
                         if acc_rej_combined == 'REJ' or '불합격' in str(item.get('Rej', '')):
                             total_rep_m += val
@@ -2196,7 +2191,7 @@ class ReportModeUIMixin:
                             total_org_m += val
                 except:
                     pass
-
+            
             total_m = total_org_m + total_rep_m
 
             org_val = f"{total_org_m:.4f} M" if total_org_m > 0 else " M"
@@ -2211,10 +2206,10 @@ class ReportModeUIMixin:
                 ("Repair", rep_val),
                 ("Total", tot_val)
             ]
-
+            
             aa_col = self.col_to_num('AA')
             ae_col = self.col_to_num('AE')
-
+            
             # [NEW] Check if there is enough space for the 3-row summary.
             # If not, create a new sheet for the summary to prevent overwriting footers.
             if curr_row + 2 > end_row:
@@ -2223,17 +2218,17 @@ class ReportModeUIMixin:
 
             for r_idx, (label, val) in enumerate(summary_data):
                 r = curr_row + r_idx
-
+                
                 c_label = ws.cell(row=r, column=aa_col, value=label)
                 c_label.border = thin_border
                 c_label.font = data_font
                 c_label.alignment = Alignment(horizontal='center', vertical='center')
-
+                
                 c_val = ws.cell(row=r, column=ae_col, value=val)
                 c_val.border = thin_border
                 c_val.font = data_font
                 c_val.alignment = Alignment(horizontal='center', vertical='center')
-
+            
             # [NEW] PAUT Page Numbering Logic (Gapji: AE3, Eulji: AF3)
             photo_pages = 0
             try:
@@ -2241,7 +2236,7 @@ class ReportModeUIMixin:
                     photo_pages = int(self.paut_photo_pages_var.get())
             except:
                 pass
-
+            
             total_p = len(wb.worksheets) + photo_pages
 
             # PAUT 보고서 뒤에 붙는 사진대장은 전체 보고서의 다음 번호부터
@@ -2261,11 +2256,11 @@ class ReportModeUIMixin:
             for p_idx, s in enumerate(wb.worksheets):
                 page_num = p_idx + 1
                 p_text = f"Page    {page_num}    of    {total_p}"
-
+                
                 # If there are multiple sheets, the first one is the Cover (Gapji)
                 if p_idx == 0 and len(wb.worksheets) > 1:
                     self.safe_set_value(s, 'AC3', p_text)
-                    try:
+                    try: 
                         if s['AC3'].font: s['AC3'].font = s['AC3'].font.copy(name='바탕', size=9, bold=False)
                         else: s['AC3'].font = Font(name='바탕', size=9, bold=False)
                     except: pass
@@ -2287,7 +2282,7 @@ class ReportModeUIMixin:
 
                 else:
                     self.safe_set_value(s, 'AA3', p_text)
-                    try:
+                    try: 
                         if s['AA3'].font: s['AA3'].font = s['AA3'].font.copy(name='바탕', size=9, bold=False)
                         else: s['AA3'].font = Font(name='바탕', size=9, bold=False)
                     except: pass
@@ -2319,7 +2314,7 @@ class ReportModeUIMixin:
             if not out_path:
                 return
             out_name = os.path.basename(out_path)
-
+            
             if not os.path.exists(os.path.dirname(out_path)): os.makedirs(os.path.dirname(out_path))
             wb.save(out_path)
             adjusted_path = None
@@ -2332,6 +2327,12 @@ class ReportModeUIMixin:
                 adjusted_wb = openpyxl.load_workbook(out_path, keep_vba=keep_vba)
                 align_report_heights(adjusted_wb.worksheets, measured_widths=widths,
                                      measured_heights=heights)
+                # Width measurement uses a temporary fixed scale to align page
+                # heights. Restore PAUT's one-page fit after that calculation so
+                # Excel does not leave the last column on a page to the right.
+                for page_index, adjusted_sheet in enumerate(adjusted_wb.worksheets):
+                    adjusted_context = "COVER" if page_index == 0 else "DATA"
+                    self.force_print_settings(adjusted_sheet, adjusted_context)
                 fd, adjusted_path = tempfile.mkstemp(
                     prefix='paut_print_', suffix=output_ext,
                     dir=os.path.dirname(out_path))
@@ -2349,7 +2350,7 @@ class ReportModeUIMixin:
             self._record_report_issue('PAUT', wb, out_path, final_list)
             self.log(f"✅ PAUT 성적서 생성 완료: {out_name}")
             os.startfile(os.path.dirname(out_path))
-
+            
         except Exception as e:
             self.log(f"❌ PAUT 성적서 생성 오류: {e}")
 
@@ -2386,7 +2387,7 @@ class ReportModeUIMixin:
         if not self.paut_extracted_data:
             messagebox.showwarning("데이터 없음", "내보낼 데이터가 없습니다.")
             return
-
+        
         path = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
@@ -2416,7 +2417,7 @@ class ReportModeUIMixin:
             df = pd.read_csv(path)
             # Ensure mandatory columns or basic structure
             new_data = df.to_dict('records')
-
+            
             # Simple normalization (handle NaNs from CSV)
             normalized_data = []
             for i, d in enumerate(new_data):
@@ -2424,16 +2425,16 @@ class ReportModeUIMixin:
                 for k, v in d.items():
                     if pd.isna(v): clean_dict[k] = ""
                     else: clean_dict[k] = v
-
+                
                 # [FIX] Ensure mandatory attributes for UI filtering
                 if 'date_filtered' not in clean_dict: clean_dict['date_filtered'] = True
                 if 'line_filtered' not in clean_dict: clean_dict['line_filtered'] = True
                 if 'size_filtered' not in clean_dict: clean_dict['size_filtered'] = True
                 if 'selected' not in clean_dict: clean_dict['selected'] = True
                 if 'order_index' not in clean_dict: clean_dict['order_index'] = i
-
+                
                 normalized_data.append(clean_dict)
-
+            
             self.paut_extracted_data = normalized_data
             self.file_info_vars['PAUT'].set(f"📂 로드됨: {os.path.basename(path)} (총 {len(normalized_data)}건)")
             self.update_date_listbox("PAUT")
@@ -2455,7 +2456,7 @@ class ReportModeUIMixin:
         source_sheet = wb[prev_title]
         new_sheet = wb.copy_worksheet(source_sheet)
         new_sheet.title = f"PAUT_Report_{page_num+1:03d}"
-
+        
         # [FIX] openpyxl's copy_worksheet does not copy images. Manually copy them to preserve Logos.
         try:
             import io
@@ -2464,12 +2465,12 @@ class ReportModeUIMixin:
             for idx, img in enumerate(source_sheet._images):
                 try:
                     img_bytes = img._data()
-
+                    
                     # Fix original image (since _data() closes its file pointer)
                     fixed_orig = OpenpyxlImage(io.BytesIO(img_bytes))
                     if hasattr(img, 'anchor'): fixed_orig.anchor = copy.copy(img.anchor)
                     source_sheet._images[idx] = fixed_orig
-
+                    
                     # Add to new sheet
                     new_img = OpenpyxlImage(io.BytesIO(img_bytes))
                     if hasattr(img, 'anchor'): new_img.anchor = copy.copy(img.anchor)
@@ -2478,16 +2479,16 @@ class ReportModeUIMixin:
                     self.log(f"개별 로고 복사 오류: {inner_e}")
         except Exception as e:
             self.log(f"PAUT 로고 복사 오류: {e}")
-
+        
         start_row = int(self.config.get('PAUT_START_ROW', 11))
         end_row = int(self.config.get('PAUT_DATA_END_ROW', 40))
         for r in range(start_row, end_row + 1):
-            for c in range(1, 51):
+            for c in range(1, 51): 
                 try:
                     new_sheet.cell(row=r, column=c).value = None
                 except Exception:
                     pass
-
+        
         return new_sheet
 
     def _apply_paut_inspector_signature(self, ws):
@@ -2587,7 +2588,6 @@ class ReportModeUIMixin:
         if changed:
             ws._images = replaced_images
         return changed
-
 
     def _get_photo_log_stamp(self):
         """PAUT 양식의 도장을 추출해 투명 PNG 데이터로 반환한다."""

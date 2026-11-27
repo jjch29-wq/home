@@ -217,10 +217,19 @@ def select_history_rows(parent, mode):
     import tkinter as tk
     from tkinter import ttk, messagebox
 
-    dialog = tk.Toplevel(parent)
+    try:
+        top_win = parent.winfo_toplevel()
+    except tk.TclError:
+        top_win = parent
+    try:
+        prev_focus = top_win.focus_get()
+    except (tk.TclError, KeyError):
+        prev_focus = None
+
+    dialog = tk.Toplevel(top_win)
     dialog.title(f'일보 NDT 불러오기 — {mode}')
     dialog.geometry('1080x540')
-    dialog.transient(parent)
+    dialog.transient(top_win)
     result = []
     rows = []
     site_var = tk.StringVar(value=next(iter(SITES)))
@@ -310,9 +319,16 @@ def select_history_rows(parent, mode):
     dialog.protocol('WM_DELETE_WINDOW', close_dialog)
     dialog.grab_set()
     reload_rows()
-    parent.wait_window(dialog)
     try:
-        parent.after_idle(parent.focus_set)
-    except tk.TclError:
-        pass
+        top_win.wait_window(dialog)
+    finally:
+        try:
+            if top_win.winfo_exists():
+                top_win.focus_force()
+                if prev_focus is not None and prev_focus.winfo_exists():
+                    prev_focus.focus_set()
+                else:
+                    parent.focus_set()
+        except (tk.TclError, KeyError):
+            pass
     return result
