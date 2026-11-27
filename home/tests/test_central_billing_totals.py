@@ -53,6 +53,18 @@ class BillingTotalsTest(unittest.TestCase):
         self.assertIn(f'{grouped_supply_amount(rows, app.contract_vars):,}', subtotal.value)
         self.assertEqual(rows[0]['subtotal'], 2061747)
 
+    def test_export_to_excel_uses_bulk_range_writes_and_calculation_control(self):
+        source = Path(__file__).resolve().parents[1] / 'src/site_apps/central/src/ndt_billing_tab.py'
+        text = source.read_text(encoding='utf-8')
+        tree = ast.parse(text)
+        method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'export_to_excel')
+        method_src = ast.get_source_segment(text, method)
+        self.assertIn('ScreenUpdating = False', method_src)
+        self.assertIn('Calculation = -4135', method_src)
+        self.assertIn('Calculation = -4105', method_src)
+        self.assertIn('grp_data_rng.Value = cont_rows_batch', method_src)
+        self.assertIn('sum_data_rng.Value = summary_rows_batch', method_src)
+
 
 if __name__ == '__main__':
     unittest.main()

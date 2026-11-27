@@ -2,6 +2,7 @@ from copy import deepcopy
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
+from time import perf_counter
 import os
 from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 import json
@@ -1907,7 +1908,20 @@ class NDTCalculatorTab(ttk.Frame):
         default_name = f"제{round_val}회_기성청구내역서_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         filepath = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=default_name, filetypes=[("Excel File", "*.xlsx")], title="정식 기성청구 엑셀 양식으로 저장")
         if not filepath: return
-            
+
+        export_started = perf_counter()
+        stage_started = export_started
+        stage_times = []
+
+        def record_stage(label):
+            nonlocal stage_started
+            now = perf_counter()
+            stage_times.append(f"{label} {now - stage_started:.2f}초")
+            stage_started = now
+
+        progress_win = None
+        excel = None
+
         def freeze_header(sheet, rows):
             try:
                 sheet.Activate()
@@ -1922,13 +1936,41 @@ class NDTCalculatorTab(ttk.Frame):
                 print(f"[기성청구 엑셀] 상단 {rows}행 틀 고정 설정 실패: {error}", flush=True)
 
         try:
+            try:
+                top_owner = self.winfo_toplevel()
+                progress_win = tk.Toplevel(top_owner)
+                progress_win.title("기성청구 엑셀 생성 중")
+                progress_win.geometry("360x105")
+                progress_win.resizable(False, False)
+                progress_win.transient(top_owner)
+                ttk.Label(
+                    progress_win,
+                    text="기성청구 내역서 엑셀 파일을 생성하고 있습니다...\n잠시만 기다려 주세요.",
+                    justify=tk.CENTER,
+                    font=("맑은 고딕", 10, "bold"),
+                ).pack(expand=True, pady=20)
+                progress_win.update()
+            except Exception:
+                progress_win = None
+
+            record_stage("안내창")
             excel = win32.Dispatch("Excel.Application")
             excel.Visible = False
             excel.DisplayAlerts = False
+            try:
+                excel.ScreenUpdating = False
+                excel.EnableEvents = False
+            except Exception:
+                pass
             
             wb = excel.Workbooks.Add()
+            try:
+                excel.Calculation = -4135  # xlCalculationManual
+            except Exception:
+                pass
             ws = wb.ActiveSheet
             ws.Name = "기성청구내역서"
+            record_stage("Excel 시작 및 통합문서 준비")
             
             # --- 상단 기본 정보 ---
             ws.Range("A1:O2").Merge()
@@ -2300,6 +2342,10 @@ class NDTCalculatorTab(ttk.Frame):
             # (세부 내역에는 실비 정산 및 부가세 항목 생략 - 갑지 및 기성내역서에만 포함)
                 
             # --- 내역서 페이지 여백 및 A4 1장 맞춤 설정 ---
+            try:
+                excel.PrintCommunication = False
+            except Exception:
+                pass
             ws.PageSetup.PrintArea = f"$A$1:$O${row - 1}"
             ws.PageSetup.PaperSize = 9  # xlPaperA4
             ws.PageSetup.Orientation = 2 # xlLandscape
@@ -2311,7 +2357,11 @@ class NDTCalculatorTab(ttk.Frame):
             ws.PageSetup.TopMargin = 20
             ws.PageSetup.BottomMargin = 20
             ws.PageSetup.CenterHorizontally = True # 페이지 가로 가운데 정렬
-            ws.PageSetup.CenterVertically = True   # 상하 여백을 갑지처럼 균등하고 얇게 배분하여 꽉 찬 레이아웃 구성
+            ws.PageSetup.CenterVertically = True
+            try:
+                excel.PrintCommunication = True
+            except Exception:
+                pass
             
             # --- 열 너비 최적화: 공종 글자 잘림 방지 및 A4 가로 꽉 찬 배율 확보 ---
             ws.Columns(1).ColumnWidth = 27 # 공종 ("위상배열초음파검사(PAUT)" 완벽 표시)
@@ -2331,6 +2381,7 @@ class NDTCalculatorTab(ttk.Frame):
 
             freeze_header(ws, 7)
 
+            # 셀 내부 글자 잘림 원천 차단 (셀 크기 맞춤)
             ws.Range(f"A6:O{row-1}").ShrinkToFit = True
 
             # 표 외곽 테두리선 굵게 적용 (청구서 갑지와 동일한 완성도)
@@ -2339,10 +2390,15 @@ class NDTCalculatorTab(ttk.Frame):
                 tbl_box.Borders(edge).LineStyle = 1
                 tbl_box.Borders(edge).Weight = 3
             # --- 표지 (청구서 갑지) 생성 ---
+            record_stage("기성청구내역서 작성")
             ws_cover = wb.Sheets.Add(ws)
             ws_cover.Name = "청구서(갑지)"
             
             # --- 페이지 가로 모드 및 여백 설정 ---
+            try:
+                excel.PrintCommunication = False
+            except Exception:
+                pass
             ws_cover.PageSetup.PaperSize = 9  # xlPaperA4
             ws_cover.PageSetup.Orientation = 2 # xlLandscape
             ws_cover.PageSetup.LeftMargin = 20
@@ -2354,6 +2410,10 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cover.PageSetup.Zoom = False
             ws_cover.PageSetup.FitToPagesWide = 1
             ws_cover.PageSetup.FitToPagesTall = 1
+            try:
+                excel.PrintCommunication = True
+            except Exception:
+                pass
             
             # --- 제목 ---
             ws_cover.Range("A2:D5").Merge()
@@ -2455,26 +2515,16 @@ class NDTCalculatorTab(ttk.Frame):
             table_headers = ["계약금액", "전회누계", "금회청구", "총누계", "잔여금액"]
             
             ws_cover.Range(f"A{table_start}:B{table_start}").Merge()
-            cell = ws_cover.Range(f"A{table_start}")
-            cell.Value = "구 분"
+            ws_cover.Range(f"A{table_start}").Value = "구 분"
+            ws_cover.Range(f"C{table_start}:G{table_start}").Value = [table_headers]
+            cell = ws_cover.Range(f"A{table_start}:G{table_start}")
             cell.Font.Bold = True
             cell.Font.Size = 14
             cell.HorizontalAlignment = -4108
             cell.VerticalAlignment = -4108
             cell.Interior.Color = 10066329
             cell.Font.Color = 16777215
-            for col_i in [1, 2]: ws_cover.Cells(table_start, col_i).Borders.LineStyle = 1
-            
-            for col_i, h in enumerate(table_headers, start=3):
-                cell = ws_cover.Cells(table_start, col_i)
-                cell.Value = h
-                cell.Font.Bold = True
-                cell.Font.Size = 14
-                cell.HorizontalAlignment = -4108
-                cell.VerticalAlignment = -4108
-                cell.Interior.Color = 10066329
-                cell.Font.Color = 16777215
-                cell.Borders.LineStyle = 1
+            cell.Borders.LineStyle = 1
             ws_cover.Rows(table_start).RowHeight = 28
 
             rows_data = [
@@ -2495,13 +2545,12 @@ class NDTCalculatorTab(ttk.Frame):
                 cell_lbl.Interior.Color = 15132390
                 for col_i in [1, 2]: ws_cover.Cells(row_idx, col_i).Borders.LineStyle = 1
                 
-                for c_idx, v in enumerate(vals, start=3):
-                    cell_val = ws_cover.Cells(row_idx, c_idx)
-                    cell_val.Value = f"{v:,}"
-                    cell_val.Font.Size = 14
-                    cell_val.HorizontalAlignment = -4152
-                    cell_val.VerticalAlignment = -4108
-                    cell_val.Borders.LineStyle = 1
+                value_range = ws_cover.Range(f"C{row_idx}:G{row_idx}")
+                value_range.Value = [[f"{v:,}" for v in vals]]
+                value_range.Font.Size = 14
+                value_range.HorizontalAlignment = -4152
+                value_range.VerticalAlignment = -4108
+                value_range.Borders.LineStyle = 1
                 ws_cover.Rows(row_idx).RowHeight = 28
             
             ws_cover.Range("A21:G21").Merge()
@@ -2554,19 +2603,9 @@ class NDTCalculatorTab(ttk.Frame):
                 outer_range.Borders(edge).Weight = 4 # xlThick
             
             # --- 업체별 기성요약 시트 생성 ---
+            record_stage("청구서 표지 작성")
             ws_summary = wb.Sheets.Add(None, ws)
             ws_summary.Name = "업체별 기성요약"
-            
-            ws_summary.PageSetup.Orientation = 2 # xlLandscape
-            ws_summary.PageSetup.Zoom = False
-            ws_summary.PageSetup.FitToPagesWide = 1
-            ws_summary.PageSetup.FitToPagesTall = False
-            ws_summary.PageSetup.LeftMargin = 20
-            ws_summary.PageSetup.RightMargin = 20
-            ws_summary.PageSetup.TopMargin = 20
-            ws_summary.PageSetup.BottomMargin = 20
-            ws_summary.PageSetup.CenterHorizontally = True
-            ws_summary.PageSetup.RightHeader = "\n\nPage &P of &N&KFFFFFF" + " "*10 + "."
             
             ws_summary.Range("A1:G2").Merge()
             ws_summary.Range("A1").Value = f"제 {round_val} 회 비파괴검사기술용역 업체별 기성요약"
@@ -2600,24 +2639,17 @@ class NDTCalculatorTab(ttk.Frame):
                         f"{error}"
                     )
 
-
             from site_apps.central.src.services.billing_summary import build_company_summaries
             company_summaries = build_company_summaries(target_records, history_data, self.contract_vars)
 
             # One common header remains visible while company bands scroll.
-            headers_sum = {
-                1: "섹션", 2: "라인번호", 3: "규격", 4: "개소", 5: "단가",
-                6: "검사수량", 7: "금액"
-            }
-            for col, heading in headers_sum.items():
-                cell = ws_summary.Cells(4, col)
-                cell.Value = heading
-                cell.Font.Bold = True
-                cell.Interior.Color = 14277081
-                cell.HorizontalAlignment = -4108
-                cell.Borders.LineStyle = 1
-            ws_summary.PageSetup.PrintTitleRows = "$1:$4"
-            freeze_header(ws_summary, 4)
+            headers_sum_list = ["섹션", "라인번호", "규격", "개소", "단가", "검사수량", "금액"]
+            hdr_sum_rng = ws_summary.Range("A4:G4")
+            hdr_sum_rng.Value = [headers_sum_list]
+            hdr_sum_rng.Font.Bold = True
+            hdr_sum_rng.Interior.Color = 14277081
+            hdr_sum_rng.HorizontalAlignment = -4108
+            hdr_sum_rng.Borders.LineStyle = 1
             sum_row = 5
             contract_category_order = [
                 cat for cat in categories if cat in self.contract_vars
@@ -2640,85 +2672,74 @@ class NDTCalculatorTab(ttk.Frame):
                 
                 # [FIX] 정렬: 규격(검사방법) -> 섹션 -> 라인번호 (검사 방법별로 그룹화)
                 sorted_keys = sorted(work_summary.keys(), key=lambda x: (x[2], x[0], x[1]))
-                
-                # 단수 조정(Fraction Adjustment): 규격별로 수량을 합산하여 총 금액을 구한 뒤, 각 행에 분배하여 1원 단위 오차 방지
-
 
                 from itertools import groupby
                 for unit_val, keys_group in groupby(sorted_keys, key=lambda x: x[3]):
                     keys_group = list(keys_group)
                     
                     start_data_row = sum_row
-                    has_data = False
+                    summary_rows_batch = []
                     for key in keys_group:
                         data = work_summary[key]
                         sec, l_no, spec, unit, c_price = key
                         calculated_amt = data.get("calculated_amt", 0)
                         
-                        if data["qty"] == 0 and calculated_amt == 0: continue
-                        has_data = True
+                        if data["qty"] == 0 and calculated_amt == 0:
+                            continue
+                        qty_cell = round(data["qty"], 4) if unit == "M" else int(data["qty"])
+                        places_cell = int(data["places"]) if data["places"] is not None else ""
+                        summary_rows_batch.append((
+                            sec,
+                            l_no,
+                            f"{spec} ({unit})",
+                            places_cell,
+                            int(c_price),
+                            qty_cell,
+                            calculated_amt,
+                        ))
                         
-                        ws_summary.Cells(sum_row, 1).Value = sec
-                        ws_summary.Cells(sum_row, 2).Value = l_no
-                        ws_summary.Cells(sum_row, 3).Value = f"{spec} ({unit})"
-                        ws_summary.Cells(sum_row, 4).Value = (
-                            int(data["places"]) if data["places"] is not None else ""
-                        )
-                        
-                        ws_summary.Cells(sum_row, 5).Value = int(c_price)
-                        ws_summary.Cells(sum_row, 5).NumberFormat = "#,##0"
-                        
-                        if unit == "M":
-                            ws_summary.Cells(sum_row, 6).Value = round(data["qty"], 4)
-                            ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
-                        else:
-                            ws_summary.Cells(sum_row, 6).Value = int(data["qty"])
-                            ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0;-#,##0;"-"'
-                            
-                        ws_summary.Cells(sum_row, 7).Value = calculated_amt
-                        ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
-                        
-                        for col in range(1, 8):
-                            cell = ws_summary.Cells(sum_row, col)
-                            cell.Borders.LineStyle = 1
-                            if col in (1, 2, 4): 
-                                cell.HorizontalAlignment = -4108
-                                if col == 2:
-                                    try:
-                                        cell.ShrinkToFit = True
-                                    except Exception:
-                                        pass
-                            elif col == 3: 
-                                cell.HorizontalAlignment = -4131
-                        
-                        sum_row += 1
-                        
-                    if not has_data: continue
+                    if not summary_rows_batch:
+                        continue
+
+                    end_data_row = start_data_row + len(summary_rows_batch) - 1
+                    sum_data_rng = ws_summary.Range(
+                        ws_summary.Cells(start_data_row, 1),
+                        ws_summary.Cells(end_data_row, 7),
+                    )
+                    sum_data_rng.Value = summary_rows_batch
+                    sum_data_rng.Borders.LineStyle = 1
+                    ws_summary.Range(ws_summary.Cells(start_data_row, 1), ws_summary.Cells(end_data_row, 2)).HorizontalAlignment = -4108
+                    ws_summary.Range(ws_summary.Cells(start_data_row, 3), ws_summary.Cells(end_data_row, 3)).HorizontalAlignment = -4131
+                    ws_summary.Range(ws_summary.Cells(start_data_row, 4), ws_summary.Cells(end_data_row, 4)).HorizontalAlignment = -4108
+                    ws_summary.Range(ws_summary.Cells(start_data_row, 5), ws_summary.Cells(end_data_row, 5)).NumberFormat = "#,##0"
+                    ws_summary.Range(ws_summary.Cells(start_data_row, 6), ws_summary.Cells(end_data_row, 6)).NumberFormat = (
+                        '#,##0.0000;-#,##0.0000;"-"' if unit_val == "M" else '#,##0;-#,##0;"-"'
+                    )
+                    ws_summary.Range(ws_summary.Cells(start_data_row, 7), ws_summary.Cells(end_data_row, 7)).NumberFormat = '#,##0;-#,##0;"-"'
+                    try:
+                        ws_summary.Range(ws_summary.Cells(start_data_row, 2), ws_summary.Cells(end_data_row, 2)).ShrinkToFit = True
+                    except Exception:
+                        pass
+                    sum_row = end_data_row + 1
                         
                     # 소계 렌더링
+                    sub_rng = ws_summary.Range(ws_summary.Cells(sum_row, 1), ws_summary.Cells(sum_row, 7))
                     ws_summary.Range(ws_summary.Cells(sum_row, 1), ws_summary.Cells(sum_row, 5)).Merge()
                     ws_summary.Cells(sum_row, 1).Value = f"소 계 ({unit_val})"
                     ws_summary.Cells(sum_row, 1).HorizontalAlignment = -4108
-                    ws_summary.Cells(sum_row, 1).Font.Bold = True
-                    ws_summary.Cells(sum_row, 1).Interior.Color = 15987699
+                    sub_rng.Font.Bold = True
+                    sub_rng.Interior.Color = 15987699
+                    sub_rng.Borders.LineStyle = 1
                     
                     qty_sum_formula = f"=SUM(F{start_data_row}:F{sum_row-1})" if sum_row > start_data_row else "0"
                     ws_summary.Cells(sum_row, 6).Formula = qty_sum_formula
-                    if unit_val == "M":
-                        ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
-                    else:
-                        ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0;-#,##0;"-"'
-                    ws_summary.Cells(sum_row, 6).Font.Bold = True
-                    ws_summary.Cells(sum_row, 6).Interior.Color = 15987699
+                    ws_summary.Cells(sum_row, 6).NumberFormat = (
+                        '#,##0.0000;-#,##0.0000;"-"' if unit_val == "M" else '#,##0;-#,##0;"-"'
+                    )
                     
                     sum_formula = f"=SUM(G{start_data_row}:G{sum_row-1})" if sum_row > start_data_row else "0"
                     ws_summary.Cells(sum_row, 7).Formula = sum_formula
                     ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
-                    ws_summary.Cells(sum_row, 7).Font.Bold = True
-                    ws_summary.Cells(sum_row, 7).Interior.Color = 15987699
-                    
-                    for col in range(1, 8):
-                        ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
     
                     company_subtotal_rows.append(sum_row)
                     sum_row += 1
@@ -2772,25 +2793,31 @@ class NDTCalculatorTab(ttk.Frame):
                 ws_summary.Columns(2).ShrinkToFit = True
             except Exception:
                 pass
+            try:
+                excel.PrintCommunication = False
+            except Exception:
+                pass
+            ws_summary.PageSetup.Orientation = 2 # xlLandscape
+            ws_summary.PageSetup.Zoom = False
+            ws_summary.PageSetup.FitToPagesWide = 1
+            ws_summary.PageSetup.FitToPagesTall = False
+            ws_summary.PageSetup.LeftMargin = 20
+            ws_summary.PageSetup.RightMargin = 20
+            ws_summary.PageSetup.TopMargin = 20
+            ws_summary.PageSetup.BottomMargin = 20
+            ws_summary.PageSetup.CenterHorizontally = True
+            ws_summary.PageSetup.RightHeader = "\n\nPage &P of &N&KFFFFFF" + " "*10 + "."
+            ws_summary.PageSetup.PrintTitleRows = "$1:$4"
+            try:
+                excel.PrintCommunication = True
+            except Exception:
+                pass
+            freeze_header(ws_summary, 4)
             
             # --- 업체별 수량내역 시트 생성 ---
+            record_stage("업체별 기성요약 작성")
             ws_cont = wb.Sheets.Add(None, ws_summary)
             ws_cont.Name = "업체별 수량내역"
-            # Keep the title, column headers and first company band visible.
-            freeze_header(ws_cont, 5)
-            
-            # --- 페이지 가로 모드 및 폭 1장 맞춤 설정 ---
-            ws_cont.PageSetup.Orientation = 2 # xlLandscape
-            ws_cont.PageSetup.Zoom = False
-            ws_cont.PageSetup.FitToPagesWide = 1
-            ws_cont.PageSetup.FitToPagesTall = False
-            ws_cont.PageSetup.LeftMargin = 20
-            ws_cont.PageSetup.RightMargin = 20
-            ws_cont.PageSetup.TopMargin = 20
-            ws_cont.PageSetup.BottomMargin = 20
-            ws_cont.PageSetup.CenterHorizontally = True
-            ws_cont.PageSetup.PrintTitleRows = "$1:$4"
-            ws_cont.PageSetup.RightHeader = "\n\nPage &P of &N&KFFFFFF" + " "*12 + "."
             
             ws_cont.Range("A1:K2").Merge()
             ws_cont.Range("A1").Value = f"제 {round_val} 회 기성청구 업체별 수량내역"
@@ -2800,13 +2827,12 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cont.Range("A1").VerticalAlignment = -4108
             
             headers_cont = ["No.", "업체명", "검사방법", "구간", "라인번호", "Joint No.", "관경", "두께", "용접사", "수량", "결과"]
-            for col, h in enumerate(headers_cont, start=1):
-                cell = ws_cont.Cells(4, col)
-                cell.Value = h
-                cell.Font.Bold = True
-                cell.Interior.Color = 14277081
-                cell.HorizontalAlignment = -4108
-                cell.Borders.LineStyle = 1
+            hdr_cont_rng = ws_cont.Range("A4:K4")
+            hdr_cont_rng.Value = [headers_cont]
+            hdr_cont_rng.Font.Bold = True
+            hdr_cont_rng.Interior.Color = 14277081
+            hdr_cont_rng.HorizontalAlignment = -4108
+            hdr_cont_rng.Borders.LineStyle = 1
                 
             ws_cont.Columns(1).ColumnWidth = 8
             ws_cont.Columns(2).ColumnWidth = 20
@@ -2824,16 +2850,8 @@ class NDTCalculatorTab(ttk.Frame):
             except Exception:
                 pass
             
-            # 헤더에 자동 필터 적용 (지원 여부에 따라 선택적 적용)
-            try:
-                ws_cont.Range("A4:K4").AutoFilter(Field=1)
-            except:
-                pass
-            
             cont_row = 5
             
-
-                
             target_dates = set(r["date"] for r in target_records)
             all_ndt_results = []
             source_rows = {}
@@ -2857,159 +2875,196 @@ class NDTCalculatorTab(ttk.Frame):
             
             from itertools import groupby
             
-            data_start_row = cont_row  # 데이터 시작 행 기록
             idx_cont = 1
             for (comp, method), group_iter in groupby(all_ndt_results, key=lambda x: (str(x.get("업체", "")).strip(), str(x.get("검사방법", "")).strip())):
                 if not comp: continue
                 group = list(group_iter)
                 
+                grp_hdr_rng = ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 11))
                 ws_cont.Cells(cont_row, 1).Value = f"■ {comp} - {method}"
-                ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 11)).Merge()
+                grp_hdr_rng.Merge()
                 ws_cont.Cells(cont_row, 1).Font.Bold = True
                 ws_cont.Cells(cont_row, 1).Interior.Color = 15132390
                 ws_cont.Cells(cont_row, 1).HorizontalAlignment = -4108
-                for c in range(1, 12): ws_cont.Cells(cont_row, c).Borders.LineStyle = 1
+                grp_hdr_rng.Borders.LineStyle = 1
                 cont_row += 1
                 
                 start_group_row = cont_row
+                is_length_inspection = any(
+                    name in method for name in ("PAUT", "UT", "MT", "PT")
+                )
+                unit_str = "M" if is_length_inspection else "매"
+                format_str = '#,##0.0000;-#,##0.0000;"-"' if unit_str == "M" else '#,##0;-#,##0;"-"'
+
+                cont_rows_batch = []
                 for r in group:
                     if not str(r.get("업체", "")).strip() and not str(r.get("Joint No.", "")).strip():
                         continue
                         
-                    ws_cont.Cells(cont_row, 1).Value = idx_cont
-                    ws_cont.Cells(cont_row, 2).Value = comp
-                    ws_cont.Cells(cont_row, 3).Value = method
-                    ws_cont.Cells(cont_row, 4).Value = r.get("구간", "")
-                    ws_cont.Cells(cont_row, 5).Value = r.get("라인번호", "")
-                    ws_cont.Cells(cont_row, 6).Value = r.get("Joint No.", "")
-                    ws_cont.Cells(cont_row, 7).Value = r.get("관경", "")
-                    ws_cont.Cells(cont_row, 8).Value = r.get("두께", "")
-                    ws_cont.Cells(cont_row, 9).Value = r.get("용접사", "")
-                    
-                    m_type = method
-                    if "PAUT" in m_type:
+                    if "PAUT" in method:
                         qty = r.get("PAUT", "")
-                    elif "RT" in m_type:
+                    elif "RT" in method:
                         qty = rt_counts(r)[0]
-                    elif "MT" in m_type:
+                    elif "MT" in method:
                         qty = r.get("MT", "")
-                    elif "PT" in m_type:
+                    elif "PT" in method:
                         qty = r.get("PT", "")
                     else:
-                        qty = r.get(m_type, "")
+                        qty = r.get(method, "")
                         
                     try:
                         q_val = float(qty) if str(qty).strip() else 0.0
                     except ValueError:
                         q_val = 0.0
                         
-                    is_length_inspection = any(
-                        name in m_type for name in ("PAUT", "UT", "MT", "PT")
-                    )
                     if is_length_inspection:
                         total_meters += q_val
                     else:
                         total_points += q_val
                     
                     # [FIX] 수량을 숫자로 저장해야 SUBTOTAL 수식이 작동함
-                    ws_cont.Cells(cont_row, 10).Value = q_val if q_val != 0.0 else (qty if str(qty).strip() else "")
-                    ws_cont.Cells(cont_row, 10).NumberFormat = (
-                        '#,##0.0000;-#,##0.0000;"-"'
-                        if is_length_inspection else '#,##0;-#,##0;"-"'
-                    )
-                    ws_cont.Cells(cont_row, 11).Value = r.get("결과", "")
-                    
-                    for c in range(1, 12):
-                        cell = ws_cont.Cells(cont_row, c)
-                        cell.Borders.LineStyle = 1
-                        cell.HorizontalAlignment = -4108
-                        if c == 5:
-                            try:
-                                cell.ShrinkToFit = True
-                            except Exception:
-                                pass
-                    
+                    q_cell = q_val if q_val != 0.0 else (qty if str(qty).strip() else "")
+                    cont_rows_batch.append((
+                        idx_cont,
+                        comp,
+                        method,
+                        r.get("구간", ""),
+                        r.get("라인번호", ""),
+                        r.get("Joint No.", ""),
+                        r.get("관경", ""),
+                        r.get("두께", ""),
+                        r.get("용접사", ""),
+                        q_cell,
+                        r.get("결과", ""),
+                    ))
                     idx_cont += 1
-                    cont_row += 1
+
+                if cont_rows_batch:
+                    end_group_row = start_group_row + len(cont_rows_batch) - 1
+                    grp_data_rng = ws_cont.Range(
+                        ws_cont.Cells(start_group_row, 1),
+                        ws_cont.Cells(end_group_row, 11),
+                    )
+                    grp_data_rng.Value = cont_rows_batch
+                    grp_data_rng.Borders.LineStyle = 1
+                    grp_data_rng.HorizontalAlignment = -4108
+                    ws_cont.Range(
+                        ws_cont.Cells(start_group_row, 10),
+                        ws_cont.Cells(end_group_row, 10),
+                    ).NumberFormat = format_str
+                    try:
+                        ws_cont.Range(
+                            ws_cont.Cells(start_group_row, 5),
+                            ws_cont.Cells(end_group_row, 5),
+                        ).ShrinkToFit = True
+                    except Exception:
+                        pass
+                    cont_row = end_group_row + 1
+                    subtotal_formula = f'=SUBTOTAL(9, J{start_group_row}:J{end_group_row})'
+                else:
+                    subtotal_formula = "0"
                 
-                end_group_row = cont_row - 1
-                
-                unit_str = (
-                    "M" if any(name in method for name in ("PAUT", "UT", "MT", "PT"))
-                    else "매"
-                )
-                format_str = '#,##0.0000;-#,##0.0000;"-"' if unit_str == "M" else '#,##0;-#,##0;"-"'
-                
+                sub_cont_rng = ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 11))
                 ws_cont.Cells(cont_row, 1).Value = f"{comp} {method} 소계"
                 ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 9)).Merge()
                 ws_cont.Cells(cont_row, 1).HorizontalAlignment = -4108
-                ws_cont.Cells(cont_row, 1).Font.Bold = True
-                ws_cont.Cells(cont_row, 1).Interior.Color = 14277081
+                sub_cont_rng.Font.Bold = True
+                sub_cont_rng.Interior.Color = 14277081
+                sub_cont_rng.Borders.LineStyle = 1
                 
-                ws_cont.Cells(cont_row, 10).Formula = f'=SUBTOTAL(9, J{start_group_row}:J{end_group_row})'
+                ws_cont.Cells(cont_row, 10).Formula = subtotal_formula
                 ws_cont.Cells(cont_row, 10).NumberFormat = format_str
-                ws_cont.Cells(cont_row, 10).Font.Bold = True
-                ws_cont.Cells(cont_row, 10).Interior.Color = 14277081
-                ws_cont.Cells(cont_row, 10).Borders.LineStyle = 1
                 
                 ws_cont.Cells(cont_row, 11).Value = unit_str
-                ws_cont.Cells(cont_row, 11).Font.Bold = True
                 ws_cont.Cells(cont_row, 11).HorizontalAlignment = -4108
-                ws_cont.Cells(cont_row, 11).Interior.Color = 14277081
-                ws_cont.Cells(cont_row, 11).Borders.LineStyle = 1
-                
-                for c in range(1, 10):
-                    ws_cont.Cells(cont_row, c).Borders.LineStyle = 1
                     
                 cont_row += 1
             
             if all_ndt_results:
+                tot_len_rng = ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 11))
                 ws_cont.Cells(cont_row, 1).Value = "총 누적 물량 (길이 검사)"
                 ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 9)).Merge()
                 ws_cont.Cells(cont_row, 1).HorizontalAlignment = -4108
-                ws_cont.Cells(cont_row, 1).Font.Bold = True
                 ws_cont.Cells(cont_row, 1).Interior.Color = 10066329
                 ws_cont.Cells(cont_row, 1).Font.Color = 16777215
+                tot_len_rng.Font.Bold = True
+                tot_len_rng.Borders.LineStyle = 1
                 
                 ws_cont.Cells(cont_row, 10).Value = total_meters
                 ws_cont.Cells(cont_row, 10).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
-                ws_cont.Cells(cont_row, 10).Font.Bold = True
-                ws_cont.Cells(cont_row, 10).Borders.LineStyle = 1
                 
                 ws_cont.Cells(cont_row, 11).Value = "M"
-                ws_cont.Cells(cont_row, 11).Font.Bold = True
                 ws_cont.Cells(cont_row, 11).HorizontalAlignment = -4108
-                ws_cont.Cells(cont_row, 11).Borders.LineStyle = 1
-                for c in range(1, 10): ws_cont.Cells(cont_row, c).Borders.LineStyle = 1
-                
                 cont_row += 1
                 
+                tot_pt_rng = ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 11))
                 ws_cont.Cells(cont_row, 1).Value = "총 누적 물량 (포인트 검사)"
                 ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 9)).Merge()
                 ws_cont.Cells(cont_row, 1).HorizontalAlignment = -4108
-                ws_cont.Cells(cont_row, 1).Font.Bold = True
                 ws_cont.Cells(cont_row, 1).Interior.Color = 10066329
                 ws_cont.Cells(cont_row, 1).Font.Color = 16777215
+                tot_pt_rng.Font.Bold = True
+                tot_pt_rng.Borders.LineStyle = 1
                 
                 ws_cont.Cells(cont_row, 10).Value = int(total_points)
                 ws_cont.Cells(cont_row, 10).NumberFormat = '#,##0;-#,##0;"-"'
-                ws_cont.Cells(cont_row, 10).Font.Bold = True
-                ws_cont.Cells(cont_row, 10).Borders.LineStyle = 1
                 
                 ws_cont.Cells(cont_row, 11).Value = "매/Point"
-                ws_cont.Cells(cont_row, 11).Font.Bold = True
                 ws_cont.Cells(cont_row, 11).HorizontalAlignment = -4108
-                ws_cont.Cells(cont_row, 11).Borders.LineStyle = 1
-                for c in range(1, 10): ws_cont.Cells(cont_row, c).Borders.LineStyle = 1
-                
                 cont_row += 1
+
+            # 헤더 자동 필터 및 페이지 설정/틀 고정을 데이터 입력 완료 후 일괄 적용
+            try:
+                ws_cont.Range("A4:K4").AutoFilter(Field=1)
+            except Exception:
+                pass
+            try:
+                excel.PrintCommunication = False
+            except Exception:
+                pass
+            ws_cont.PageSetup.Orientation = 2 # xlLandscape
+            ws_cont.PageSetup.Zoom = False
+            ws_cont.PageSetup.FitToPagesWide = 1
+            ws_cont.PageSetup.FitToPagesTall = False
+            ws_cont.PageSetup.LeftMargin = 20
+            ws_cont.PageSetup.RightMargin = 20
+            ws_cont.PageSetup.TopMargin = 20
+            ws_cont.PageSetup.BottomMargin = 20
+            ws_cont.PageSetup.CenterHorizontally = True
+            ws_cont.PageSetup.PrintTitleRows = "$1:$4"
+            ws_cont.PageSetup.RightHeader = "\n\nPage &P of &N&KFFFFFF" + " "*12 + "."
+            try:
+                excel.PrintCommunication = True
+            except Exception:
+                pass
+
+            freeze_header(ws_cont, 5)
             
             ws_cover.Select()
+            record_stage("업체별 수량내역 작성")
+            try:
+                excel.Calculation = -4105  # xlCalculationAutomatic
+                excel.Calculate()
+                excel.ScreenUpdating = True
+                excel.EnableEvents = True
+            except Exception:
+                pass
             
             filepath = filepath.replace("/", "\\")
+            record_stage("계산 및 저장 준비")
             wb.SaveAs(filepath)
+            record_stage("파일 저장")
             wb.Close()
             excel.Quit()
+            record_stage("Excel 종료")
+            excel = None
+            print(f"[기성청구 엑셀] 총 {perf_counter() - export_started:.2f}초 | " + " | ".join(stage_times))
+            if progress_win is not None:
+                try:
+                    progress_win.destroy()
+                    progress_win = None
+                except Exception:
+                    pass
             
             if history_warning:
                 messagebox.showwarning("저장 완료 · 작업일보 연결 실패", f"{history_warning}\n\n{filepath}")
@@ -3018,9 +3073,22 @@ class NDTCalculatorTab(ttk.Frame):
             os.startfile(filepath)
             
         except Exception as e:
+            if progress_win is not None:
+                try:
+                    progress_win.destroy()
+                    progress_win = None
+                except Exception:
+                    pass
             messagebox.showerror("저장 오류", f"엑셀 파일 생성 중 오류가 발생했습니다.\n{str(e)}")
-            try: excel.Quit()
-            except: pass
+            if excel is not None:
+                try: excel.Quit()
+                except: pass
+        finally:
+            if progress_win is not None:
+                try:
+                    progress_win.destroy()
+                except Exception:
+                    pass
 
     def show_contract_status(self):
         win = tk.Toplevel(self)

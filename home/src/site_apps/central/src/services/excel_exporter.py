@@ -1824,11 +1824,21 @@ def export_invoice_excel_impl(self):
         filepath = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=default_name, filetypes=[("Excel File", "*.xlsx")], title="정식 기성청구 엑셀 양식으로 저장")
         if not filepath: return
 
+        excel = None
         try:
             excel = win32.Dispatch("Excel.Application")
             excel.Visible = False
             excel.DisplayAlerts = False
+            try:
+                excel.ScreenUpdating = False
+                excel.EnableEvents = False
+            except Exception:
+                pass
             wb = excel.Workbooks.Add()
+            try:
+                excel.Calculation = -4135  # xlCalculationManual
+            except Exception:
+                pass
             ws = wb.ActiveSheet
             ws.Name = "기성청구내역서"
 
@@ -1883,33 +1893,32 @@ def export_invoice_excel_impl(self):
                 if not group_records: continue
 
                 sub_mat = sub_lab = sub_ovr = sub_tech = sub_sub = 0
+                grp_start_row = current_row
+                grp_rows_batch = []
                 for r in group_records:
-                    ws.Cells(current_row, 1).Value = item_idx
-                    ws.Cells(current_row, 2).Value = r["date"]
-                    ws.Cells(current_row, 3).Value = r["loc"].split()[0] if isinstance(r["loc"], str) and r["loc"] else r["loc"]
-                    ws.Cells(current_row, 4).Value = r["ndt_type"]
-                    ws.Cells(current_row, 5).Value = r["material_type"]
-                    ws.Cells(current_row, 6).Value = r["work_time"]
-                    ws.Cells(current_row, 7).Value = r["qty"]
-                    ws.Cells(current_row, 8).Value = r["unit"]
-                    ws.Cells(current_row, 9).Value = r["corr"]
-                    ws.Cells(current_row, 10).Value = r["adjusted_qty"]
-                    ws.Cells(current_row, 11).Value = r["mat_cost"]
-                    ws.Cells(current_row, 12).Value = r["lab_cost"]
-                    ws.Cells(current_row, 13).Value = r["overhead"]
-                    ws.Cells(current_row, 14).Value = r["tech"]
-                    ws.Cells(current_row, 15).Value = r["subtotal"]
-
-                    for c in range(1, 16):
-                        cell = ws.Cells(current_row, c)
-                        cell.Borders.LineStyle = 1
-                        if c <= 4 or c == 6 or c == 8: cell.HorizontalAlignment = -4108
-                        elif c == 5 or c == 3: cell.HorizontalAlignment = -4131
-                        else: cell.NumberFormat = "#,##0" if c >= 11 else "0.00"
-
+                    loc_disp = r["loc"].split()[0] if isinstance(r["loc"], str) and r["loc"] else r["loc"]
+                    grp_rows_batch.append((
+                        item_idx, r["date"], loc_disp, r["ndt_type"], r["material_type"],
+                        r["work_time"], r["qty"], r["unit"], r["corr"], r["adjusted_qty"],
+                        r["mat_cost"], r["lab_cost"], r["overhead"], r["tech"], r["subtotal"]
+                    ))
                     sub_mat += r["mat_cost"]; sub_lab += r["lab_cost"]; sub_ovr += r["overhead"]
                     sub_tech += r["tech"]; sub_sub += r["subtotal"]
-                    item_idx += 1; current_row += 1
+                    item_idx += 1
+                grp_end_row = grp_start_row + len(grp_rows_batch) - 1
+                grp_rng = ws.Range(ws.Cells(grp_start_row, 1), ws.Cells(grp_end_row, 15))
+                grp_rng.Value = grp_rows_batch
+                grp_rng.Borders.LineStyle = 1
+                ws.Range(ws.Cells(grp_start_row, 1), ws.Cells(grp_end_row, 2)).HorizontalAlignment = -4108
+                ws.Range(ws.Cells(grp_start_row, 3), ws.Cells(grp_end_row, 3)).HorizontalAlignment = -4131
+                ws.Range(ws.Cells(grp_start_row, 4), ws.Cells(grp_end_row, 4)).HorizontalAlignment = -4108
+                ws.Range(ws.Cells(grp_start_row, 5), ws.Cells(grp_end_row, 5)).HorizontalAlignment = -4131
+                ws.Range(ws.Cells(grp_start_row, 6), ws.Cells(grp_end_row, 6)).HorizontalAlignment = -4108
+                ws.Range(ws.Cells(grp_start_row, 7), ws.Cells(grp_end_row, 7)).NumberFormat = "0.00"
+                ws.Range(ws.Cells(grp_start_row, 8), ws.Cells(grp_end_row, 8)).HorizontalAlignment = -4108
+                ws.Range(ws.Cells(grp_start_row, 9), ws.Cells(grp_end_row, 10)).NumberFormat = "0.00"
+                ws.Range(ws.Cells(grp_start_row, 11), ws.Cells(grp_end_row, 15)).NumberFormat = "#,##0"
+                current_row = grp_end_row + 1
 
                 ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
                 ws.Cells(current_row, 1).Value = f"[{g_type}] 검사 소계"
@@ -2002,10 +2011,18 @@ def export_invoice_excel_impl(self):
                 cell.Borders.LineStyle = 1
                 cell.Interior.Color = 13434879
 
+            try:
+                excel.Calculation = -4105  # xlCalculationAutomatic
+                excel.Calculate()
+                excel.ScreenUpdating = True
+                excel.EnableEvents = True
+            except Exception:
+                pass
             filepath = filepath.replace("/", "\\")
             wb.SaveAs(filepath)
             wb.Close()
             excel.Quit()
+            excel = None
 
             messagebox.showinfo("저장 완료", f"엑셀 기성청구 내역서가 성공적으로 생성되었습니다.\n{filepath}")
             os.startfile(filepath)
