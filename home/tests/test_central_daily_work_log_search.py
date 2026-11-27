@@ -69,6 +69,12 @@ class CentralDailyWorkLogSearchTests(unittest.TestCase):
                 )
 
     def setUp(self):
+        conn_patcher = patch(
+            "site_apps.central.src.daily_work_log_tab.get_data_connection_error",
+            return_value="",
+        )
+        conn_patcher.start()
+        self.addCleanup(conn_patcher.stop)
         self.root = tk.Tk()
         self.root.withdraw()
 
