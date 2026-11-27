@@ -746,11 +746,13 @@ class NDTCalculatorTab(ttk.Frame):
         bottom_frame = ttk.Frame(self.work_pane)
         self.work_pane.add(bottom_frame, stretch="always")
         
-        lbl_frame = ttk.Frame(bottom_frame)
-        lbl_frame.pack(fill=tk.X, pady=(0, 5))
+        filter_row = ttk.Frame(bottom_frame)
+        filter_row.pack(fill=tk.X, pady=(0, 5))
+        lbl_frame = ttk.Frame(filter_row)
+        lbl_frame.pack(side=tk.LEFT)
         ttk.Label(lbl_frame, text="📅 월별 작업 기록 목록", font=('Malgun Gothic', 10, 'bold'), foreground='#1e293b').pack(side=tk.LEFT)
         
-        ttk.Label(lbl_frame, text="  |  🗓️ 기성청구 기간: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(6, 2))
+        ttk.Label(lbl_frame, text="기성청구 기간", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(12, 4))
         
         self.billing_start_date = tk.StringVar(value=datetime.now().strftime('%Y-%m-01'))
         self.billing_end_date = tk.StringVar(value=datetime.now().strftime('%Y-%m-%d'))
@@ -771,21 +773,21 @@ class NDTCalculatorTab(ttk.Frame):
             self.ent_billing_end = ttk.Entry(lbl_frame, textvariable=self.billing_end_date, width=12)
             self.ent_billing_end.pack(side=tk.LEFT)
             
-        ttk.Label(lbl_frame, text="  |  🔬 종류: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Label(lbl_frame, text="종류", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(10, 4))
         self.cb_billing_type = ttk.Combobox(lbl_frame, width=7, state='readonly', values=['전체', 'PAUT', 'RT', 'MT', 'PT'])
         self.cb_billing_type.set('전체')
         self.cb_billing_type.pack(side=tk.LEFT, padx=(0, 4))
 
-        ttk.Label(lbl_frame, text="  |  🏢 시공업체: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Label(lbl_frame, text="시공업체", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(10, 4))
         self.cb_billing_site = ttk.Combobox(lbl_frame, width=14, state='readonly')
         self.cb_billing_site.pack(side=tk.LEFT, padx=(0, 4))
 
-        ttk.Label(lbl_frame, text="📍 구간: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(2, 2))
+        ttk.Label(lbl_frame, text="구간", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(10, 4))
         self.cb_billing_section = ttk.Combobox(lbl_frame, width=12, state='readonly')
         self.cb_billing_section.pack(side=tk.LEFT, padx=(0, 4))
 
-        ttk.Label(lbl_frame, text="🔍 라인: ", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(2, 2))
-        self.cb_billing_line = ttk.Combobox(lbl_frame, width=28)
+        ttk.Label(lbl_frame, text="라인", font=('Malgun Gothic', 9, 'bold')).pack(side=tk.LEFT, padx=(10, 4))
+        self.cb_billing_line = ttk.Combobox(lbl_frame, width=24)
         self.cb_billing_line.pack(side=tk.LEFT, padx=(0, 4))
 
         self._history_mapping = {
@@ -933,14 +935,25 @@ class NDTCalculatorTab(ttk.Frame):
         self.cb_billing_line.bind('<Return>', lambda e: self.filter_billing_tree())
         self.cb_billing_line.bind('<KeyRelease>', _debounced_filter_line)
             
-        ttk.Button(lbl_frame, text="🔍 조회(일보 연동)", command=self.import_from_work_log, style="Primary.TButton").pack(side=tk.LEFT, padx=(3, 0))
-            
-        ttk.Button(lbl_frame, text="📊 구간/라인별 기성청구", command=self.open_section_line_billing_dialog, style="Primary.TButton").pack(side=tk.RIGHT, padx=(2, 4))
-        ttk.Button(lbl_frame, text="📑 기성청구(엑셀)", command=self.export_to_excel, style="Action.TButton").pack(side=tk.RIGHT, padx=2)
-        ttk.Button(lbl_frame, text="🧹 기록 초기화", command=self.clear_records, style="Warning.TButton").pack(side=tk.RIGHT, padx=2)
-        ttk.Button(lbl_frame, text="📥 일보 연동", command=self.import_from_work_log, style="Info.TButton").pack(side=tk.RIGHT, padx=2)
-        ttk.Button(lbl_frame, text="🗑️ 선택 삭제", command=self.delete_selected_records, style="Danger.TButton").pack(side=tk.RIGHT, padx=2)
-        ttk.Button(lbl_frame, text="☑️ 전체 선택", command=self.select_all_records, style="Secondary.TButton").pack(side=tk.RIGHT, padx=2)
+        management_row = ttk.Frame(bottom_frame)
+        management_row.pack(fill=tk.X, pady=(0, 5))
+        billing_actions = ttk.Frame(bottom_frame)
+        ttk.Button(billing_actions, text="🔍 조회(일보 연동)", command=self.import_from_work_log, style="Primary.TButton").pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Button(billing_actions, text="📑 기성청구(엑셀)", command=self.export_to_excel, style="Action.TButton").pack(side=tk.LEFT, padx=2)
+        ttk.Button(billing_actions, text="📊 구간/라인별 기성청구", command=self.open_section_line_billing_dialog, style="Primary.TButton").pack(side=tk.LEFT, padx=2)
+        ttk.Button(management_row, text="🧹 기록 초기화", command=self.clear_records, style="Warning.TButton").pack(side=tk.RIGHT, padx=2)
+        ttk.Button(management_row, text="🗑️ 선택 삭제", command=self.delete_selected_records, style="Danger.TButton").pack(side=tk.RIGHT, padx=2)
+        ttk.Button(management_row, text="☑️ 전체 선택", command=self.select_all_records, style="Secondary.TButton").pack(side=tk.RIGHT, padx=2)
+        billing_actions.pack(in_=management_row, side=tk.LEFT)
+
+        def layout_billing_actions(event):
+            required_width = lbl_frame.winfo_reqwidth() + billing_actions.winfo_reqwidth() + 4
+            row = filter_row if event.width >= required_width else management_row
+            if str(billing_actions.pack_info()["in"]) != str(row):
+                billing_actions.pack_forget()
+                billing_actions.pack(in_=row, side=tk.RIGHT if row is filter_row else tk.LEFT)
+
+        filter_row.bind("<Configure>", layout_billing_actions, add="+")
 
         self.subtotal_var = tk.StringVar(value="[소계] PAUT: 0.0000 M  |  RT: 0 매  |  MT: 0.0000 M  |  총 공급가액: 0 원")
         subtotal_lbl = ttk.Label(bottom_frame, textvariable=self.subtotal_var, font=("Arial", 11, "bold"), foreground="blue")
