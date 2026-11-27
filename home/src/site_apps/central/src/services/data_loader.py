@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 import json
 import os
@@ -7,6 +8,8 @@ from datetime import datetime
 import traceback
 import tkinter as tk
 from tkinter import messagebox
+
+logger = logging.getLogger(__name__)
 
 def load_data_impl(self):
     import re
@@ -42,31 +45,31 @@ def load_data_impl(self):
         return df
 
     try:
-        print(f"DEBUG: Loading data from {self.db_path}...")
+        logger.debug("Loading data from %s...", self.db_path)
         
         # Check if database exists in app_dir. If not, try to restore from bundle_dir
         if not os.path.exists(self.db_path):
             db_basename = os.path.basename(self.db_path)
             bundled_db = os.path.join(self.bundle_dir, db_basename)
-            print(f"DEBUG: Main DB not found. Trying to restore from bundle: {bundled_db}")
+            logger.debug("Main DB not found. Trying to restore from bundle: %s", bundled_db)
             if os.path.exists(bundled_db):
                 import shutil
                 try:
                     shutil.copy2(bundled_db, self.db_path)
                     with open(self.db_path, 'rb') as stream:
                         self._inventory_version = (os.path.abspath(self.db_path), hashlib.sha256(stream.read()).hexdigest())
-                    print("DEBUG: Restored DB from bundle.")
+                    logger.debug("Restored DB from bundle.")
                     # Also try to copy config if it exists in bundle but not in app_dir
                     config_basename = os.path.basename(self.config_path)
                     bundled_config = os.path.join(self.bundle_dir, config_basename)
                     if os.path.exists(bundled_config) and not os.path.exists(self.config_path):
                         shutil.copy2(bundled_config, self.config_path)
-                        print("DEBUG: Restored Config from bundle.")
+                        logger.debug("Restored Config from bundle.")
                 except Exception as e:
                     print(f"Failed to restore data from bundle: {e}")
 
         if not os.path.exists(self.db_path):
-            print("DEBUG: DB still not found. Initializing new DataFrames.")
+            logger.debug("DB still not found. Initializing new DataFrames.")
             # Initialize with new schema if still not found
             self.materials_df = pd.DataFrame(columns=[
                 'MaterialID', '회사코드', '관리품번', '품목명', 'SN', '창고',
@@ -92,7 +95,7 @@ def load_data_impl(self):
                                             '차량번호', '주행거리', '차량점검', '차량비고'])
             self.budget_df = pd.DataFrame(columns=['Site', 'Period', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail', 'Actual_Period', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit', 'Actual_Note', 'Actual_LaborDetail', 'Actual_MaterialDetail', 'Actual_ExpenseDetail'])
         else:
-            print("DEBUG: DB found. Reading Excel...")
+            logger.debug("DB found. Reading Excel...")
             # 1. Materials
             self.materials_df = pd.read_excel(self.db_path, sheet_name='Materials')
             self.materials_df = normalize_cols(self.materials_df)
@@ -106,10 +109,10 @@ def load_data_impl(self):
             qty_aliases = {'기초재고': '수량', '현재고': '수량', 'Stock': '수량', 'Quantity': '수량', 'Qty': '수량', '재고': '수량'}
             for alias, target in qty_aliases.items():
                 if alias in self.materials_df.columns and target not in self.materials_df.columns:
-                    print(f"DEBUG: Mapping {alias} to {target}")
+                    logger.debug("Mapping %s to %s", alias, target)
                     self.materials_df.rename(columns={alias: target}, inplace=True)
             
-            print(f"DEBUG: Materials columns loaded: {self.materials_df.columns.tolist()}")
+            logger.debug("Materials columns loaded: %s", self.materials_df.columns.tolist())
             
             # Ensure Active is numeric and handle NaNs (treat as Active=1)
             self.materials_df['Active'] = pd.to_numeric(self.materials_df['Active'], errors='coerce').fillna(1)
@@ -215,7 +218,7 @@ def load_data_impl(self):
                                                     dtype={'Site': str, 'Note': str, 'User': str,
                                                            '차량번호': str, '주행거리': str, '차량점검': str, '차량비고': str,
                                                            'MaterialID': object})  # [FIX] Keep text MaterialIDs (e.g. 'JIREH Scanner') as-is, prevent NaN coercion
-                print(f"DEBUG: Loaded {len(self.daily_usage_df)} records from DailyUsage sheet.")
+                logger.debug("Loaded %d records from DailyUsage sheet.", len(self.daily_usage_df))
                 self.daily_usage_df = normalize_cols(self.daily_usage_df)
                 
                 # [NEW] Column Name Migration for Daily Usage
@@ -448,9 +451,9 @@ def load_data_impl(self):
             try:
                 self.settings_df = pd.read_excel(self.db_path, sheet_name='Settings')
                 self.settings_df = normalize_cols(self.settings_df)
-                print("DEBUG: Loaded Settings sheet.")
+                logger.debug("Loaded Settings sheet.")
             except Exception as e:
-                print(f"DEBUG: Settings sheet missing or load failed: {e}. Initializing defaults.")
+                logger.debug("Settings sheet missing or load failed: %s. Initializing defaults.", e)
                 # Initialize with hardcoded defaults
                 labor_defaults = [
                     ['Labor', r, '', '', s] for r, s in {

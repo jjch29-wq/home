@@ -332,6 +332,103 @@ class TestCentralNDTReportTab(unittest.TestCase):
         self.assertEqual(win.focus_get(), ent)
         self.assertIsNone(win.grab_current())
 
+    def test_report_panes_sidebar_hide_and_col_widths_persist_across_restart(self):
+        """보고서 탭의 좌우 분할선 비율(PMI/MT/PHOTO 포함), 왼쪽 패널 접기, 표 열 너비가 재시작 후에도 유지되는지 검증."""
+        if not self.has_tk:
+            self.skipTest("Tkinter display not available in current environment")
+        import json
+        import tempfile
+        import site_apps.central.src.reports.ndt_report_app as report_mod
+
+        with tempfile.TemporaryDirectory() as folder:
+            settings_path = Path(folder) / "logo_settings_unified.json"
+            photolog_path = Path(folder) / "photolog_config.json"
+            with patch.object(report_mod, "SETTINGS_FILE", str(settings_path)), \
+                 patch.object(report_mod, "LEGACY_SETTINGS_FILE", str(settings_path)), \
+                 patch.object(report_mod, "PHOTO_LOG_CONFIG_FILE", str(photolog_path)), \
+                 patch.object(report_mod, "LEGACY_PHOTO_LOG_CONFIG_FILE", str(photolog_path)), \
+                 patch.object(report_mod, "CONFIG_DIR", folder):
+
+                win1 = tk.Toplevel(self.root)
+                win1.geometry("1200x700")
+                tab1 = NDTReportTab(win1, main_app=None)
+                tab1.pack(fill="both", expand=True)
+                app1 = tab1.report_app
+
+                # 1) PMI (0번) 패널 비율 조정 & 미리보기 표 열 너비 변경
+                app1._ensure_subtab_built(0)
+                win1.update()
+                app1.pmi_paned._sash_initialized = True
+                total_w = app1.pmi_paned.winfo_width()
+                target_x = int(total_w * 0.28)
+                app1.pmi_paned._sash_press_x = app1.pmi_paned.sash_coord(0)[0]
+                app1.pmi_paned.sash_place(0, target_x, 0)
+                app1.pmi_paned.event_generate("<ButtonRelease-1>")
+                app1.preview_tree.column("Drawing No.", width=510)
+                app1.preview_tree._resizing_col = True
+                app1.preview_tree.event_generate("<ButtonRelease-1>")
+
+                # 2) MT (3번) 패널 접기 & PHOTO (5번) 패널 비율 조정
+                app1.mode_notebook.select(3)
+                win1.update()
+                app1.mt_paned._sash_initialized = True
+                mt_toggle_btn = next(
+                    ch.winfo_children()[0]
+                    for ch in app1.mt_paned.master.winfo_children()
+                    if isinstance(ch, ttk.Frame) and ch.winfo_children() and isinstance(ch.winfo_children()[0], ttk.Button)
+                )
+                mt_toggle_btn.invoke()
+
+                app1.mode_notebook.select(5)
+                win1.update()
+                app1.photo_paned._sash_initialized = True
+                photo_w = app1.photo_paned.winfo_width()
+                app1.photo_paned._sash_press_x = app1.photo_paned.sash_coord(0)[0]
+                app1.photo_paned.sash_place(0, int(photo_w * 0.35), 0)
+                app1.photo_paned.event_generate("<ButtonRelease-1>")
+                win1.update()
+
+                # Pump pending after(10)/after_idle callbacks
+                for _ in range(8):
+                    self.root.update()
+                app1.on_closing()
+                win1.destroy()
+
+                saved = json.loads(settings_path.read_text(encoding="utf-8"))
+                self.assertAlmostEqual(saved["PMI_SASH_RATIO"], target_x / total_w, delta=0.04)
+                self.assertAlmostEqual(saved["PHOTO_SASH_RATIO"], 0.35, delta=0.04)
+                self.assertEqual(saved["PMI_COL_WIDTHS"]["Drawing No."], 510)
+                self.assertTrue(saved["SIDEBAR_HIDDEN"].get("MT"))
+
+                # Session 2: Restart and verify restoration
+                win2 = tk.Toplevel(self.root)
+                win2.geometry("1200x700")
+                tab2 = NDTReportTab(win2, main_app=None)
+                tab2.pack(fill="both", expand=True)
+                app2 = tab2.report_app
+
+                app2._ensure_subtab_built(0)
+                app2.mode_notebook.select(0)
+                win2.update()
+                self.assertEqual(int(app2.preview_tree.column("Drawing No.", "width")), 510)
+                self.assertAlmostEqual(app2.pmi_pane_ratio, saved["PMI_SASH_RATIO"], delta=0.02)
+
+                app2.mode_notebook.select(3)
+                win2.update()
+                mt_panes2 = app2.mt_paned.panes()
+                self.assertTrue(app2.mt_paned.tk.getboolean(app2.mt_paned.panecget(mt_panes2[0], "hide")))
+                mt_btn2 = next(
+                    ch.winfo_children()[0]
+                    for ch in app2.mt_paned.master.winfo_children()
+                    if isinstance(ch, ttk.Frame) and ch.winfo_children() and isinstance(ch.winfo_children()[0], ttk.Button)
+                )
+                self.assertIn("펼치기", mt_btn2.cget("text"))
+
+                app2.mode_notebook.select(5)
+                win2.update()
+                self.assertAlmostEqual(app2.photo_pane_ratio, saved["PHOTO_SASH_RATIO"], delta=0.02)
+                win2.destroy()
+
 
 if __name__ == '__main__':
     unittest.main()

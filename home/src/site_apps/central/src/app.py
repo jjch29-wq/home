@@ -1320,7 +1320,18 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def _load_tab_on_first_map(self, page, setup, *, show_loading=False):
+        state = {"built": False, "binding": None}
+
         def build():
+            if state["built"] or not page.winfo_exists():
+                return
+            state["built"] = True
+            if state["binding"] is not None:
+                try:
+                    page.unbind("<Map>", state["binding"])
+                except Exception:
+                    pass
+                state["binding"] = None
             try:
                 setup()
             except Exception as error:
@@ -1329,28 +1340,17 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                 )
 
         def initialize(event):
-            if event.widget is not page:
+            if event.widget is not page or state["built"]:
                 return
-            page.unbind("<Map>", binding)
-            if not show_loading:
-                build()
-                return
-            loading = ttk.Label(page, text="화면을 불러오는 중…")
-            loading.pack(anchor="w", padx=10, pady=10)
+            # Build immediately before extra paint cycles to avoid mapped-HWND Configure storms on Win32
+            build()
 
-            def build_after_display():
-                try:
-                    build()
-                finally:
-                    loading.destroy()
-
-            page.after(50, build_after_display)
-        binding = page.bind("<Map>", initialize, add="+")
+        state["binding"] = page.bind("<Map>", initialize, add="+")
 
     def setup_daily_work_log_tab(self, page):
         from site_apps.central.src.daily_work_log_tab import DailyWorkLogTab
 
-        self.tab_daily_work_log = DailyWorkLogTab(page)
+        self.tab_daily_work_log = DailyWorkLogTab(page, main_app=self)
         self.tab_daily_work_log.main_app = self
         self.tab_daily_work_log.pack(fill="both", expand=True)
 
@@ -1371,7 +1371,11 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             if width > 0:
                 self.stock_tree.column(column, width=width, minwidth=20, stretch=False)
         if hasattr(self, 'update_registration_combos'):
-            self.update_registration_combos()
+            self._suppress_combo_stock_refresh = True
+            try:
+                self.update_registration_combos()
+            finally:
+                self._suppress_combo_stock_refresh = False
         self.update_stock_view()
     
     def show_low_stock(self):
@@ -1399,8 +1403,13 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
                 msg += f"• {item}: 현재 {current:g} (필요 수준: {reorder:g})\n"
             messagebox.showwarning("재고 부족", msg)
     
+    def flush_pending_stock_rows(self):
+        from site_apps.central.src.views.stock_management_view import flush_pending_stock_rows_impl
+        return flush_pending_stock_rows_impl(self)
+
     def select_all_stock(self):
         """Select all items in the stock treeview"""
+        self.flush_pending_stock_rows()
         all_items = self.stock_tree.get_children()
         self.stock_tree.selection_set(all_items)
 
@@ -4422,6 +4431,12 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
 
     def treeview_sort_column(self, tv, col, reverse):
         """Sort treeview contents when a column header is clicked"""
+        if tv is getattr(self, 'stock_tree', None) or (
+            hasattr(self, 'detached_windows')
+            and 'stock' in self.detached_windows
+            and tv is self.detached_windows['stock'].get('tree')
+        ):
+            self.flush_pending_stock_rows()
         l = [(tv.set(k, col), k) for k in tv.get_children('')]
         
         # Separate the 'Total' row (tagged 'total') from sorting

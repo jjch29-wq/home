@@ -309,6 +309,319 @@ class NDTCalculatorTab(ttk.Frame):
         menubar.add_cascade(label="파일 (File)", menu=file_menu)
         # self.config(menu=menubar)
 
+    def _init_billing_contract_state(self):
+        """기성 계약관리(서브탭 2)의 데이터 변수와 계산 콜백만 즉시 초기화한다."""
+        self.round_var = tk.IntVar(value=1)
+
+        def format_currency(*args, var=None):
+            try:
+                val = var.get().replace(',', '')
+                if val:
+                    formatted = f"{int(val):,}"
+                    if var.get() != formatted:
+                        var.set(formatted)
+            except ValueError:
+                pass
+
+        def get_int(var):
+            try:
+                return int(str(var.get()).replace(',', ''))
+            except Exception:
+                return 0
+
+        def get_float(var):
+            try:
+                return float(str(var.get()).replace(',', ''))
+            except Exception:
+                return 0.0
+
+        def format_qty(*args, var=None):
+            try:
+                val = var.get().replace(',', '')
+                if not val or val == '.' or val.endswith('.'):
+                    return
+                if '.' not in val:
+                    formatted = f"{int(val):,}"
+                    if var.get() != formatted:
+                        var.set(formatted)
+            except ValueError:
+                pass
+
+        self._format_currency = format_currency
+        self._format_qty = format_qty
+        self.get_int = get_int
+        self.get_float = get_float
+
+        self.contract_vars = {}
+        self._billing_contract_rows_meta = []
+
+        locations = ["열배관"]
+        times = ["일반", "야간"]
+        materials = [
+            ("PAUT_300A 이상", "PAUT 300A 이상"),
+            ("PAUT_250A", "PAUT 250A"),
+            ("PAUT_200A", "PAUT 200A"),
+            ("PAUT_150A-125A", "PAUT 150A-125A"),
+            ("PAUT_100A 이하", "PAUT 100A 이하"),
+            ("RT_3 1/3 x 12\"", 'RT 3 1/3 x 12"'),
+            ("RT_3 1/3 x 6\"", 'RT 3 1/3 x 6"'),
+            ("MT_MT", "MT"),
+            ("PT_PT", "PT")
+        ]
+
+        for loc in locations:
+            for t_time in times:
+                for m_key, m_name in materials:
+                    unit = "매" if m_key.startswith("RT") else "M"
+                    full_key = f"{loc}_{t_time}_{m_key}"
+                    self._billing_contract_rows_meta.append((loc, t_time, m_key, m_name, unit, full_key))
+
+                    val = 0
+                    if isinstance(CONTRACT_QTY.get(loc), dict) and isinstance(CONTRACT_QTY[loc].get(t_time), dict):
+                        val = CONTRACT_QTY[loc][t_time].get(m_key, 0)
+                    else:
+                        flat_key = f"{m_key}_야간" if t_time == "야간" else m_key
+                        val = CONTRACT_QTY.get(flat_key, 0)
+
+                    formatted_val = f"{int(val):,}" if float(val).is_integer() else f"{float(val):,.2f}"
+                    c_qty = tk.StringVar(value=formatted_val)
+                    p_qty = tk.StringVar(value="0")
+                    curr_qty = tk.StringVar(value="0")
+
+                    unit_cost = 0
+                    try:
+                        lab_unit = LABOR_COST[loc][t_time].get(m_key, 0)
+                        mat_unit = MATERIAL_COST.get(m_key, 0)
+                        oh = int(lab_unit * float(self.overhead_rate_var.get()) / 100.0)
+                        tech = int((lab_unit + oh) * float(self.tech_fee_rate_var.get()) / 100.0)
+                        unit_cost = mat_unit + lab_unit + oh + tech
+                    except Exception as e:
+                        print(e)
+
+                    amt = float(val) * unit_cost
+                    c_var = tk.StringVar(value=f"{int(amt):,}")
+                    p_var = tk.StringVar(value="0")
+                    c_price_var = tk.StringVar(value=f"{int(unit_cost):,}")
+                    rem_qty = tk.StringVar(value=formatted_val)
+                    c_qty.trace_add("write", lambda *a, v=c_qty: format_qty(var=v))
+                    p_qty.trace_add("write", lambda *a, v=p_qty: format_qty(var=v))
+
+                    def update_rem_qty(*args, k=full_key):
+                        try:
+                            c = self.get_float(self.contract_vars[k]["c_qty"])
+                            p = self.get_float(self.contract_vars[k]["p_qty"])
+                            cur = self.get_float(self.contract_vars[k]["curr_qty"])
+                            rem = c - p - cur
+                            formatted_rem = f"{int(rem):,}" if rem.is_integer() else f"{rem:,.2f}"
+                            self.contract_vars[k]["rem_qty"].set(formatted_rem)
+                            lbl_rem = self.contract_vars[k].get("lbl_rem")
+                            if lbl_rem is not None:
+                                lbl_rem.config(foreground="red" if rem < 0 else "blue")
+                        except Exception:
+                            pass
+
+                    c_qty.trace_add("write", update_rem_qty)
+                    p_qty.trace_add("write", update_rem_qty)
+                    curr_qty.trace_add("write", update_rem_qty)
+
+                    c_var.trace_add("write", lambda *a, v=c_var: format_currency(var=v))
+                    p_var.trace_add("write", lambda *a, v=p_var: format_currency(var=v))
+
+                    self.contract_vars[full_key] = {
+                        "c_qty": c_qty, "p_qty": p_qty, "curr_qty": curr_qty, "rem_qty": rem_qty, "lbl_rem": None,
+                        "c_price": unit_cost, "c_price_var": c_price_var, "contract": c_var, "prev": p_var
+                    }
+
+        self.total_contract_amt_var = tk.StringVar(value="총 계약금액: 0 원")
+
+        def update_total_contract_amt(*args):
+            total = 0
+            for k, v in self.contract_vars.items():
+                total += self.get_int(v["contract"])
+            if hasattr(self, 'exp_vars'):
+                for k, v in self.exp_vars.items():
+                    total += self.get_int(v["budget"])
+            else:
+                total += 86944000
+            self.total_contract_amt_var.set(f"총 계약금액 (부가세 별도): {total:,} 원")
+
+        self._update_total_contract_amt = update_total_contract_amt
+        for k, v in self.contract_vars.items():
+            v["contract"].trace_add("write", update_total_contract_amt)
+        update_total_contract_amt()
+
+        self.total_contract_var = tk.StringVar(value="288,268,000")
+        self.total_contract_var.trace_add("write", lambda *a, v=self.total_contract_var: format_currency(var=v))
+        self.total_prev_var = tk.StringVar(value="0")
+        self.total_prev_var.trace_add("write", lambda *a, v=self.total_prev_var: format_currency(var=v))
+
+        self.exp_vars = {}
+        self._billing_exp_items_meta = [
+            ("equip", "원자력 안전부담금", 343000),
+            ("safety", "안전관리비 (미사용)", 0),
+            ("travel", "주재비 (미사용)", 0),
+            ("print", "도서인쇄비 (미사용)", 0),
+            ("liability", "손해배상공제 수수료", 1613000)
+        ]
+
+        for k, name, budget in self._billing_exp_items_meta:
+            b_var = tk.StringVar(value=f"{budget:,}")
+            p_var = tk.StringVar(value="0")
+            c_var = tk.IntVar(value=0)
+            r_var = tk.StringVar(value=f"{budget:,}")
+
+            def update_rem(*args, kv=k):
+                try:
+                    b = self.get_float(self.exp_vars[kv]["budget"])
+                    p = self.get_float(self.exp_vars[kv]["prev"])
+                    c = float(self.exp_vars[kv]["curr"].get())
+                    rem = b - p - c
+                    self.exp_vars[kv]["rem"].set(f"{int(rem):,}" if rem.is_integer() else f"{rem:,.2f}")
+                    lbl_w = self.exp_vars[kv].get("lbl")
+                    if lbl_w is not None:
+                        lbl_w.config(foreground="red" if rem < 0 else "blue")
+                except Exception:
+                    pass
+
+            b_var.trace_add("write", lambda *a, v=b_var: format_currency(var=v))
+            p_var.trace_add("write", lambda *a, v=p_var: format_currency(var=v))
+            b_var.trace_add("write", update_rem)
+            p_var.trace_add("write", update_rem)
+            c_var.trace_add("write", update_rem)
+
+            self.exp_vars[k] = {"budget": b_var, "prev": p_var, "curr": c_var, "rem": r_var, "lbl": None}
+
+        self.equip_cost_var = self.exp_vars["equip"]["curr"]
+        self.safety_cost_var = self.exp_vars["safety"]["curr"]
+        self.travel_cost_var = self.exp_vars["travel"]["curr"]
+        self.print_cost_var = self.exp_vars["print"]["curr"]
+        self.liability_cost_var = self.exp_vars["liability"]["curr"]
+
+    def _ensure_billing_tab_ui(self):
+        """'📑 2. 기성 계약관리' 서브탭이 처음 화면에 표시될 때 위젯을 생성한다."""
+        if getattr(self, '_billing_tab_ui_built', False):
+            return
+        self._billing_tab_ui_built = True
+        tab_billing = self.tab_billing
+
+        billing_container = ttk.Frame(tab_billing)
+        billing_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        round_frame = ttk.Frame(billing_container)
+        round_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(round_frame, text="기성 청구 회차: 제", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
+        ttk.Entry(round_frame, textvariable=self.round_var, width=5, justify="center", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=5)
+        ttk.Label(round_frame, text="회", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
+
+        ttk.Button(round_frame, text="📦 다음 회차로 이월 (전회 누적 & 금회 초기화)", command=self.carry_over_round, style="Warning.TButton").pack(side=tk.RIGHT)
+        ttk.Button(round_frame, text="📂 이전 백업 불러오기 (.ndt)", command=self.load_project, style="Info.TButton").pack(side=tk.RIGHT, padx=10)
+
+        content_frame = ttk.Frame(billing_container)
+        content_frame.pack(fill=tk.BOTH, expand=True)
+        content_frame.columnconfigure(0, weight=2)
+        content_frame.columnconfigure(1, weight=1)
+        content_frame.rowconfigure(0, weight=1)
+
+        contract_frame = ttk.LabelFrame(content_frame, text="항목별 계약 및 전회 기성 (세액 미포함)", padding=10)
+        contract_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
+
+        ttk.Button(contract_frame, text="⚡ 프로젝트 총 계약수량 자동입력", command=self.auto_load_contract_qty, style="Primary.TButton").pack(fill=tk.X, pady=(0, 10))
+
+        contract_canvas = tk.Canvas(contract_frame, highlightthickness=0, height=200)
+        contract_scrollbar = ttk.Scrollbar(contract_frame, orient="vertical", command=contract_canvas.yview)
+        contract_canvas.configure(yscrollcommand=contract_scrollbar.set)
+
+        contract_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        contract_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        contract_inner_frame = ttk.Frame(contract_canvas)
+        contract_window = contract_canvas.create_window((0, 0), window=contract_inner_frame, anchor="nw")
+
+        contract_inner_frame.bind("<Configure>", lambda e: contract_canvas.configure(scrollregion=contract_canvas.bbox("all")))
+        contract_canvas.bind("<Configure>", lambda e: contract_canvas.itemconfig(contract_window, width=e.width))
+
+        headers = ["구간", "시간", "항목", "단위", "계약수량", "전회수량", "금회수량", "잔여수량", "계약단가", "계약금액", "전회금액"]
+        for i, h in enumerate(headers):
+            ttk.Label(contract_inner_frame, text=h, font=("Arial", 9, "bold"), anchor="center").grid(row=0, column=i, padx=5, pady=2, sticky="ew")
+
+        for row_idx, (loc, t_time, m_key, m_name, unit, full_key) in enumerate(self._billing_contract_rows_meta, start=1):
+            v = self.contract_vars[full_key]
+            ttk.Label(contract_inner_frame, text=loc).grid(row=row_idx, column=0, sticky="w", padx=2)
+            ttk.Label(contract_inner_frame, text=t_time).grid(row=row_idx, column=1, sticky="w", padx=2)
+            ttk.Label(contract_inner_frame, text=m_name).grid(row=row_idx, column=2, sticky="w", padx=2)
+            ttk.Label(contract_inner_frame, text=unit).grid(row=row_idx, column=3, padx=2)
+
+            ttk.Entry(contract_inner_frame, textvariable=v["c_qty"], width=8).grid(row=row_idx, column=4, padx=1, pady=1)
+            ttk.Entry(contract_inner_frame, textvariable=v["p_qty"], width=8).grid(row=row_idx, column=5, padx=1, pady=1)
+            ttk.Label(contract_inner_frame, textvariable=v["curr_qty"], width=6, anchor="e", foreground="green").grid(row=row_idx, column=6, padx=1, pady=1)
+            rem_fg = "red" if self.get_float(v["rem_qty"]) < 0 else "blue"
+            lbl_rem = ttk.Label(contract_inner_frame, textvariable=v["rem_qty"], width=8, anchor="e", font=("Arial", 9, "bold"), foreground=rem_fg)
+            lbl_rem.grid(row=row_idx, column=7, padx=1, pady=1)
+            v["lbl_rem"] = lbl_rem
+
+            ttk.Label(contract_inner_frame, textvariable=v["c_price_var"], anchor="e", width=12).grid(row=row_idx, column=8, padx=2, pady=1)
+            ttk.Entry(contract_inner_frame, textvariable=v["contract"], width=12).grid(row=row_idx, column=9, padx=1, pady=1)
+            ttk.Entry(contract_inner_frame, textvariable=v["prev"], width=12).grid(row=row_idx, column=10, padx=1, pady=1)
+
+        ttk.Label(contract_frame, textvariable=self.total_contract_amt_var, font=("Arial", 11, "bold"), foreground="blue").pack(side=tk.BOTTOM, pady=10, anchor="e")
+
+        def _on_contract_mousewheel(event):
+            try:
+                if str(event.widget).startswith(str(contract_frame)):
+                    delta = event.delta
+                    if event.num == 4:
+                        delta = 120
+                    if event.num == 5:
+                        delta = -120
+                    contract_canvas.yview_scroll(int(-1 * (delta / 120)), "units")
+            except Exception:
+                pass
+
+        contract_frame.bind_all("<MouseWheel>", _on_contract_mousewheel, add='+')
+        contract_frame.bind_all("<Button-4>", _on_contract_mousewheel, add='+')
+        contract_frame.bind_all("<Button-5>", _on_contract_mousewheel, add='+')
+
+        f = ttk.Frame(contract_frame)
+        f.pack(fill=tk.X, pady=2)
+        ttk.Label(f, text="[프로젝트 총액]", width=12, font=("Arial", 9, "bold")).grid(row=0, column=0, rowspan=2, sticky=tk.W)
+        ttk.Label(f, text="계약 총액:").grid(row=0, column=1, sticky=tk.W)
+        ttk.Entry(f, textvariable=self.total_contract_var, width=15).grid(row=0, column=2, padx=2)
+        ttk.Label(f, text="원").grid(row=0, column=3)
+
+        ttk.Label(f, text="전회 총액:").grid(row=1, column=1, sticky=tk.W, pady=2)
+        ttk.Entry(f, textvariable=self.total_prev_var, width=15).grid(row=1, column=2, padx=2)
+        ttk.Label(f, text="원").grid(row=1, column=3)
+
+        exp_frame = ttk.LabelFrame(content_frame, text="기타 경비 및 실비 정산 (월간)", padding=10)
+        exp_frame.grid(row=0, column=1, sticky='nsew')
+
+        hf = ttk.Frame(exp_frame)
+        hf.pack(fill=tk.X, pady=2)
+        ttk.Label(hf, text="항목", width=18, font=("Arial", 9, "bold")).grid(row=0, column=0, padx=2)
+        ttk.Label(hf, text="책정예산", width=12, font=("Arial", 9, "bold")).grid(row=0, column=1, padx=2)
+        ttk.Label(hf, text="전회청구액", width=12, font=("Arial", 9, "bold")).grid(row=0, column=2, padx=2)
+        ttk.Label(hf, text="금회청구액", width=12, font=("Arial", 9, "bold")).grid(row=0, column=3, padx=2)
+        ttk.Label(hf, text="잔여예산", width=12, font=("Arial", 9, "bold")).grid(row=0, column=4, padx=2)
+
+        for k, name, _budget in self._billing_exp_items_meta:
+            ev = self.exp_vars[k]
+            ef = ttk.Frame(exp_frame)
+            ef.pack(fill=tk.X, pady=2)
+
+            ttk.Label(ef, text=name, width=18).grid(row=0, column=0, padx=2)
+            ttk.Entry(ef, textvariable=ev["budget"], width=12).grid(row=0, column=1, padx=2)
+            ttk.Entry(ef, textvariable=ev["prev"], width=12).grid(row=0, column=2, padx=2)
+            ttk.Entry(ef, textvariable=ev["curr"], width=12).grid(row=0, column=3, padx=2)
+            exp_fg = "red" if self.get_float(ev["rem"]) < 0 else "blue"
+            lbl = ttk.Label(ef, textvariable=ev["rem"], width=12, anchor="e", font=("Arial", 9, "bold"), foreground=exp_fg)
+            lbl.grid(row=0, column=4, padx=2)
+            ev["lbl"] = lbl
+
+            if k == "equip":
+                btn = ttk.Button(ef, text="계산기", width=6, command=lambda v=ev["curr"]: self.open_equip_calculator(v))
+                btn.grid(row=0, column=5, padx=2)
+
     def create_widgets(self):
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
@@ -317,7 +630,10 @@ class NDTCalculatorTab(ttk.Frame):
         self.notebook.add(tab_work, text="📋 1. 일일 작업 기록 및 목록")
         
         tab_billing = ttk.Frame(self.notebook)
+        self.tab_billing = tab_billing
+        self._billing_tab_ui_built = False
         self.notebook.add(tab_billing, text="📑 2. 기성 계약관리")
+        tab_billing.bind("<Map>", lambda _e: self._ensure_billing_tab_ui(), add="+")
         # --- TAB 1: WORK (입력 폼 및 목록 사이드바이사이드) ---
         self.work_pane = tk.PanedWindow(tab_work, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=5, bg="#b0b0b0")
         self.work_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -445,303 +761,8 @@ class NDTCalculatorTab(ttk.Frame):
         self.result_text = tk.Text(left_frame, height=10, width=25, state=tk.DISABLED, font=("Consolas", 11), wrap=tk.WORD)
         self.result_text.pack(fill=tk.X, expand=False)
         
-        # --- TAB 2: BILLING (계약 및 실비 정산) ---
-        billing_container = ttk.Frame(tab_billing)
-        billing_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        round_frame = ttk.Frame(billing_container)
-        round_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        self.round_var = tk.IntVar(value=1)
-        ttk.Label(round_frame, text="기성 청구 회차: 제", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
-        ttk.Entry(round_frame, textvariable=self.round_var, width=5, justify="center", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=5)
-        ttk.Label(round_frame, text="회", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
-        
-        # ttk.Label(round_frame, text="  |  기성청구 기간:", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=(15, 5))
-        # self.billing_period_var = tk.StringVar(value="")
-        # ttk.Entry(round_frame, textvariable=self.billing_period_var, width=25, font=("Arial", 11)).pack(side=tk.LEFT)
-        
-        ttk.Button(round_frame, text="📦 다음 회차로 이월 (전회 누적 & 금회 초기화)", command=self.carry_over_round, style="Warning.TButton").pack(side=tk.RIGHT)
-        ttk.Button(round_frame, text="📂 이전 백업 불러오기 (.ndt)", command=self.load_project, style="Info.TButton").pack(side=tk.RIGHT, padx=10)
-        # ttk.Button(round_frame, text="✨ 엑셀 보고서 생성기 열기", command=self.open_report_hub).pack(side=tk.RIGHT, padx=5)
-        
-        content_frame = ttk.Frame(billing_container)
-        content_frame.pack(fill=tk.BOTH, expand=True)
-        content_frame.columnconfigure(0, weight=2)  # Left frame takes 2/3
-        content_frame.columnconfigure(1, weight=1)  # Right frame takes 1/3
-        content_frame.rowconfigure(0, weight=1)
-        
-        contract_frame = ttk.LabelFrame(content_frame, text="항목별 계약 및 전회 기성 (세액 미포함)", padding=10)
-        contract_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
-        
-        ttk.Button(contract_frame, text="⚡ 프로젝트 총 계약수량 자동입력", command=self.auto_load_contract_qty, style="Primary.TButton").pack(fill=tk.X, pady=(0, 10))
-        
-        def format_currency(*args, var=None):
-            try:
-                val = var.get().replace(',', '')
-                if val:
-                    formatted = f"{int(val):,}"
-                    if var.get() != formatted:
-                        var.set(formatted)
-            except ValueError:
-                pass
-
-        def get_int(var):
-            try: return int(str(var.get()).replace(',', ''))
-            except: return 0
-
-        def get_float(var):
-            try: return float(str(var.get()).replace(',', ''))
-            except: return 0.0
-
-        def format_qty(*args, var=None):
-            try:
-                val = var.get().replace(',', '')
-                if not val or val == '.' or val.endswith('.'): return
-                if '.' not in val:
-                    formatted = f"{int(val):,}"
-                    if var.get() != formatted:
-                        var.set(formatted)
-            except ValueError:
-                pass
-
-        self.get_int = get_int
-        self.get_float = get_float
-        
-        contract_canvas = tk.Canvas(contract_frame, highlightthickness=0, height=200)
-        contract_scrollbar = ttk.Scrollbar(contract_frame, orient="vertical", command=contract_canvas.yview)
-        contract_canvas.configure(yscrollcommand=contract_scrollbar.set)
-        
-        contract_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        contract_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        contract_inner_frame = ttk.Frame(contract_canvas)
-        contract_window = contract_canvas.create_window((0, 0), window=contract_inner_frame, anchor="nw")
-        
-        contract_inner_frame.bind("<Configure>", lambda e: contract_canvas.configure(scrollregion=contract_canvas.bbox("all")))
-        contract_canvas.bind("<Configure>", lambda e: contract_canvas.itemconfig(contract_window, width=e.width))
-        
-        self.contract_vars = {}
-        
-        headers = ["구간", "시간", "항목", "단위", "계약수량", "전회수량", "금회수량", "잔여수량", "계약단가", "계약금액", "전회금액"]
-        for i, h in enumerate(headers):
-            ttk.Label(contract_inner_frame, text=h, font=("Arial", 9, "bold"), anchor="center").grid(row=0, column=i, padx=5, pady=2, sticky="ew")
-            
-        locations = ["열배관"]
-        times = ["일반", "야간"]
-        materials = [
-            ("PAUT_300A 이상", "PAUT 300A 이상"),
-            ("PAUT_250A", "PAUT 250A"),
-            ("PAUT_200A", "PAUT 200A"),
-            ("PAUT_150A-125A", "PAUT 150A-125A"),
-            ("PAUT_100A 이하", "PAUT 100A 이하"),
-            ("RT_3 1/3 x 12\"", 'RT 3 1/3 x 12"'),
-            ("RT_3 1/3 x 6\"", 'RT 3 1/3 x 6"'),
-            ("MT_MT", "MT"),
-            ("PT_PT", "PT")
-        ]
-        
-        row_idx = 1
-        for loc in locations:
-            for t_time in times:
-                for m_key, m_name in materials:
-                    unit = "매" if m_key.startswith("RT") else "M"
-                    full_key = f"{loc}_{t_time}_{m_key}"
-                    
-                    ttk.Label(contract_inner_frame, text=loc).grid(row=row_idx, column=0, sticky="w", padx=2)
-                    ttk.Label(contract_inner_frame, text=t_time).grid(row=row_idx, column=1, sticky="w", padx=2)
-                    ttk.Label(contract_inner_frame, text=m_name).grid(row=row_idx, column=2, sticky="w", padx=2)
-                    ttk.Label(contract_inner_frame, text=unit).grid(row=row_idx, column=3, padx=2)
-                    
-                    val = 0
-                    if isinstance(CONTRACT_QTY.get(loc), dict) and isinstance(CONTRACT_QTY[loc].get(t_time), dict):
-                        val = CONTRACT_QTY[loc][t_time].get(m_key, 0)
-                    else:
-                        flat_key = f"{m_key}_야간" if t_time == "야간" else m_key
-                        val = CONTRACT_QTY.get(flat_key, 0)
-
-                    formatted_val = f"{int(val):,}" if float(val).is_integer() else f"{float(val):,.2f}"
-                    c_qty = tk.StringVar(value=formatted_val)
-                    p_qty = tk.StringVar(value="0")
-                    curr_qty = tk.StringVar(value="0")
-                    
-                    unit_cost = 0
-                    try:
-                        lab_unit = LABOR_COST[loc][t_time].get(m_key, 0)
-                        mat_unit = MATERIAL_COST.get(m_key, 0)
-                        
-                        oh = int(lab_unit * float(self.overhead_rate_var.get()) / 100.0)
-                        tech = int((lab_unit + oh) * float(self.tech_fee_rate_var.get()) / 100.0)
-                        
-                        unit_cost = mat_unit + lab_unit + oh + tech
-                    except Exception as e:
-                        print(e)
-                        pass
-
-                    amt = float(val) * unit_cost
-                    c_var = tk.StringVar(value=f"{int(amt):,}")
-                    p_var = tk.StringVar(value="0")
-                    c_price_var = tk.StringVar(value=f"{int(unit_cost):,}")
-                    rem_qty = tk.StringVar(value=formatted_val)
-                    c_qty.trace_add("write", lambda *a, v=c_qty: format_qty(var=v))
-                    p_qty.trace_add("write", lambda *a, v=p_qty: format_qty(var=v))
-                    
-                    def update_rem_qty(*args, k=full_key):
-                        try:
-                            c = self.get_float(self.contract_vars[k]["c_qty"])
-                            p = self.get_float(self.contract_vars[k]["p_qty"])
-                            cur = self.get_float(self.contract_vars[k]["curr_qty"])
-                            rem = c - p - cur
-                            formatted_rem = f"{int(rem):,}" if rem.is_integer() else f"{rem:,.2f}"
-                            self.contract_vars[k]["rem_qty"].set(formatted_rem)
-                            
-                            if rem < 0:
-                                self.contract_vars[k]["lbl_rem"].config(foreground="red")
-                            else:
-                                self.contract_vars[k]["lbl_rem"].config(foreground="blue")
-                        except:
-                            pass
-                            
-                    c_qty.trace_add("write", update_rem_qty)
-                    p_qty.trace_add("write", update_rem_qty)
-                    curr_qty.trace_add("write", update_rem_qty)
-                    
-                    ttk.Entry(contract_inner_frame, textvariable=c_qty, width=8).grid(row=row_idx, column=4, padx=1, pady=1)
-                    ttk.Entry(contract_inner_frame, textvariable=p_qty, width=8).grid(row=row_idx, column=5, padx=1, pady=1)
-                    ttk.Label(contract_inner_frame, textvariable=curr_qty, width=6, anchor="e", foreground="green").grid(row=row_idx, column=6, padx=1, pady=1)
-                    lbl_rem = ttk.Label(contract_inner_frame, textvariable=rem_qty, width=8, anchor="e", font=("Arial", 9, "bold"))
-                    lbl_rem.grid(row=row_idx, column=7, padx=1, pady=1)
-                    
-                    ttk.Label(contract_inner_frame, textvariable=c_price_var, anchor="e", width=12).grid(row=row_idx, column=8, padx=2, pady=1)
-                    ttk.Entry(contract_inner_frame, textvariable=c_var, width=12).grid(row=row_idx, column=9, padx=1, pady=1)
-                    ttk.Entry(contract_inner_frame, textvariable=p_var, width=12).grid(row=row_idx, column=10, padx=1, pady=1)
-                    
-                    c_var.trace_add("write", lambda *a, v=c_var: format_currency(var=v))
-                    p_var.trace_add("write", lambda *a, v=p_var: format_currency(var=v))
-                    
-                    self.contract_vars[full_key] = {
-                        "c_qty": c_qty, "p_qty": p_qty, "curr_qty": curr_qty, "rem_qty": rem_qty, "lbl_rem": lbl_rem,
-                        "c_price": unit_cost, "c_price_var": c_price_var, "contract": c_var, "prev": p_var
-                    }
-                    row_idx += 1
-                    
-        # Total Contract Amount Label
-        self.total_contract_amt_var = tk.StringVar(value="총 계약금액: 0 원")
-        ttk.Label(contract_frame, textvariable=self.total_contract_amt_var, font=("Arial", 11, "bold"), foreground="blue").pack(side=tk.BOTTOM, pady=10, anchor="e")
-        
-        def update_total_contract_amt(*args):
-            total = 0
-            for k, v in self.contract_vars.items():
-                total += self.get_int(v["contract"])
-                
-            # 기타 경비 및 실비 정산 예산 합산
-            if hasattr(self, 'exp_vars'):
-                for k, v in self.exp_vars.items():
-                    total += self.get_int(v["budget"])
-            else:
-                total += 86944000 # exp_vars 초기화 전 기본 실비 합계 (단수조정 제거 후 순수 합계)
-                
-            self.total_contract_amt_var.set(f"총 계약금액 (부가세 별도): {total:,} 원")
-            
-        for k, v in self.contract_vars.items():
-            v["contract"].trace_add("write", update_total_contract_amt)
-            
-        update_total_contract_amt()
-            
-        def _on_contract_mousewheel(event):
-            try:
-                if str(event.widget).startswith(str(contract_frame)):
-                    delta = event.delta
-                    if event.num == 4: delta = 120
-                    if event.num == 5: delta = -120
-                    contract_canvas.yview_scroll(int(-1*(delta/120)), "units")
-            except:
-                pass
-        contract_frame.bind_all("<MouseWheel>", _on_contract_mousewheel, add='+')
-        contract_frame.bind_all("<Button-4>", _on_contract_mousewheel, add='+')
-        contract_frame.bind_all("<Button-5>", _on_contract_mousewheel, add='+')
-
-        f = ttk.Frame(contract_frame)
-        f.pack(fill=tk.X, pady=2)
-        ttk.Label(f, text="[프로젝트 총액]", width=12, font=("Arial", 9, "bold")).grid(row=0, column=0, rowspan=2, sticky=tk.W)
-        ttk.Label(f, text="계약 총액:").grid(row=0, column=1, sticky=tk.W)
-        self.total_contract_var = tk.StringVar(value="288,268,000")
-        self.total_contract_var.trace_add("write", lambda *a, v=self.total_contract_var: format_currency(var=v))
-        ttk.Entry(f, textvariable=self.total_contract_var, width=15).grid(row=0, column=2, padx=2)
-        ttk.Label(f, text="원").grid(row=0, column=3)
-        
-        ttk.Label(f, text="전회 총액:").grid(row=1, column=1, sticky=tk.W, pady=2)
-        self.total_prev_var = tk.StringVar(value="0")
-        self.total_prev_var.trace_add("write", lambda *a, v=self.total_prev_var: format_currency(var=v))
-        ttk.Entry(f, textvariable=self.total_prev_var, width=15).grid(row=1, column=2, padx=2)
-        ttk.Label(f, text="원").grid(row=1, column=3)
-        
-        exp_frame = ttk.LabelFrame(content_frame, text="기타 경비 및 실비 정산 (월간)", padding=10)
-        exp_frame.grid(row=0, column=1, sticky='nsew')
-        
-        hf = ttk.Frame(exp_frame)
-        hf.pack(fill=tk.X, pady=2)
-        ttk.Label(hf, text="항목", width=18, font=("Arial", 9, "bold")).grid(row=0, column=0, padx=2)
-        ttk.Label(hf, text="책정예산", width=12, font=("Arial", 9, "bold")).grid(row=0, column=1, padx=2)
-        ttk.Label(hf, text="전회청구액", width=12, font=("Arial", 9, "bold")).grid(row=0, column=2, padx=2)
-        ttk.Label(hf, text="금회청구액", width=12, font=("Arial", 9, "bold")).grid(row=0, column=3, padx=2)
-        ttk.Label(hf, text="잔여예산", width=12, font=("Arial", 9, "bold")).grid(row=0, column=4, padx=2)
-        
-        self.exp_vars = {}
-        items = [
-            ("equip", "원자력 안전부담금", 343000),
-            ("safety", "안전관리비 (미사용)", 0),
-            ("travel", "주재비 (미사용)", 0),
-            ("print", "도서인쇄비 (미사용)", 0),
-            ("liability", "손해배상공제 수수료", 1613000)
-        ]
-        
-        for i, (k, name, budget) in enumerate(items, start=1):
-            f = ttk.Frame(exp_frame)
-            f.pack(fill=tk.X, pady=2)
-            
-            ttk.Label(f, text=name, width=18).grid(row=0, column=0, padx=2)
-            
-            b_var = tk.StringVar(value=f"{budget:,}")
-            p_var = tk.StringVar(value="0")
-            c_var = tk.IntVar(value=0)
-            r_var = tk.StringVar(value=f"{budget:,}")
-            
-            def update_rem(*args, kv=k):
-                try:
-                    b = self.get_float(self.exp_vars[kv]["budget"])
-                    p = self.get_float(self.exp_vars[kv]["prev"])
-                    c = float(self.exp_vars[kv]["curr"].get())
-                    rem = b - p - c
-                    self.exp_vars[kv]["rem"].set(f"{int(rem):,}" if rem.is_integer() else f"{rem:,.2f}")
-                    if rem < 0: self.exp_vars[kv]["lbl"].config(foreground="red")
-                    else: self.exp_vars[kv]["lbl"].config(foreground="blue")
-                except: pass
-                
-            b_var.trace_add("write", lambda *a, v=b_var: format_currency(var=v))
-            p_var.trace_add("write", lambda *a, v=p_var: format_currency(var=v))
-            
-            b_var.trace_add("write", update_rem)
-            p_var.trace_add("write", update_rem)
-            c_var.trace_add("write", update_rem)
-            
-            ttk.Entry(f, textvariable=b_var, width=12).grid(row=0, column=1, padx=2)
-            ttk.Entry(f, textvariable=p_var, width=12).grid(row=0, column=2, padx=2)
-            ttk.Entry(f, textvariable=c_var, width=12).grid(row=0, column=3, padx=2)
-            lbl = ttk.Label(f, textvariable=r_var, width=12, anchor="e", font=("Arial", 9, "bold"), foreground="blue")
-            lbl.grid(row=0, column=4, padx=2)
-            
-            if k == "equip":
-                btn = ttk.Button(f, text="계산기", width=6, command=lambda v=c_var: self.open_equip_calculator(v))
-                btn.grid(row=0, column=5, padx=2)
-            
-            self.exp_vars[k] = {"budget": b_var, "prev": p_var, "curr": c_var, "rem": r_var, "lbl": lbl}
-            
-        self.equip_cost_var = self.exp_vars["equip"]["curr"]
-        self.safety_cost_var = self.exp_vars["safety"]["curr"]
-        self.travel_cost_var = self.exp_vars["travel"]["curr"]
-        self.print_cost_var = self.exp_vars["print"]["curr"]
-        self.liability_cost_var = self.exp_vars["liability"]["curr"]
+        # --- TAB 2: BILLING (계약 및 실비 정산 - 데이터 모델 즉시 초기화, 위젯은 탭 진입 시 지연 생성) ---
+        self._init_billing_contract_state()
 
         
         # --- RIGHT FRAME (누적 테이블, TAB 1에 배치) ---

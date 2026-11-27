@@ -440,8 +440,7 @@ class ReportModeUIMixin:
         
         self._create_preview_ui(tab_data)
         self._apply_sash_ratio("PMI")
-        
-        self.template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("PMI"))
+        self._bind_report_paned(self.pmi_paned, "PMI", 0.5)
 
     def _update_pmi_ratio(self):
         """Saves current sash position and persists it."""
@@ -634,10 +633,7 @@ class ReportModeUIMixin:
         self._create_gapji_preview_ui(t_gapji, "RT") # Gapji uses current sub-mode context internally
         
         self._apply_sash_ratio("RT")
-        self.rt_pane_ratio = self.config.get('RT_SASH_RATIO', 0.5)
-        self.rt_paned.bind("<Configure>", self._on_rt_paned_configure)
-        self.rt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_rt_ratio))
-        self.root.after(500, lambda: self._on_rt_paned_configure(None))
+        self._bind_report_paned(self.rt_paned, "RT", 0.5)
 
     def _update_rt_path_ui(self):
         """모드에 따라 파일 선택 경로 입력 UI 갱신"""
@@ -1035,14 +1031,9 @@ class ReportModeUIMixin:
         self._create_pt_preview_ui(tab_data)
         self._create_gapji_preview_ui(tab_gapji, "PT")
         self._apply_sash_ratio("PT")
-        
-        self.pt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("PT"))
 
         # Adaptive Resizing Bindings
-        self.pt_pane_ratio = self.config.get('PT_SASH_RATIO', 0.5)
-        self.pt_paned.bind("<Configure>", self._on_pt_paned_configure)
-        self.pt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_pt_ratio))
-        self.root.after(500, lambda: self._on_pt_paned_configure(None))
+        self._bind_report_paned(self.pt_paned, "PT", 0.5)
 
     def _setup_mt_ui(self, parent):
         # [FORCE] Ensure parent (pt_mode_frame) allows expansion
@@ -1170,14 +1161,9 @@ class ReportModeUIMixin:
         self._create_mt_preview_ui(tab_data)
         self._create_gapji_preview_ui(tab_gapji, "MT")
         self._apply_sash_ratio("MT")
-        
-        self.mt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config(self.mt_template_file_path.get(), "MT"))
 
         # Adaptive Resizing Bindings
-        self.mt_pane_ratio = self.config.get('MT_SASH_RATIO', 0.5)
-        self.mt_paned.bind("<Configure>", self._on_mt_paned_configure)
-        self.mt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_mt_ratio))
-        self.root.after(500, lambda: self._on_mt_paned_configure(None))
+        self._bind_report_paned(self.mt_paned, "MT", 0.5)
 
     def _update_pt_ratio(self):
         try:

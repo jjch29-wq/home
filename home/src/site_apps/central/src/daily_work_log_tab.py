@@ -57,10 +57,246 @@ COMPANY_WORK_CATEGORIES = {
 }
 ALL_WORK_CATEGORIES = ['', '제조', '수탁', '건가', '건가-추가', '건가-개선']
 
+
+class _NDTCellProxy:
+    """Treeview 셀 하나를 기존 Entry/Combobox 위젯 인터페이스와 호환되게 감싸는 경량 프록시."""
+
+    __slots__ = ('_row', '_col', '_value', '_values_list', '_bindings', '_is_combo', '_readonly')
+
+    def __init__(self, row_proxy, col_name, values=None, readonly=False):
+        self._row = row_proxy
+        self._col = col_name
+        self._value = ''
+        self._is_combo = values is not None
+        self._values_list = list(values) if values is not None else []
+        self._readonly = bool(readonly)
+        self._bindings = {}
+
+    def get(self):
+        return self._value
+
+    def set(self, val):
+        new_val = '' if val is None else str(val)
+        if self._value != new_val:
+            self._value = new_val
+            self._row._on_cell_value_updated(self._col)
+        else:
+            self._row._on_cell_value_updated(self._col)
+
+    def delete(self, first, last=None):
+        if first == 0 or first == '0':
+            if last in (None, tk.END, 'end') or (isinstance(last, int) and last >= len(self._value)):
+                if self._value != '':
+                    self._value = ''
+                    self._row._on_cell_value_updated(self._col)
+                return
+            if isinstance(last, int):
+                self._value = self._value[last:]
+                self._row._on_cell_value_updated(self._col)
+
+    def insert(self, index, val):
+        s = '' if val is None else str(val)
+        if index in (tk.END, 'end'):
+            self._value = self._value + s
+        else:
+            try:
+                pos = int(index)
+            except (TypeError, ValueError):
+                pos = 0
+            self._value = self._value[:pos] + s + self._value[pos:]
+        self._row._on_cell_value_updated(self._col)
+
+    def __getitem__(self, key):
+        if key == 'values':
+            return tuple(self._values_list)
+        if key == 'state':
+            return 'readonly' if self._readonly else 'normal'
+        raise KeyError(key)
+
+    def __setitem__(self, key, value):
+        if key == 'values':
+            self._values_list = list(value or [])
+            self._row._tab._sync_active_combo_values(self._row._row_index, self._col)
+            return
+        if key == 'state':
+            self._readonly = (value == 'readonly')
+            return
+        raise KeyError(key)
+
+    def configure(self, **kwargs):
+        if 'values' in kwargs:
+            self['values'] = kwargs['values']
+        if 'state' in kwargs:
+            self['state'] = kwargs['state']
+
+    config = configure
+
+    def cget(self, key):
+        return self[key]
+
+    def bind(self, sequence, func, add=None):
+        seq = '<Button-1>' if sequence == '<ButtonPress-1>' else sequence
+        if add in ('+', True) and seq in self._bindings:
+            self._bindings[seq].append(func)
+        else:
+            self._bindings[seq] = [func]
+
+    def event_generate(self, sequence, **kwargs):
+        seq = '<Button-1>' if sequence == '<ButtonPress-1>' else sequence
+        evt = type('_VirtualEvent', (), {'widget': self, **kwargs})()
+        for fn in list(self._bindings.get(seq, ())):
+            res = fn(evt)
+            if res == 'break':
+                break
+
+    def focus_set(self):
+        self._row._tab._focus_ndt_cell(self._row._row_index, self._col)
+
+
+class _NDTSectionInfoProxy:
+    """'구간정보' 셀(RT 4분할 / PAUT·MT·PT 단일 문자열) 호환 프록시."""
+
+    def __init__(self, row_proxy):
+        self._row = row_proxy
+        self._slots = ['', '', '', '']
+        self._rt_retake_meta = {}
+        self._in_sync = False
+        self._bindings = {}
+
+    def _method(self):
+        m_cell = self._row.get('검사방법')
+        return m_cell.get().strip().upper() if m_cell is not None else ''
+
+    def get(self):
+        method = self._method()
+        if method in ('PAUT', 'PT', 'MT'):
+            return self._slots[0]
+        parts = [s.strip() for s in self._slots]
+        return ','.join(parts).rstrip(',') if method == 'RT' else ','.join([p for p in parts if p])
+
+    def set(self, val):
+        s_val = '' if val is None else str(val)
+        self._slots = ['', '', '', '']
+        method = self._method()
+        if method in ('PAUT', 'PT', 'MT'):
+            self._slots[0] = s_val
+        else:
+            parts = s_val.split(',') if s_val else []
+            for i, p in enumerate(parts[:4]):
+                self._slots[i] = p
+        self._row._on_cell_value_updated('구간정보')
+        if not self._in_sync and not self._row._batch_depth:
+            self._in_sync = True
+            try:
+                sync_rt_widgets(self._row, all_rows=self._row._tab._rt_context())
+            except ValueError:
+                pass
+            finally:
+                self._in_sync = False
+
+    def set_slots_from_editor(self, slots):
+        for i in range(4):
+            self._slots[i] = str(slots[i]) if i < len(slots) else ''
+        self._row._on_cell_value_updated('구간정보')
+
+    def get_slots(self):
+        return list(self._slots)
+
+    def delete(self, first, last=None):
+        if first == 0 or first == '0':
+            self._slots = ['', '', '', '']
+            self._row._on_cell_value_updated('구간정보')
+
+    def insert(self, index, val):
+        s_val = '' if val is None else str(val)
+        if index in (tk.END, 'end'):
+            self._slots[0] = self._slots[0] + s_val
+        else:
+            self._slots[0] = s_val + self._slots[0]
+        self._row._on_cell_value_updated('구간정보')
+
+    def apply_layout(self):
+        self._row._on_cell_value_updated('구간정보')
+        self._row._tab._refresh_active_section_info_mode(self._row._row_index)
+
+    def bind(self, sequence, func, add=None):
+        seq = '<Button-1>' if sequence == '<ButtonPress-1>' else sequence
+        if add in ('+', True) and seq in self._bindings:
+            self._bindings[seq].append(func)
+        else:
+            self._bindings[seq] = [func]
+
+    def event_generate(self, sequence, **kwargs):
+        seq = '<Button-1>' if sequence == '<ButtonPress-1>' else sequence
+        evt = type('_VirtualEvent', (), {'widget': self, **kwargs})()
+        for fn in list(self._bindings.get(seq, ())):
+            res = fn(evt)
+            if res == 'break':
+                break
+
+    def focus_set(self):
+        self._row._tab._focus_ndt_cell(self._row._row_index, '구간정보')
+
+
+class _NDTRowProxy(dict):
+    """한 행의 컬럼별 셀 프록시를 담고 Treeview 행 표시를 동기화하는 dict 서브클래스."""
+
+    def __init__(self, tab, row_index, iid):
+        super().__init__()
+        self._tab = tab
+        self._row_index = row_index  # 0-based
+        self._iid = iid
+        self._batch_depth = 0
+        self._dirty = False
+
+    def begin_batch(self):
+        self._batch_depth += 1
+
+    def end_batch(self):
+        if self._batch_depth > 0:
+            self._batch_depth -= 1
+        if self._batch_depth == 0 and self._dirty:
+            self._dirty = False
+            self._flush_to_tree()
+            state = getattr(self._tab, '_active_editor_state', None)
+            if state and state.get('row') == self._row_index and state.get('col') in self:
+                self._tab._sync_active_editor_if_matching(self._row_index, state['col'])
+
+    def _on_cell_value_updated(self, col_name):
+        if self._batch_depth > 0:
+            self._dirty = True
+            return
+        tree = getattr(self._tab, 'ndt_tree', None)
+        if tree is not None and tree.winfo_exists():
+            try:
+                tree.set(self._iid, col_name, self[col_name].get())
+            except tk.TclError:
+                pass
+        self._tab._sync_active_editor_if_matching(self._row_index, col_name)
+
+    def _flush_to_tree(self):
+        tree = getattr(self._tab, 'ndt_tree', None)
+        if tree is None or not tree.winfo_exists():
+            return
+        checked = False
+        if self._row_index < len(self._tab.ndt_selection_vars):
+            checked = bool(self._tab.ndt_selection_vars[self._row_index].get())
+        mark = f"☑ {self._row_index + 1}" if checked else f"☐ {self._row_index + 1}"
+        vals = [mark] + [self[c].get() for c in self._tab.ndt_cols]
+        try:
+            tree.item(self._iid, values=vals)
+        except tk.TclError:
+            pass
+
+
 class DailyWorkLogTab(ttk.Frame):
-    def __init__(self, parent, *args, **kwargs):
+    def __init__(self, parent, *args, main_app=None, initial_ndt_rows=10, target_ndt_rows=10, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.parent = parent
+        self.main_app = main_app
+        self._initial_ndt_rows = max(1, int(initial_ndt_rows))
+        self._target_ndt_rows = max(self._initial_ndt_rows, int(target_ndt_rows))
+        self._ndt_warmup_job = None
         self.history_path = get_history_path()
         self._history_cache = None
         self._history_cache_mtime = None
@@ -151,6 +387,10 @@ class DailyWorkLogTab(ttk.Frame):
     def setup_ui(self):
         self._left_pane_visible = True
         self._left_pane_width = None
+        self._saved_sash_ratio = 0.5
+        self._last_paned_width = 0
+        self._sash_press_pos = None
+        self._resizing_ndt_col = False
 
         toolbar = ttk.Frame(self)
         toolbar.pack(fill='x', padx=5, pady=(4, 0))
@@ -179,11 +419,14 @@ class DailyWorkLogTab(ttk.Frame):
         self.left_window = self.left_canvas.create_window((0, 0), window=self.left_frame, anchor="nw")
         self.left_canvas.configure(yscrollcommand=self.left_scrollbar.set)
         
+        self._last_left_win_size = (None, None)
         def _on_left_canvas_configure(event):
             new_width = max(event.width, self.left_frame.winfo_reqwidth())
             new_height = max(event.height, self.left_frame.winfo_reqheight())
-            self.left_canvas.itemconfig(self.left_window, width=new_width, height=new_height)
-            _update_left_scroll()
+            if (new_width, new_height) != self._last_left_win_size:
+                self._last_left_win_size = (new_width, new_height)
+                self.left_canvas.itemconfig(self.left_window, width=new_width, height=new_height)
+                _update_left_scroll()
             
         self.left_canvas.bind("<Configure>", _on_left_canvas_configure)
         
@@ -192,38 +435,20 @@ class DailyWorkLogTab(ttk.Frame):
         
         self._build_left_pane(self.left_frame)
         
-        # --- RIGHT PANE ---
+        # --- RIGHT PANE (Treeview + In-Place Cell Editor) ---
         self.right_container = ttk.Frame(self.paned)
         self.paned.add(self.right_container, weight=6) # 60% width
-        
-        self.right_canvas = tk.Canvas(self.right_container)
-        self.right_xscroll = ttk.Scrollbar(self.right_container, orient="horizontal", command=self.right_canvas.xview)
-        self.right_yscroll = ttk.Scrollbar(self.right_container, orient="vertical", command=self.right_canvas.yview)
-        self.right_frame = ttk.Frame(self.right_canvas)
-        
-        _update_right_scroll = self._bind_scroll_region(self.right_canvas)
-        self.right_frame.bind("<Configure>", _update_right_scroll)
-        self.right_window = self.right_canvas.create_window((0, 0), window=self.right_frame, anchor="nw")
-        self.right_canvas.configure(xscrollcommand=self.right_xscroll.set, yscrollcommand=self.right_yscroll.set)
-        
-        def _on_right_canvas_configure(event):
-            # Stretch the embedded pane to the visible canvas so no unused strip remains.
-            if event.width > self.right_frame.winfo_reqwidth():
-                self.right_canvas.itemconfig(self.right_window, width=event.width)
-            if event.height > self.right_frame.winfo_reqheight():
-                self.right_canvas.itemconfig(self.right_window, height=event.height)
-            _update_right_scroll()
-        self.right_canvas.bind("<Configure>", _on_right_canvas_configure)
-        
-        self.right_canvas.grid(row=0, column=0, sticky="nsew")
-        self.right_yscroll.grid(row=0, column=1, sticky="ns")
-        self.right_xscroll.grid(row=1, column=0, sticky="ew")
-        self.right_container.grid_rowconfigure(0, weight=1)
-        self.right_container.grid_columnconfigure(0, weight=1)
-        
-        self._build_right_pane(self.right_frame)
+        self.right_canvas = None
+        self.right_frame = self.right_container
+        self._build_right_pane(self.right_container)
 
-        # 재시작할 때 좌우 작업영역을 화면 중앙에서 동일한 폭으로 시작한다.
+        self.paned.bind("<Configure>", self._on_paned_configure, add="+")
+        self.paned.bind("<ButtonPress-1>", self._on_paned_press, add="+")
+        self.paned.bind("<ButtonRelease-1>", self._on_paned_release, add="+")
+
+        # 저장된 좌우 프레임 비율·좌측 숨김 상태·결과서 열 너비를 복원한다.
+        self._load_work_log_layout_prefs()
+
         initial_jobs = {
             self.after(200, self._apply_initial_pane_layout),
             self.after(100, self.on_date_change),
@@ -268,12 +493,157 @@ class DailyWorkLogTab(ttk.Frame):
         canvas.bind("<Destroy>", cancel, add="+")
         return schedule
 
+    def _get_host_tab_config(self):
+        app = getattr(self, 'main_app', None)
+        cfg = getattr(app, 'tab_config', None) if app is not None else None
+        return cfg if isinstance(cfg, dict) else None
+
+    def _load_work_log_layout_prefs(self):
+        cfg = self._get_host_tab_config()
+        if not cfg:
+            return
+        try:
+            ratio = float(cfg.get('work_log_sash_ratio', 0.5))
+            if 0.08 <= ratio <= 0.92:
+                self._saved_sash_ratio = ratio
+        except (TypeError, ValueError):
+            pass
+
+        saved_pos = cfg.get('work_log_sash_pos')
+        if isinstance(saved_pos, (int, float)) and saved_pos > 50:
+            self._left_pane_width = int(saved_pos)
+
+        col_widths = cfg.get('work_log_ndt_col_widths', {})
+        if isinstance(col_widths, dict) and hasattr(self, 'ndt_tree') and self.ndt_tree.winfo_exists():
+            valid_cols = set(self.ndt_tree['columns'])
+            for col, width in col_widths.items():
+                if col in valid_cols:
+                    try:
+                        w = int(width)
+                        if w >= 36:
+                            self.ndt_tree.column(col, width=w, minwidth=36, stretch=False)
+                    except (TypeError, ValueError, tk.TclError):
+                        pass
+
+        want_visible = bool(cfg.get('work_log_left_visible', True))
+        if not want_visible and self._left_pane_visible:
+            try:
+                self.paned.forget(self.left_container)
+                self._left_pane_visible = False
+                self.left_pane_toggle.configure(text='▶ 좌측 보이기')
+            except tk.TclError:
+                pass
+        elif want_visible and not self._left_pane_visible:
+            try:
+                self.paned.insert(0, self.left_container, weight=4)
+                self._left_pane_visible = True
+                self.left_pane_toggle.configure(text='◀ 좌측 숨기기')
+            except tk.TclError:
+                pass
+
+    def restore_work_log_layout(self):
+        """외부 설정 복원(load_tab_config / 창 최대화 직후) 시 프레임 상태를 재적용한다."""
+        if not self.winfo_exists():
+            return
+        self._load_work_log_layout_prefs()
+        self._apply_initial_pane_layout()
+
+    def sync_layout_to_config(self):
+        """현재 좌우 프레임 상태와 결과서 컬럼 너비를 main_app.tab_config에 반영한다."""
+        cfg = self._get_host_tab_config()
+        if cfg is None:
+            return
+        cfg['work_log_left_visible'] = bool(self._left_pane_visible)
+        cfg['work_log_sash_ratio'] = round(float(self._saved_sash_ratio), 4)
+        if self._left_pane_width is not None:
+            cfg['work_log_sash_pos'] = int(self._left_pane_width)
+        if hasattr(self, 'ndt_tree') and self.ndt_tree.winfo_exists():
+            widths = {}
+            for col in self.ndt_tree['columns']:
+                try:
+                    widths[col] = int(self.ndt_tree.column(col, 'width'))
+                except (TypeError, ValueError, tk.TclError):
+                    pass
+            if widths:
+                cfg['work_log_ndt_col_widths'] = widths
+
+    def capture_visible_sash_before_close(self):
+        """창 종료 시점에 화면에 표시 중인 좌우 분할선이 있으면 최신 비율을 캡처한다."""
+        try:
+            if (self.winfo_exists() and self.paned.winfo_ismapped()
+                    and self._left_pane_visible and self.paned.winfo_width() > 200):
+                pos = self.paned.sashpos(0)
+                if pos > 50:
+                    self._left_pane_width = pos
+                    self._saved_sash_ratio = max(0.08, min(0.92, pos / self.paned.winfo_width()))
+        except tk.TclError:
+            pass
+        self.sync_layout_to_config()
+
+    def _save_work_log_layout(self, force=False):
+        self.sync_layout_to_config()
+        app = getattr(self, 'main_app', None)
+        save_fn = getattr(app, 'save_tab_config', None) if app is not None else None
+        if callable(save_fn):
+            try:
+                save_fn(force=force)
+            except TypeError:
+                save_fn()
+
+    def _on_paned_configure(self, event):
+        if event.widget is not self.paned:
+            return
+        width = event.width
+        if width <= 200 or width == self._last_paned_width:
+            return
+        self._last_paned_width = width
+        if self._left_pane_visible and self._sash_press_pos is None:
+            target = max(120, min(int(round(width * self._saved_sash_ratio)), width - 120))
+            try:
+                self.paned.sashpos(0, target)
+            except tk.TclError:
+                pass
+
+    def _on_paned_press(self, event):
+        if event.widget is self.paned and self._left_pane_visible:
+            try:
+                self._sash_press_pos = self.paned.sashpos(0)
+            except tk.TclError:
+                self._sash_press_pos = None
+
+    def _on_paned_release(self, event):
+        prev_pos = self._sash_press_pos
+        self._sash_press_pos = None
+        if prev_pos is None or not self._left_pane_visible:
+            return
+
+        def _capture_sash():
+            if not self.winfo_exists() or not self._left_pane_visible:
+                return
+            try:
+                total_w = self.paned.winfo_width()
+                cur_pos = self.paned.sashpos(0)
+            except tk.TclError:
+                return
+            if total_w > 200 and abs(cur_pos - prev_pos) >= 2:
+                self._left_pane_width = cur_pos
+                self._saved_sash_ratio = max(0.08, min(0.92, cur_pos / total_w))
+                self._save_work_log_layout(force=True)
+
+        _capture_sash()
+        try:
+            self.after_idle(_capture_sash)
+        except tk.TclError:
+            pass
+
     def _apply_initial_pane_layout(self):
         try:
             self.update_idletasks()
             total_width = self.paned.winfo_width()
             if total_width > 200 and self._left_pane_visible:
-                self.paned.sashpos(0, total_width // 2)
+                target = max(120, min(int(round(total_width * self._saved_sash_ratio)), total_width - 120))
+                self.paned.sashpos(0, target)
+                self._last_paned_width = total_width
         except (tk.TclError, AttributeError):
             pass
 
@@ -290,18 +660,28 @@ class DailyWorkLogTab(ttk.Frame):
 
     def _toggle_left_pane(self):
         if self._left_pane_visible:
-            self._left_pane_width = self.paned.sashpos(0)
+            width = self.paned.winfo_width()
+            pos = self.paned.sashpos(0)
+            if width > 200 and pos > 50:
+                self._left_pane_width = pos
+                self._saved_sash_ratio = max(0.08, min(0.92, pos / width))
             self.paned.forget(self.left_container)
             self._left_pane_visible = False
             self.left_pane_toggle.configure(text='▶ 좌측 보이기')
+            self._save_work_log_layout(force=True)
         else:
             self.paned.insert(0, self.left_container, weight=4)
             self._left_pane_visible = True
             self.paned.update_idletasks()
             width = self.paned.winfo_width()
-            position = self._left_pane_width if self._left_pane_width is not None else width // 2
-            self.paned.sashpos(0, max(0, min(position, width - 1)))
+            if width > 200:
+                position = int(round(width * self._saved_sash_ratio))
+                self.paned.sashpos(0, max(120, min(position, width - 120)))
+                self._last_paned_width = width
+            elif self._left_pane_width is not None:
+                self.paned.sashpos(0, max(0, self._left_pane_width))
             self.left_pane_toggle.configure(text='◀ 좌측 숨기기')
+            self._save_work_log_layout(force=True)
 
     def _build_basic_info(self, parent):
         # --- Top Section: General Info & Unified Work Toolbar ---
@@ -635,52 +1015,755 @@ class DailyWorkLogTab(ttk.Frame):
         ]
 
     def _build_right_pane(self, parent):
-        # --- NDT Results Grid ---
+        # --- NDT Results Grid (Treeview + In-Place Cell Editor) ---
         title_frame = ttk.Frame(parent)
         title_frame.pack(fill="x", padx=5, pady=(4, 2))
         ttk.Label(title_frame, text="2. 비파괴검사결과서", font=("맑은 고딕", 11, "bold")).pack(side="left", padx=(5, 10))
         ttk.Label(
             title_frame,
-            text="※ 행 추가/삭제/일괄변경, 핫태핑/공정사진 및 보고서 발행 도구는 상단 툴바에 통합되어 있습니다.",
-            foreground="#666666"
+            text="※ 셀 클릭 즉시 편집 · Tab/Shift+Tab 칸 이동 · Enter 윗줄 복사 및 다음 줄 이동 · 우클릭 빠른 메뉴",
+            foreground="#555555"
         ).pack(side="left", padx=5)
-        
-        # Grid Container
+
         grid_frame = ttk.Frame(parent)
         grid_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        self.ndt_cols = ('업체', '공사구분', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
-                         'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT')
+        grid_frame.grid_rowconfigure(1, weight=1)
+        grid_frame.grid_columnconfigure(1, weight=1)
+
+        self.ndt_cols = (
+            '업체', '공사구분', '검사방법', '구간', '작업구분',
+            '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', 'Joint No.',
+            '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
+            'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT'
+        )
         history = self.load_history()
         self._extract_history_choices(history)
 
-        
-        # Draw Headers
-        selection_button = ttk.Menubutton(grid_frame, text='선택', width=5, padding=(4, 1))
+        selection_button = ttk.Menubutton(grid_frame, text='☑ 선택 ▾', width=8, padding=(4, 1))
         selection_menu = tk.Menu(selection_button, tearoff=False)
         selection_menu.add_command(label='입력된 행 선택', command=self._select_filled_ndt_rows)
         selection_menu.add_command(label='전체 해제', command=self._clear_ndt_selection)
         selection_button.configure(menu=selection_menu)
-        selection_button.grid(row=0, column=0, padx=(2, 4), pady=(0, 2), sticky='w')
-        for col_idx, c in enumerate(self.ndt_cols, start=1):
-            label = {'RT_OR': 'RT_OR 전체', 'RT_RE': 'RT_RE 불량'}.get(c, c)
-            ttk.Label(grid_frame, text=label, font=("맑은 고딕", 9, "bold")).grid(row=0, column=col_idx, padx=1, pady=2)
-            if c == '구간정보':
-                grid_frame.grid_columnconfigure(col_idx, weight=5, minsize=260)
-            elif c == '라인번호':
-                grid_frame.grid_columnconfigure(col_idx, weight=3)
-            elif c == '업체':
-                grid_frame.grid_columnconfigure(col_idx, weight=2, minsize=145)
-            elif c == '공사구분':
-                grid_frame.grid_columnconfigure(col_idx, weight=1, minsize=85)
-            elif c == '규격':
-                grid_frame.grid_columnconfigure(col_idx, weight=2, minsize=105)
+        selection_button.grid(row=0, column=0, padx=(2, 6), pady=(0, 3), sticky='w')
+        self._ndt_selection_menu = selection_menu
+
+        ttk.Label(
+            grid_frame,
+            text="왼쪽 '선택' 열 클릭으로 개별 체크(Shift+클릭 범위 선택), 열 경계 드래그로 너비 조절이 가능합니다.",
+            foreground="#64748b",
+            font=("맑은 고딕", 8)
+        ).grid(row=0, column=1, sticky='w', pady=(0, 3))
+
+        top_win = self.winfo_toplevel()
+        if not getattr(top_win, '_ndt_grid_style_configured', False):
+            style = ttk.Style(top_win)
+            style.configure("NDTGrid.Treeview", rowheight=26, font=("맑은 고딕", 9))
+            style.configure("NDTGrid.Treeview.Heading", font=("맑은 고딕", 9, "bold"))
+            top_win._ndt_grid_style_configured = True
+
+        tree_columns = ('선택',) + self.ndt_cols
+        self.ndt_tree = ttk.Treeview(
+            grid_frame,
+            columns=tree_columns,
+            show='headings',
+            selectmode='none',
+            style="NDTGrid.Treeview",
+        )
+
+        def _on_yscroll(*args):
+            self.right_yscroll.set(*args)
+            self._reposition_active_cell_editor()
+
+        def _on_xscroll(*args):
+            self.right_xscroll.set(*args)
+            self._reposition_active_cell_editor()
+
+        self.right_yscroll = ttk.Scrollbar(
+            grid_frame, orient="vertical",
+            command=lambda *a: (self.ndt_tree.yview(*a), self._reposition_active_cell_editor())
+        )
+        self.right_xscroll = ttk.Scrollbar(
+            grid_frame, orient="horizontal",
+            command=lambda *a: (self.ndt_tree.xview(*a), self._reposition_active_cell_editor())
+        )
+        self.ndt_tree.configure(yscrollcommand=_on_yscroll, xscrollcommand=_on_xscroll)
+
+        col_widths = {
+            '선택': 60,
+            '업체': 125,
+            '공사구분': 85,
+            '검사방법': 70,
+            '구간': 85,
+            '작업구분': 85,
+            '핫태핑개소': 80,
+            '핫태핑차수': 75,
+            '핫태핑개소수': 80,
+            '라인번호': 195,
+            'Joint No.': 95,
+            '관경': 65,
+            '두께': 60,
+            '용접사': 165,
+            '구간정보': 230,
+            '결과': 65,
+            '규격': 105,
+            '근무구분': 70,
+            'RT_OR': 80,
+            'RT_RE': 80,
+            'PAUT': 72,
+            'MT': 72,
+            'PT': 72,
+        }
+        left_aligned = {'라인번호', '구간정보'}
+        for col in tree_columns:
+            label = {'RT_OR': 'RT_OR 전체', 'RT_RE': 'RT_RE 불량'}.get(col, col)
+            if col == '선택':
+                self.ndt_tree.heading(col, text='선택 ▾', command=self._popup_ndt_selection_menu)
             else:
-                grid_frame.grid_columnconfigure(col_idx, weight=1)
-            
+                self.ndt_tree.heading(col, text=label)
+            anchor = 'w' if col in left_aligned else 'center'
+            self.ndt_tree.column(col, width=col_widths.get(col, 75), minwidth=48, stretch=False, anchor=anchor)
+
+        self.ndt_tree.tag_configure('odd_row', background='#ffffff')
+        self.ndt_tree.tag_configure('even_row', background='#f8fafc')
+        self.ndt_tree.tag_configure('focused_row', background='#fef9c3')
+        self.ndt_tree.tag_configure('checked_row', background='#dbeafe')
+        self.ndt_tree.tag_configure('checked_focused_row', background='#bfdbfe')
+
+        self.ndt_tree.grid(row=1, column=0, columnspan=2, sticky='nsew')
+        self.right_yscroll.grid(row=1, column=2, sticky='ns')
+        self.right_xscroll.grid(row=2, column=0, columnspan=2, sticky='ew')
+
         self._ndt_grid_frame = grid_frame
         self.ndt_grid_entries = []
-        self._append_ndt_rows(10)
+        self._active_editor_state = None  # {'row': int, 'col': str, 'widget': Widget, 'full_values': list}
+        self._init_ndt_inplace_editors()
+
+        self.ndt_tree.bind('<ButtonPress-1>', self._on_ndt_tree_click)
+        self.ndt_tree.bind('<ButtonRelease-1>', self._on_ndt_tree_release, add='+')
+        self.ndt_tree.bind('<Button-3>', self._on_ndt_tree_right_click)
+        self.ndt_tree.bind('<Configure>', lambda _e: self._reposition_active_cell_editor(), add='+')
+        self.ndt_tree.bind('<Escape>', self._on_ndt_escape, add='+')
+
+        self._append_ndt_rows(self._initial_ndt_rows)
+
+    def _popup_ndt_selection_menu(self):
+        try:
+            x = self.ndt_tree.winfo_rootx() + 12
+            y = self.ndt_tree.winfo_rooty() + 26
+            self._ndt_selection_menu.tk_popup(x, y)
+        finally:
+            self._ndt_selection_menu.grab_release()
+
+    def _init_ndt_inplace_editors(self):
+        """Treeview 셀 위에 재사용할 단일 Entry, Combobox, 4분할 RT 구간정보 에디터를 1회 생성한다."""
+        self._cell_entry_var = tk.StringVar(master=self)
+        self._cell_entry = tk.Entry(
+            self.ndt_tree,
+            textvariable=self._cell_entry_var,
+            font=("맑은 고딕", 9),
+            relief="solid",
+            bd=1,
+            highlightthickness=1,
+            highlightcolor="#2563eb",
+            highlightbackground="#2563eb",
+            bg="#ffffff",
+        )
+
+        self._cell_combo_var = tk.StringVar(master=self)
+        self._cell_combo = ttk.Combobox(
+            self.ndt_tree,
+            textvariable=self._cell_combo_var,
+            font=("맑은 고딕", 9),
+        )
+
+        self._cell_rt_frame = tk.Frame(
+            self.ndt_tree,
+            bg="#2563eb",
+            bd=0,
+            highlightthickness=1,
+            highlightcolor="#2563eb",
+            highlightbackground="#2563eb",
+        )
+        self._cell_rt_vars = [tk.StringVar(master=self) for _ in range(4)]
+        self._cell_rt_entries = []
+        for idx in range(4):
+            sub_ent = tk.Entry(
+                self._cell_rt_frame,
+                textvariable=self._cell_rt_vars[idx],
+                width=4,
+                justify='center',
+                font=("맑은 고딕", 9),
+                relief="flat",
+                bd=1,
+                bg="#ffffff",
+            )
+            sub_ent.pack(side='left', fill='both', expand=True, padx=(0, 1 if idx < 3 else 0), pady=0)
+            self._cell_rt_entries.append(sub_ent)
+
+        # Single Entry bindings
+        self._cell_entry.bind('<KeyRelease>', self._on_cell_entry_keyrelease)
+        self._cell_entry.bind('<Return>', self._on_editor_return)
+        self._cell_entry.bind('<Tab>', lambda e: self._on_editor_tab(e, forward=True))
+        self._cell_entry.bind('<Shift-Tab>', lambda e: self._on_editor_tab(e, forward=False))
+        self._cell_entry.bind('<ISO_Left_Tab>', lambda e: self._on_editor_tab(e, forward=False))
+        self._cell_entry.bind('<Up>', lambda e: self._on_editor_vertical(e, delta=-1))
+        self._cell_entry.bind('<Down>', lambda e: self._on_editor_vertical(e, delta=1))
+        self._cell_entry.bind('<Escape>', self._on_ndt_escape)
+        self._cell_entry.bind('<FocusOut>', self._on_editor_focus_out)
+        self._cell_entry.bind('<Button-3>', self._on_editor_right_click)
+
+        # Combobox bindings
+        self._cell_combo.bind('<<ComboboxSelected>>', self._on_cell_combo_selected)
+        self._cell_combo.bind('<KeyRelease>', self._on_cell_combo_keyrelease)
+        self._cell_combo.bind('<Button-1>', self._on_cell_combo_click, add='+')
+        self._cell_combo.bind('<Return>', self._on_editor_return)
+        self._cell_combo.bind('<Tab>', lambda e: self._on_editor_tab(e, forward=True))
+        self._cell_combo.bind('<Shift-Tab>', lambda e: self._on_editor_tab(e, forward=False))
+        self._cell_combo.bind('<ISO_Left_Tab>', lambda e: self._on_editor_tab(e, forward=False))
+        self._cell_combo.bind('<Control-Up>', lambda e: self._on_editor_vertical(e, delta=-1))
+        self._cell_combo.bind('<Control-Down>', lambda e: self._on_editor_vertical(e, delta=1))
+        self._cell_combo.bind('<Escape>', self._on_ndt_escape)
+        self._cell_combo.bind('<FocusOut>', self._on_editor_focus_out)
+        self._cell_combo.bind('<Button-3>', self._on_editor_right_click)
+
+        # 4-slot RT section info bindings
+        for sub_idx, sub_ent in enumerate(self._cell_rt_entries):
+            sub_ent.bind('<KeyRelease>', self._on_rt_sub_keyrelease)
+            sub_ent.bind('<Return>', self._on_editor_return)
+            sub_ent.bind('<Tab>', lambda e, idx=sub_idx: self._on_rt_sub_tab(e, idx, forward=True))
+            sub_ent.bind('<Shift-Tab>', lambda e, idx=sub_idx: self._on_rt_sub_tab(e, idx, forward=False))
+            sub_ent.bind('<ISO_Left_Tab>', lambda e, idx=sub_idx: self._on_rt_sub_tab(e, idx, forward=False))
+            sub_ent.bind('<Up>', lambda e: self._on_editor_vertical(e, delta=-1))
+            sub_ent.bind('<Down>', lambda e: self._on_editor_vertical(e, delta=1))
+            sub_ent.bind('<Escape>', self._on_ndt_escape)
+            sub_ent.bind('<FocusOut>', self._on_rt_sub_focus_out)
+            sub_ent.bind('<Button-3>', self._on_editor_right_click)
+
+    def _update_ndt_row_tags(self, row_index):
+        tree = getattr(self, 'ndt_tree', None)
+        if tree is None or not tree.winfo_exists() or row_index >= len(self.ndt_grid_entries):
+            return
+        row = self.ndt_grid_entries[row_index]
+        checked = row_index < len(self.ndt_selection_vars) and bool(self.ndt_selection_vars[row_index].get())
+        focused = (getattr(self, 'selected_ndt_row', None) is row)
+        if checked and focused:
+            tag = 'checked_focused_row'
+        elif checked:
+            tag = 'checked_row'
+        elif focused:
+            tag = 'focused_row'
+        else:
+            tag = 'even_row' if (row_index % 2 == 1) else 'odd_row'
+        mark = f"☑ {row_index + 1}" if checked else f"☐ {row_index + 1}"
+        try:
+            tree.set(row._iid, '선택', mark)
+            tree.item(row._iid, tags=(tag,))
+        except tk.TclError:
+            pass
+
+    def _sync_active_editor_if_matching(self, row_index, col_name):
+        state = getattr(self, '_active_editor_state', None)
+        if not state or state.get('in_live_edit'):
+            return
+        if state['row'] != row_index or state['col'] != col_name:
+            return
+        cell = self.ndt_grid_entries[row_index][col_name]
+        if state['widget'] is self._cell_entry:
+            self._cell_entry_var.set(cell.get())
+        elif state['widget'] is self._cell_combo:
+            self._cell_combo_var.set(cell.get())
+        elif state['widget'] is self._cell_rt_frame and hasattr(cell, 'get_slots'):
+            slots = cell.get_slots()
+            for i in range(4):
+                self._cell_rt_vars[i].set(slots[i])
+
+    def _sync_active_combo_values(self, row_index, col_name):
+        state = getattr(self, '_active_editor_state', None)
+        if not state or state['row'] != row_index or state['col'] != col_name:
+            return
+        if state['widget'] is self._cell_combo:
+            vals = list(self.ndt_grid_entries[row_index][col_name]['values'])
+            state['full_values'] = vals
+            self._cell_combo['values'] = vals
+
+    def _refresh_active_section_info_mode(self, row_index):
+        state = getattr(self, '_active_editor_state', None)
+        if not state or state['row'] != row_index or state['col'] != '구간정보':
+            return
+        self._open_cell_editor(row_index, '구간정보', select_all=False)
+
+    def _reposition_active_cell_editor(self):
+        state = getattr(self, '_active_editor_state', None)
+        if not state:
+            return
+        tree = getattr(self, 'ndt_tree', None)
+        if tree is None or not tree.winfo_exists():
+            return
+        row_idx = state['row']
+        col_name = state['col']
+        if row_idx >= len(self.ndt_grid_entries):
+            self._hide_active_cell_editor()
+            return
+        iid = self.ndt_grid_entries[row_idx]._iid
+        col_num = self.ndt_cols.index(col_name) + 2
+        bbox = tree.bbox(iid, f'#{col_num}')
+        widget = state['widget']
+        if not bbox:
+            widget.place_forget()
+            return
+        x, y, w, h = bbox
+        widget.place(x=x, y=y, width=max(w, 36), height=max(h, 22))
+
+    def _hide_active_cell_editor(self):
+        state = getattr(self, '_active_editor_state', None)
+        self._active_editor_state = None
+        if state and state.get('widget') is not None:
+            try:
+                state['widget'].place_forget()
+            except tk.TclError:
+                pass
+
+    def _commit_active_cell_editor(self, run_triggers=True):
+        state = getattr(self, '_active_editor_state', None)
+        if not state or state.get('committing'):
+            return
+        state['committing'] = True
+        try:
+            row_idx = state['row']
+            col_name = state['col']
+            if row_idx >= len(self.ndt_grid_entries):
+                return
+            row = self.ndt_grid_entries[row_idx]
+            cell = row[col_name]
+            widget = state['widget']
+            state['in_live_edit'] = True
+            try:
+                if widget is self._cell_entry:
+                    new_val = self._cell_entry_var.get()
+                    if col_name == '구간정보':
+                        cell.set(new_val)
+                    else:
+                        cell.set(new_val)
+                elif widget is self._cell_combo:
+                    cell.set(self._cell_combo_var.get())
+                elif widget is self._cell_rt_frame:
+                    slots = [v.get() for v in self._cell_rt_vars]
+                    cell.set_slots_from_editor(slots)
+                    try:
+                        sync_rt_widgets(row, from_details=True, all_rows=self._rt_context())
+                    except ValueError:
+                        pass
+            finally:
+                state['in_live_edit'] = False
+
+            if run_triggers and cell.get() != state.get('initial_value') or state.get('combo_picked'):
+                cell.event_generate('<FocusOut>')
+        finally:
+            state['committing'] = False
+
+    def _prepare_dynamic_cell_options(self, row_idx, col_name):
+        """셀 에디터를 열기 직전 현재 행의 업체/구간/검사방법에 맞춰 드롭다운 후보를 최신화한다."""
+        row = self.ndt_grid_entries[row_idx]
+        if col_name == '공사구분':
+            comp = row['업체'].get().strip()
+            matched_opts = None
+            for k, opts in COMPANY_WORK_CATEGORIES.items():
+                if k in comp:
+                    matched_opts = opts
+                    break
+            row['공사구분']['values'] = matched_opts if matched_opts else ALL_WORK_CATEGORIES
+        elif col_name == '구간':
+            comp = row['업체'].get().strip()
+            mapping = getattr(self, 'company_section_mapping', None)
+            if mapping and comp:
+                row['구간']['values'] = [''] + get_sections_for_company(mapping, comp)
+            else:
+                row['구간']['values'] = self.history_sections
+        elif col_name == '라인번호':
+            comp = row['업체'].get().strip()
+            sec = row['구간'].get().strip()
+            mapping = getattr(self, 'company_section_mapping', None)
+            if mapping and (comp or sec):
+                row['라인번호']['values'] = [''] + get_lines_for_company_and_section(mapping, comp, sec)
+            else:
+                row['라인번호']['values'] = self.history_lines
+        elif col_name == '규격':
+            self._sync_ndt_spec(row)
+
+    def _open_cell_editor(self, row_idx, col_name, select_all=True, sub_idx=0):
+        if row_idx < 0 or row_idx >= len(self.ndt_grid_entries):
+            return
+        if col_name not in self.ndt_cols:
+            return
+        prev = getattr(self, '_active_editor_state', None)
+        if prev and (prev['row'] != row_idx or prev['col'] != col_name):
+            self._commit_active_cell_editor()
+        self._hide_active_cell_editor()
+
+        tree = getattr(self, 'ndt_tree', None)
+        if tree is None or not tree.winfo_exists():
+            return
+
+        row = self.ndt_grid_entries[row_idx]
+        self._select_ndt_row(row)
+        iid = row._iid
+        col_num = self.ndt_cols.index(col_name) + 2
+        col_id = f'#{col_num}'
+
+        try:
+            tree.see(iid)
+            # Ensure target column is horizontally visible when off-screen
+            bbox = tree.bbox(iid, col_id)
+            if not bbox:
+                self.update_idletasks()
+                bbox = tree.bbox(iid, col_id)
+            if not bbox:
+                total_w = sum(int(tree.column(c, 'width')) for c in ('선택',) + self.ndt_cols)
+                before_w = sum(int(tree.column(c, 'width')) for c in (('선택',) + self.ndt_cols)[:col_num - 1])
+                if total_w > 0:
+                    tree.xview_moveto(max(0.0, (before_w - 80) / total_w))
+                    self.update_idletasks()
+                    bbox = tree.bbox(iid, col_id)
+        except tk.TclError:
+            bbox = None
+
+        if not bbox:
+            return
+
+        self._prepare_dynamic_cell_options(row_idx, col_name)
+        cell = row[col_name]
+        x, y, w, h = bbox
+
+        if col_name == '구간정보':
+            method = row['검사방법'].get().strip().upper()
+            if method in ('PAUT', 'PT', 'MT'):
+                widget = self._cell_entry
+                self._cell_entry.configure(justify='left')
+                self._cell_entry_var.set(cell.get())
+                self._active_editor_state = {
+                    'row': row_idx, 'col': col_name, 'widget': widget,
+                    'initial_value': cell.get(), 'full_values': [],
+                }
+                widget.place(x=x, y=y, width=max(w, 40), height=max(h, 22))
+                widget.focus_set()
+                if select_all:
+                    widget.selection_range(0, tk.END)
+                    widget.icursor(tk.END)
+            else:
+                widget = self._cell_rt_frame
+                slots = cell.get_slots()
+                for i in range(4):
+                    self._cell_rt_vars[i].set(slots[i])
+                self._active_editor_state = {
+                    'row': row_idx, 'col': col_name, 'widget': widget,
+                    'initial_value': cell.get(), 'full_values': [],
+                }
+                widget.place(x=x, y=y, width=max(w, 100), height=max(h, 22))
+                target_sub = max(0, min(3, sub_idx))
+                ent = self._cell_rt_entries[target_sub]
+                ent.focus_set()
+                if select_all:
+                    ent.selection_range(0, tk.END)
+                    ent.icursor(tk.END)
+            return
+
+        if getattr(cell, '_is_combo', False):
+            widget = self._cell_combo
+            full_vals = list(cell['values'])
+            widget.configure(
+                state='readonly' if cell._readonly else 'normal',
+                values=full_vals,
+                justify='left' if col_name == '라인번호' else 'center',
+            )
+            self._cell_combo_var.set(cell.get())
+            self._active_editor_state = {
+                'row': row_idx, 'col': col_name, 'widget': widget,
+                'initial_value': cell.get(), 'full_values': full_vals,
+            }
+            widget.place(x=x, y=y, width=max(w, 48), height=max(h, 22))
+            widget.focus_set()
+            if not cell._readonly and select_all:
+                try:
+                    widget.selection_range(0, tk.END)
+                    widget.icursor(tk.END)
+                except tk.TclError:
+                    pass
+        else:
+            widget = self._cell_entry
+            self._cell_entry.configure(justify='center')
+            self._cell_entry_var.set(cell.get())
+            self._active_editor_state = {
+                'row': row_idx, 'col': col_name, 'widget': widget,
+                'initial_value': cell.get(), 'full_values': [],
+            }
+            widget.place(x=x, y=y, width=max(w, 40), height=max(h, 22))
+            widget.focus_set()
+            if select_all:
+                widget.selection_range(0, tk.END)
+                widget.icursor(tk.END)
+
+    def _on_cell_entry_keyrelease(self, event):
+        state = getattr(self, '_active_editor_state', None)
+        if not state or state['widget'] is not self._cell_entry:
+            return
+        if event.keysym in ('Return', 'Tab', 'ISO_Left_Tab', 'Escape', 'Up', 'Down', 'Shift_L', 'Shift_R'):
+            return
+        row = self.ndt_grid_entries[state['row']]
+        col = state['col']
+        state['in_live_edit'] = True
+        try:
+            if col == '구간정보':
+                row[col].set_slots_from_editor([self._cell_entry_var.get(), '', '', ''])
+            else:
+                row[col].set(self._cell_entry_var.get())
+        finally:
+            state['in_live_edit'] = False
+
+    def _on_cell_combo_click(self, _event=None):
+        state = getattr(self, '_active_editor_state', None)
+        if state and state['widget'] is self._cell_combo:
+            self._cell_combo['values'] = state.get('full_values', [])
+
+    def _on_cell_combo_keyrelease(self, event):
+        state = getattr(self, '_active_editor_state', None)
+        if not state or state['widget'] is not self._cell_combo:
+            return
+        if event.keysym in ('Return', 'Tab', 'ISO_Left_Tab', 'Escape', 'Up', 'Down', 'Left', 'Right', 'Alt_L', 'Alt_R', 'Control_L', 'Control_R', 'Shift_L', 'Shift_R'):
+            return
+        row = self.ndt_grid_entries[state['row']]
+        col = state['col']
+        cell = row[col]
+        if cell._readonly:
+            return
+        typed = self._cell_combo_var.get()
+        state['in_live_edit'] = True
+        try:
+            cell.set(typed)
+        finally:
+            state['in_live_edit'] = False
+        q = typed.strip().lower()
+        full_vals = state.get('full_values', [])
+        if q:
+            filtered = [v for v in full_vals if not v or q in str(v).lower()]
+            self._cell_combo['values'] = filtered if filtered else full_vals
+        else:
+            self._cell_combo['values'] = full_vals
+
+    def _on_cell_combo_selected(self, _event=None):
+        state = getattr(self, '_active_editor_state', None)
+        if not state or state['widget'] is not self._cell_combo:
+            return
+        row_idx = state['row']
+        col = state['col']
+        row = self.ndt_grid_entries[row_idx]
+        cell = row[col]
+        state['combo_picked'] = True
+        state['in_live_edit'] = True
+        try:
+            cell.set(self._cell_combo_var.get())
+        finally:
+            state['in_live_edit'] = False
+        cell.event_generate('<<ComboboxSelected>>')
+
+    def _on_rt_sub_keyrelease(self, event):
+        state = getattr(self, '_active_editor_state', None)
+        if not state or state['widget'] is not self._cell_rt_frame:
+            return
+        if event.keysym in ('Return', 'Tab', 'ISO_Left_Tab', 'Escape', 'Up', 'Down'):
+            return
+        row = self.ndt_grid_entries[state['row']]
+        state['in_live_edit'] = True
+        try:
+            row['구간정보'].set_slots_from_editor([v.get() for v in self._cell_rt_vars])
+            try:
+                sync_rt_widgets(row, from_details=True, all_rows=self._rt_context())
+            except ValueError:
+                pass
+        finally:
+            state['in_live_edit'] = False
+
+    def _on_rt_sub_tab(self, _event, sub_idx, forward=True):
+        if forward and sub_idx < 3:
+            nxt = self._cell_rt_entries[sub_idx + 1]
+            nxt.focus_set()
+            nxt.selection_range(0, tk.END)
+            return 'break'
+        if not forward and sub_idx > 0:
+            prv = self._cell_rt_entries[sub_idx - 1]
+            prv.focus_set()
+            prv.selection_range(0, tk.END)
+            return 'break'
+        return self._on_editor_tab(_event, forward=forward)
+
+    def _on_rt_sub_focus_out(self, _event):
+        state = getattr(self, '_active_editor_state', None)
+        if not state or state['widget'] is not self._cell_rt_frame:
+            return
+        focused = self.focus_get()
+        if focused in self._cell_rt_entries:
+            return
+        self._commit_active_cell_editor()
+
+    def _on_editor_focus_out(self, event):
+        state = getattr(self, '_active_editor_state', None)
+        if not state:
+            return
+        if event is not None and getattr(event, 'widget', None) is not state.get('widget'):
+            return
+        self._commit_active_cell_editor()
+
+    def _on_editor_tab(self, _event, forward=True):
+        state = getattr(self, '_active_editor_state', None)
+        if not state:
+            return 'break'
+        row_idx = state['row']
+        col_idx = self.ndt_cols.index(state['col'])
+        self._commit_active_cell_editor()
+        if forward:
+            col_idx += 1
+            if col_idx >= len(self.ndt_cols):
+                col_idx = 0
+                row_idx += 1
+                if row_idx >= len(self.ndt_grid_entries):
+                    self._append_ndt_rows(10)
+            self._open_cell_editor(row_idx, self.ndt_cols[col_idx], sub_idx=0)
+        else:
+            col_idx -= 1
+            if col_idx < 0:
+                if row_idx > 0:
+                    row_idx -= 1
+                    col_idx = len(self.ndt_cols) - 1
+                else:
+                    col_idx = 0
+            self._open_cell_editor(row_idx, self.ndt_cols[col_idx], sub_idx=3)
+        return 'break'
+
+    def _on_editor_vertical(self, _event, delta=1):
+        state = getattr(self, '_active_editor_state', None)
+        if not state:
+            return 'break'
+        row_idx = state['row'] + delta
+        col_name = state['col']
+        self._commit_active_cell_editor()
+        if row_idx < 0:
+            row_idx = 0
+        elif row_idx >= len(self.ndt_grid_entries):
+            self._append_ndt_rows(10)
+        self._open_cell_editor(row_idx, col_name)
+        return 'break'
+
+    def _on_editor_return(self, _event):
+        state = getattr(self, '_active_editor_state', None)
+        if not state:
+            return 'break'
+        row_idx = state['row']
+        col_name = state['col']
+        self._commit_active_cell_editor()
+        self._hide_active_cell_editor()
+        self.ndt_grid_entries[row_idx][col_name].event_generate('<Return>')
+        return 'break'
+
+    def _on_ndt_escape(self, _event=None):
+        self._commit_active_cell_editor()
+        self._hide_active_cell_editor()
+        self._clear_ndt_selection()
+        return 'break'
+
+    def _on_ndt_tree_click(self, event):
+        region = self.ndt_tree.identify_region(event.x, event.y)
+        if region == 'separator':
+            self._commit_active_cell_editor()
+            self._hide_active_cell_editor()
+            self._resizing_ndt_col = True
+            return
+        if region == 'heading':
+            return
+        self._commit_active_cell_editor()
+        iid = self.ndt_tree.identify_row(event.y)
+        col_id = self.ndt_tree.identify_column(event.x)
+        if not iid or not col_id:
+            self._hide_active_cell_editor()
+            return
+        try:
+            row_idx = int(iid.split('_', 1)[1]) - 1
+            col_num = int(col_id[1:])
+        except (IndexError, ValueError):
+            return
+        if row_idx < 0 or row_idx >= len(self.ndt_grid_entries):
+            return
+
+        if col_num == 1:
+            self._hide_active_cell_editor()
+            if event.state & 0x0001:
+                return self._select_ndt_range(row_idx)
+            var = self.ndt_selection_vars[row_idx]
+            var.set(not var.get())
+            self._toggle_ndt_row(self.ndt_grid_entries[row_idx], var)
+            return 'break'
+
+        col_idx = col_num - 2
+        if 0 <= col_idx < len(self.ndt_cols):
+            col_name = self.ndt_cols[col_idx]
+            self._open_cell_editor(row_idx, col_name)
+            return 'break'
+
+    def _on_ndt_tree_release(self, _event):
+        if getattr(self, '_resizing_ndt_col', False):
+            self._resizing_ndt_col = False
+
+            def _commit_resize():
+                if not self.winfo_exists():
+                    return
+                self._reposition_active_cell_editor()
+                self._save_work_log_layout(force=True)
+
+            _commit_resize()
+            try:
+                self.after_idle(_commit_resize)
+            except tk.TclError:
+                pass
+
+    def _on_ndt_tree_right_click(self, event):
+        self._commit_active_cell_editor()
+        self._hide_active_cell_editor()
+        iid = self.ndt_tree.identify_row(event.y)
+        if not iid:
+            return
+        try:
+            row_idx = int(iid.split('_', 1)[1]) - 1
+        except (IndexError, ValueError):
+            return
+        if 0 <= row_idx < len(self.ndt_grid_entries):
+            self._show_ndt_context_menu_for_row(event, self.ndt_grid_entries[row_idx])
+
+    def _on_editor_right_click(self, event):
+        state = getattr(self, '_active_editor_state', None)
+        if not state:
+            return
+        row_idx = state['row']
+        self._commit_active_cell_editor()
+        if 0 <= row_idx < len(self.ndt_grid_entries):
+            self._show_ndt_context_menu_for_row(event, self.ndt_grid_entries[row_idx])
+        return 'break'
+
+    def _show_ndt_context_menu_for_row(self, event, row_entries):
+        self._select_ndt_row(row_entries)
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True))
+        menu.add_command(label="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row)
+        menu.add_separator()
+        menu.add_command(label="✏️ 라인번호 일괄 변경...", command=self._edit_ndt_lines)
+        menu.add_command(label="✏️ 구간 일괄 변경...", command=self._edit_ndt_sections)
+        menu.add_command(label="🏷️ 공사구분 일괄 변경...", command=self._edit_ndt_work_categories)
+        menu.add_command(label="🔍 작업내역 검색·수정...", command=self.open_history_search_dialog)
+        menu.add_separator()
+        menu.add_command(label="💾 자동 집계 및 저장", command=self.auto_calculate_and_save)
+        menu.add_command(label="📊 엑셀 출력 (일보)", command=self.export_excel)
+        menu.add_command(label="📗 NDT 누계대장 엑셀 출력", command=self.export_ndt_summary)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     def _append_ndt_rows(self, count=10, focus=False):
         first = len(self.ndt_grid_entries)
@@ -690,168 +1773,71 @@ class DailyWorkLogTab(ttk.Frame):
             self._focus_ndt_joint(first)
 
     def _ensure_ndt_capacity(self, required):
-        missing = required - len(self.ndt_grid_entries)
-        if missing > 0:
-            self._append_ndt_rows(((missing + 9) // 10) * 10)
+        if required <= len(self.ndt_grid_entries):
+            return
+        target = max(10, ((required + 9) // 10) * 10)
+        self._append_ndt_rows(target - len(self.ndt_grid_entries))
+
+    def _focus_ndt_cell(self, index, col_name='Joint No.'):
+        if index < 0 or index >= len(self.ndt_grid_entries):
+            return
+        row = self.ndt_grid_entries[index]
+        self._select_ndt_row(row)
+        tree = getattr(self, 'ndt_tree', None)
+        if tree is not None and tree.winfo_exists():
+            try:
+                tree.see(row._iid)
+            except tk.TclError:
+                pass
+            if tree.winfo_ismapped():
+                self._open_cell_editor(index, col_name)
 
     def _focus_ndt_joint(self, index):
-        entry = self.ndt_grid_entries[index]['Joint No.']
-        entry.focus_set()
-        self.update_idletasks()
-        y = self._ndt_grid_frame.winfo_y() + entry.winfo_y()
-        top = self.right_canvas.canvasy(0)
-        if y < top or y + entry.winfo_height() > top + self.right_canvas.winfo_height():
-            self.right_canvas.yview_moveto(y / max(1, self.right_frame.winfo_height()))
+        self._focus_ndt_cell(index, 'Joint No.')
 
     def _create_ndt_row(self, row_idx):
-        grid_frame = self._ndt_grid_frame
-        row_entries = {}
+        iid = f"row_{row_idx}"
+        r_zero = row_idx - 1
+        row_entries = _NDTRowProxy(self, r_zero, iid)
+
         selected = tk.BooleanVar(value=False)
         self.ndt_selection_vars.append(selected)
-        checkbox = ttk.Checkbutton(
-            grid_frame, text=str(row_idx), variable=selected,
-            command=lambda: self._toggle_ndt_row(row_entries, selected)
-        )
-        checkbox.grid(row=row_idx, column=0, sticky='w', padx=(4, 2))
-        checkbox.bind('<Shift-Button-1>', lambda _event: self._select_ndt_range(row_idx - 1))
+        selected.trace_add('write', lambda *_a, idx=r_zero: self._update_ndt_row_tags(idx))
 
-        for col_idx, c in enumerate(self.ndt_cols, start=1):
-            # Adjust width for some columns
-            w = 8
-            if c == '규격': w = 13
-            elif c == '근무구분': w = 7
-            elif c in ('검사방법', '결과', '관경', '두께'): w = 6
-            elif c == '업체': w = 16
-            elif c == '구간': w = 10
-            elif c == '용접사': w = 23
-            elif c == '라인번호': w = 25
-            elif c == 'Joint No.': w = 12
-            elif c == '구간정보': w = 35
-            else: w = 8
-
+        for c in self.ndt_cols:
             if c in ('작업구분', '핫태핑차수'):
                 values = ['', '일반', '핫태핑', 'PAD', 'PAD(C심)', 'PAD(L심)', 'PAD(CAP)'] if c == '작업구분' else ['', '1차', '2차']
-                ent = ttk.Combobox(grid_frame, width=10, values=values, state='readonly')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky='ew')
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=values, readonly=True)
             elif c == '검사방법':
-                ent = ttk.Combobox(grid_frame, width=w, values=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'], justify='center')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'])
             elif c == '구간정보':
-                frame = ttk.Frame(grid_frame)
-                frame.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                entries = []
-                for i in range(4):
-                    e = ttk.Entry(frame, width=5, justify='center')
-                    e.pack(side='left', fill='x', expand=True, padx=(0, 1 if i<3 else 0))
-                    entries.append(e)
-                frame.entries = entries
-                def update_rt_films(event=None, r=row_entries):
-                    try:
-                        sync_rt_widgets(r, from_details=True, all_rows=self._rt_context())
-                    except ValueError:
-                        pass  # Allow an incomplete value while typing; validate before save.
-                for entry in entries:
-                    entry.bind('<KeyRelease>', update_rt_films, add='+')
-                    entry.bind('<FocusOut>', update_rt_films, add='+')
-                def apply_layout(ents=entries, r_dict=row_entries):
-                    method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
-                    if method in ['PAUT', 'PT', 'MT']:
-                        ents[0].configure(justify='left')
-                        for i in range(1, 4):
-                            ents[i].pack_forget()
-                    else:
-                        ents[0].configure(justify='center')
-                        for i in range(1, 4):
-                            if not ents[i].winfo_manager():
-                                ents[i].pack(
-                                    side='left', fill='x', expand=True,
-                                    padx=(0, 1 if i < 3 else 0)
-                                )
-                def get_val(ents=entries, r_dict=row_entries):
-                    method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
-                    if method in ['PAUT', 'PT', 'MT']:
-                        return ents[0].get()
-                    parts = [e.get().strip() for e in ents]
-                    return ','.join(parts).rstrip(',') if method == 'RT' else ','.join([p for p in parts if p])
-                def set_val(val, ents=entries, r_dict=row_entries, layout_fn=apply_layout):
-                    for e in ents: e.delete(0, tk.END)
-                    method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
-                    if method in ['PAUT', 'PT', 'MT']:
-                        ents[0].insert(0, val)
-                    else:
-                        parts = val.split(',') if val else []
-                        for i, p in enumerate(parts):
-                            if i < len(ents): ents[i].insert(0, p)
-                    layout_fn()
-                    try:
-                        sync_rt_widgets(r_dict, all_rows=self._rt_context())
-                    except ValueError:
-                        pass
-                def delete_val(first, last, ents=entries):
-                    for e in ents: e.delete(first, last)
-                def insert_val(idx, val, ents=entries):
-                    ents[0].insert(idx, val)
-                frame.get = get_val
-                frame.set = set_val
-                frame.delete = delete_val
-                frame.insert = insert_val
-                frame.apply_layout = apply_layout
-                row_entries[c] = frame
+                row_entries[c] = _NDTSectionInfoProxy(row_entries)
             elif c == '관경':
-                ent = ttk.Combobox(grid_frame, width=w, values=[''] + list(SIZE_LENGTH.keys()), justify='center')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=[''] + list(SIZE_LENGTH.keys()))
             elif c == '결과':
-                ent = ttk.Combobox(grid_frame, width=w, values=['', '합격', '불합격', '재촬영', '보류'], justify='center')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=['', '합격', '불합격', '재촬영', '보류'])
             elif c == '규격':
-                ent = ttk.Combobox(grid_frame, width=w, values=[''], justify='center')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=[''])
             elif c == '근무구분':
-                ent = ttk.Combobox(
-                    grid_frame, width=w, values=['', '주간', '야간', '재검'],
-                    justify='center'
-                )
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=['', '주간', '야간', '재검'])
             elif c == '용접사':
-                ent = ttk.Combobox(
-                    grid_frame, width=w, values=self.history_welders,
-                    justify='center'
-                )
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=self.history_welders)
             elif c == '업체':
-                ent = ttk.Combobox(grid_frame, width=w, values=self.history_companies, justify='center')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=self.history_companies)
             elif c == '공사구분':
-                ent = ttk.Combobox(grid_frame, width=w, values=ALL_WORK_CATEGORIES, justify='center')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=ALL_WORK_CATEGORIES)
             elif c == '구간':
-                ent = ttk.Combobox(grid_frame, width=w, values=self.history_sections, justify='center')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=self.history_sections)
             elif c == '라인번호':
-                ent = ttk.Combobox(grid_frame, width=w, values=self.history_lines, justify='center')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c, values=self.history_lines)
             else:
-                ent = ttk.Entry(grid_frame, width=w, justify='center')
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                row_entries[c] = _NDTCellProxy(row_entries, c)
 
         def on_ndt_change(event, r=row_entries):
             method = r['검사방법'].get().strip().upper()
             pipe = r['관경'].get().strip().upper()
             self._sync_ndt_spec(r)
 
-            # --- 관경 선택 시 두께 자동 입력 ---
             thk_mapping = {
                 "1100": "11.1", "1000": "11.1", "900": "10.3", "850": "10.3", "800": "9.5",
                 "750": "8.7", "700": "8.7", "650": "8.7", "600": "9.5", "550": "9.5",
@@ -861,9 +1847,7 @@ class DailyWorkLogTab(ttk.Frame):
             }
             lookup_size = str(pipe).replace("A", "").strip()
             if lookup_size in thk_mapping and r['작업구분'].get() != '핫태핑':
-                r['두께'].delete(0, tk.END)
-                r['두께'].insert(0, thk_mapping[lookup_size])
-            # -----------------------------------
+                r['두께'].set(thk_mapping[lookup_size])
 
             if pipe and pipe.isdigit():
                 pipe += 'A'
@@ -875,10 +1859,10 @@ class DailyWorkLogTab(ttk.Frame):
                     if method in ('MT', 'PT') and count > 0:
                         length = inspection_length(pipe, r['핫태핑차수'].get()) * count
                         for col in ('RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT'):
-                            r[col].delete(0, tk.END)
-                        r[method].insert(0, f'{length:.4f}')
+                            r[col].set('')
+                        r[method].set(f'{length:.4f}')
                 except ValueError:
-                    pass  # 미입력 조건은 저장 시 검증한다.
+                    pass
                 r['구간정보'].apply_layout()
                 self._refresh_hot_summary()
                 return
@@ -894,7 +1878,6 @@ class DailyWorkLogTab(ttk.Frame):
             elif pipe in SIZE_LENGTH:
                 length = SIZE_LENGTH[pipe]
                 length_str = f"{length:.4f}"
-
                 if method == 'RT':
                     try:
                         size_val = int(''.join(filter(str.isdigit, pipe)))
@@ -908,15 +1891,11 @@ class DailyWorkLogTab(ttk.Frame):
                 length_str = ""
 
             if target_col and length_str and not r[target_col].get().strip():
-                # Clear other length columns if we are auto-filling
-                for col in ['RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT']:
-                    r[col].delete(0, tk.END)
-                r[target_col].insert(0, length_str)
+                for col in ('RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT'):
+                    r[col].set('')
+                r[target_col].set(length_str)
 
-            # Update '구간정보' display based on method
-            if '구간정보' in r and hasattr(r['구간정보'], 'entries'):
-                r['구간정보'].apply_layout()
-
+            r['구간정보'].apply_layout()
 
         def update_work_category_options(r=row_entries):
             comp = r['업체'].get().strip()
@@ -942,7 +1921,7 @@ class DailyWorkLogTab(ttk.Frame):
             mapping = getattr(self, 'company_section_mapping', None)
             if mapping:
                 sec_cb = r.get('구간')
-                if isinstance(sec_cb, ttk.Combobox):
+                if sec_cb is not None:
                     sections = [''] + get_sections_for_company(mapping, comp)
                     sec_cb['values'] = sections
                     curr_sec = sec_cb.get().strip()
@@ -956,7 +1935,7 @@ class DailyWorkLogTab(ttk.Frame):
             mapping = getattr(self, 'company_section_mapping', None)
             if mapping:
                 line_cb = r.get('라인번호')
-                if isinstance(line_cb, ttk.Combobox):
+                if line_cb is not None:
                     lines = [''] + get_lines_for_company_and_section(mapping, comp, sec)
                     line_cb['values'] = lines
 
@@ -970,59 +1949,56 @@ class DailyWorkLogTab(ttk.Frame):
                 self._edit_hot_tapping(r)
             elif str(r['작업구분'].get()).startswith('PAD'):
                 on_ndt_change(event, r)
+
         row_entries['작업구분'].bind('<<ComboboxSelected>>', on_hot_change)
         row_entries['검사방법'].bind('<<ComboboxSelected>>', on_ndt_change)
         row_entries['검사방법'].bind('<FocusOut>', on_ndt_change)
         row_entries['관경'].bind('<<ComboboxSelected>>', on_ndt_change)
         row_entries['관경'].bind('<FocusOut>', on_ndt_change)
-        row_entries['Joint No.'].bind('<FocusOut>', lambda event, r=row_entries: self._sync_rt_row(r), add='+')
+        row_entries['Joint No.'].bind('<FocusOut>', lambda _e, r=row_entries: self._sync_rt_row(r), add='+')
 
-        def on_joint_enter(event, r_idx=row_idx-1, r=row_entries):
+        def on_joint_enter(event, r_idx=r_zero, r=row_entries):
             import re
             if r_idx == 0:
                 if len(self.ndt_grid_entries) > 1:
-                    self.ndt_grid_entries[1]['Joint No.'].focus_set()
+                    self._focus_ndt_joint(1)
                 return 'break'
 
             prev_row = self.ndt_grid_entries[r_idx - 1]
+            r.begin_batch()
+            try:
+                curr_joint = r['Joint No.'].get().strip()
+                if not curr_joint:
+                    prev_joint = prev_row['Joint No.'].get().strip()
+                    if prev_joint:
+                        match = re.search(r'(\d+)$', prev_joint)
+                        if match:
+                            num_str = match.group(1)
+                            prefix = prev_joint[:-len(num_str)]
+                            next_num = str(int(num_str) + 1).zfill(len(num_str))
+                            r['Joint No.'].set(prefix + next_num)
 
-            # Auto-increment Joint No.
-            curr_joint = r['Joint No.'].get().strip()
-            if not curr_joint:
-                prev_joint = prev_row['Joint No.'].get().strip()
-                if prev_joint:
-                    match = re.search(r'(\d+)$', prev_joint)
-                    if match:
-                        num_str = match.group(1)
-                        prefix = prev_joint[:-len(num_str)]
-                        next_num = str(int(num_str) + 1).zfill(len(num_str))
-                        r['Joint No.'].insert(0, prefix + next_num)
-
-            for col in ['업체', '공사구분', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
-                if col == '규격' and r['검사방법'].get().strip().upper() != prev_row['검사방법'].get().strip().upper():
-                    continue
-                if col in ('구간정보', '결과') and (r['검사방법'].get().strip().upper() == 'RT' or prev_row['검사방법'].get().strip().upper() == 'RT'):
-                    continue
-                if not r[col].get().strip():
-                    prev_val = prev_row[col].get().strip()
-                    if prev_val:
-                        if col == '구간정보':
+                for col in ['업체', '공사구분', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
+                    if col == '규격' and r['검사방법'].get().strip().upper() != prev_row['검사방법'].get().strip().upper():
+                        continue
+                    if col in ('구간정보', '결과') and (r['검사방법'].get().strip().upper() == 'RT' or prev_row['검사방법'].get().strip().upper() == 'RT'):
+                        continue
+                    if not r[col].get().strip():
+                        prev_val = prev_row[col].get().strip()
+                        if prev_val:
                             r[col].set(prev_val)
-                        elif isinstance(r[col], ttk.Combobox):
-                            r[col].set(prev_val)
-                        else:
-                            r[col].delete(0, tk.END)
-                            r[col].insert(0, prev_val)
-                        if col == '업체':
-                            on_company_selected(r)
-                        elif col == '구간':
-                            on_section_selected(r)
+                            if col == '업체':
+                                on_company_selected(r)
+                            elif col == '구간':
+                                on_section_selected(r)
 
-            on_ndt_change(None, r)
-            defaults = default_rt_copy(widget_rt_values(r), self._rt_context())
-            if defaults.get('구간정보', '') != r['구간정보'].get():
-                r['구간정보'].set(defaults['구간정보'])
-            self._sync_rt_row(r)
+                on_ndt_change(None, r)
+                defaults = default_rt_copy(widget_rt_values(r), self._rt_context())
+                if defaults.get('구간정보', '') != r['구간정보'].get():
+                    r['구간정보'].set(defaults['구간정보'])
+                self._sync_rt_row(r)
+            finally:
+                r.end_batch()
 
             if r_idx + 1 == len(self.ndt_grid_entries):
                 self._append_ndt_rows(10)
@@ -1030,42 +2006,20 @@ class DailyWorkLogTab(ttk.Frame):
                 self._focus_ndt_joint(r_idx + 1)
             return 'break'
 
-        def _show_ndt_cell_context_menu(event, r=row_entries):
-            self._select_ndt_row(r)
-            menu = tk.Menu(self, tearoff=0)
-            menu.add_command(label="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True))
-            menu.add_command(label="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row)
-            menu.add_separator()
-            menu.add_command(label="✏️ 라인번호 일괄 변경...", command=self._edit_ndt_lines)
-            menu.add_command(label="✏️ 구간 일괄 변경...", command=self._edit_ndt_sections)
-            menu.add_command(label="🏷️ 공사구분 일괄 변경...", command=self._edit_ndt_work_categories)
-            menu.add_command(label="🔍 작업내역 검색·수정...", command=self.open_history_search_dialog)
-            menu.add_separator()
-            menu.add_command(label="💾 자동 집계 및 저장", command=self.auto_calculate_and_save)
-            menu.add_command(label="📊 엑셀 출력 (일보)", command=self.export_excel)
-            menu.add_command(label="📗 NDT 누계대장 엑셀 출력", command=self.export_ndt_summary)
-            try:
-                menu.tk_popup(event.x_root, event.y_root)
-            finally:
-                menu.grab_release()
+        for widget in row_entries.values():
+            widget.bind('<Return>', on_joint_enter)
+            widget.bind('<Button-1>', lambda _e, r=row_entries: self._select_ndt_row(r), add='+')
+            widget.bind('<Escape>', self._clear_ndt_selection, add='+')
 
-        for col_name, widget in row_entries.items():
-            if hasattr(widget, 'entries'):
-                for e in widget.entries:
-                    e.bind('<Return>', on_joint_enter)
-                    e.bind('<Button-1>', lambda event, r=row_entries: self._select_ndt_row(r), add='+')
-                    e.bind('<Button-3>', lambda event, r=row_entries: _show_ndt_cell_context_menu(event, r), add='+')
-                    e.bind('<Escape>', self._clear_ndt_selection, add='+')
-            else:
-                widget.bind('<Return>', on_joint_enter)
-                widget.bind('<Button-1>', lambda event, r=row_entries: self._select_ndt_row(r), add='+')
-                widget.bind('<Button-3>', lambda event, r=row_entries: _show_ndt_cell_context_menu(event, r), add='+')
-                widget.bind('<Escape>', self._clear_ndt_selection, add='+')
-
+        tag = 'even_row' if (r_zero % 2 == 1) else 'odd_row'
+        self.ndt_tree.insert('', tk.END, iid=iid, values=(f"☐ {row_idx}",) + ('',) * len(self.ndt_cols), tags=(tag,))
         self.ndt_grid_entries.append(row_entries)
 
 
     def _delete_selected_ndt_row(self):
+        if hasattr(self, '_commit_active_cell_editor'):
+            self._commit_active_cell_editor()
+            self._hide_active_cell_editor()
         targets = [(i, row) for i, row in enumerate(self.ndt_grid_entries)
                    if self.ndt_selection_vars[i].get()]
         if not targets:
@@ -2066,7 +3020,12 @@ class DailyWorkLogTab(ttk.Frame):
 
     def _select_ndt_row(self, row_entries):
         """Focus an editing row for row-specific tools without changing batch checks."""
+        prev = getattr(self, 'selected_ndt_row', None)
         self.selected_ndt_row = row_entries
+        if prev is not None and prev is not row_entries and hasattr(prev, '_row_index'):
+            self._update_ndt_row_tags(prev._row_index)
+        if hasattr(row_entries, '_row_index'):
+            self._update_ndt_row_tags(row_entries._row_index)
         method = row_entries['검사방법'].get().strip() or '-'
         section = row_entries['구간'].get().strip() or '-'
         joint = row_entries['Joint No.'].get().strip() or '-'
@@ -2118,10 +3077,13 @@ class DailyWorkLogTab(ttk.Frame):
         self._refresh_ndt_selection_text()
 
     def _clear_ndt_selection(self, event=None):
+        prev = getattr(self, 'selected_ndt_row', None)
         self.selected_ndt_row = None
         self._ndt_selection_anchor = None
         for var in self.ndt_selection_vars:
             var.set(False)
+        if prev is not None and hasattr(prev, '_row_index'):
+            self._update_ndt_row_tags(prev._row_index)
         self._refresh_ndt_selection_text()
         self.photo_selection_var.set("")
 
@@ -2892,6 +3854,9 @@ class DailyWorkLogTab(ttk.Frame):
         return self._corrected_history_cache
 
     def on_date_change(self, event=None):
+        if hasattr(self, '_commit_active_cell_editor'):
+            self._commit_active_cell_editor()
+            self._hide_active_cell_editor()
         current_date = self._selected_date_key()
         previous = getattr(self, '_loaded_log_date', None)
         baseline = getattr(self, '_log_baseline', None)
@@ -3057,23 +4022,32 @@ class DailyWorkLogTab(ttk.Frame):
         for i, row_entries in enumerate(self.ndt_grid_entries):
             row_data = curr_ndt[i] if i < len(curr_ndt) else {}
             normalized_spec, work_shift = split_legacy_spec(row_data)
-            for col, ent in row_entries.items():
-                if col == '규격':
-                    val = normalized_spec
-                elif col == '근무구분':
-                    val = work_shift
-                elif col == '용접사':
-                    val = self._format_welder_display(row_data.get(col, ''))
-                else:
-                    val = row_data.get(col, '')
-                if col == '구간정보':
-                    ent.set(val)
-                elif isinstance(ent, tk.ttk.Combobox):
-                    ent.set(val)
-                elif hasattr(ent, 'delete'):
-                    ent.delete(0, tk.END)
-                    ent.insert(0, val)
+            if hasattr(row_entries, 'begin_batch'):
+                row_entries.begin_batch()
+            try:
+                for col, ent in row_entries.items():
+                    if col == '규격':
+                        val = normalized_spec
+                    elif col == '근무구분':
+                        val = work_shift
+                    elif col == '용접사':
+                        val = self._format_welder_display(row_data.get(col, ''))
+                    else:
+                        val = row_data.get(col, '')
+                    if hasattr(ent, 'set'):
+                        ent.set(val)
+                    elif hasattr(ent, 'delete'):
+                        ent.delete(0, tk.END)
+                        ent.insert(0, val)
+                if '구간정보' in row_entries:
+                    row_entries['구간정보']._rt_retake_meta = {
+                        k: row_data[k] for k in ('원본JointNo', '재촬영구간') if k in row_data
+                    }
+            finally:
+                if hasattr(row_entries, 'end_batch'):
+                    row_entries.end_batch()
                     
+        rt_context = None
         for widgets in self.ndt_grid_entries:
             self._sync_ndt_spec(widgets)
             if '공사구분' in widgets and '업체' in widgets:
@@ -3085,10 +4059,13 @@ class DailyWorkLogTab(ttk.Frame):
                         matched_opts = opts
                         break
                 cat_cb['values'] = matched_opts if matched_opts else ALL_WORK_CATEGORIES
-            try:
-                sync_rt_widgets(widgets, all_rows=self._rt_context())
-            except ValueError:
-                pass  # Keep the saved inputs available for correction before saving.
+            if widgets['검사방법'].get().strip().upper() == 'RT':
+                if rt_context is None:
+                    rt_context = self._rt_context()
+                try:
+                    sync_rt_widgets(widgets, all_rows=rt_context)
+                except ValueError:
+                    pass  # Keep the saved inputs available for correction before saving.
         self._refresh_hot_summary()
 
         # [NEW] Recalculate Subtotals for Qty to heal missing '금일작업' fields in UI
@@ -3150,6 +4127,8 @@ class DailyWorkLogTab(ttk.Frame):
         self._log_baseline = self._capture_log_input()
 
     def auto_calculate_and_save(self, show_completion=True):
+        if hasattr(self, '_commit_active_cell_editor'):
+            self._commit_active_cell_editor()
         if not self._validate_rt_rows():
             return
         if not self._validate_hot_rows():

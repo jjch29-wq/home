@@ -26,7 +26,11 @@ def export_daily_work_report_impl(self):
     try:
         template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'resources', 'Template_DailyWorkReport.xlsx')
         if not os.path.exists(template_path):
-            template_path = r'c:\Users\jjch2\Desktop\보고서Project PROVIDENCE\Request\PMI\Na-aba\home\resources\Template_DailyWorkReport.xlsx'
+            template_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
+                'resources',
+                'Template_DailyWorkReport.xlsx',
+            )
         
         if not os.path.exists(template_path):
             messagebox.showerror("오류", "작업일보 템플릿(Template_DailyWorkReport.xlsx)을 찾을 수 없습니다.")
@@ -1378,7 +1382,7 @@ def export_monthly_ndt_report_impl(self):
     file_frame = ttk.LabelFrame(top, text="3. 대상 엑셀 파일")
     file_frame.pack(fill='x', padx=15, pady=5)
 
-    file_var = tk.StringVar(value=r"C:\Users\jjch2\Desktop\월용역진도보고서.xlsx")
+    file_var = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Desktop", "월용역진도보고서.xlsx"))
     ttk.Entry(file_frame, textvariable=file_var, width=55).pack(side='left', padx=5, pady=5)
     def browse_file():
         fp = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")], title="월용역진도보고서 선택")

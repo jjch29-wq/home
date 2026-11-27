@@ -1,8 +1,12 @@
 """Central-site inventory calculations shared by stock rows and reorder alerts."""
+import logging
 import pandas as pd
 import json
 
+logger = logging.getLogger(__name__)
+
 CHEMICALS = ('세척제', '침투제', '현상제', '백색페인트', '흑색자분', '형광자분', '형광침투제', '자분페인트')
+_CHEMICALS_BY_LEN = tuple(sorted(CHEMICALS, key=len, reverse=True))
 
 
 class ChemicalUsage(dict):
@@ -16,7 +20,10 @@ class ChemicalUsage(dict):
 def chemical_key(name):
     """Prefer the most specific chemical name, so fluorescent penetrant is distinct."""
     text = str(name).replace(' ', '')
-    return next((key for key in sorted(CHEMICALS, key=len, reverse=True) if key in text), None)
+    for key in _CHEMICALS_BY_LEN:
+        if key in text:
+            return key
+    return None
 
 
 def build_stock_lookups(self):
@@ -42,15 +49,21 @@ def build_stock_lookups(self):
     daily_usage_lookup = {}
     daily_name_lookup = {}
     
-    # [NEW] Get a set of consumable MaterialIDs from master for robust deduction
+    # [NEW] Get a set of consumable MaterialIDs and chemical materials in a single fast dict pass
     consumable_ids = set()
-    if not self.materials_df.empty:
-        for _, m in self.materials_df.iterrows():
-            # Check if the master item itself is a consumable
-            m_name = str(m.get('품목명', '')).strip()
-            if self._is_consumable_material(m_name, ''):
-                c_id = self.normalize_id(m.get('MaterialID'))
-                if c_id: consumable_ids.add(c_id)
+    ndt_keys = ['세척제', '침투제', '현상제', '백색페인트', '흑색자분', '형광자분', '형광침투제', '자분페인트']
+    chemical_materials = {key: [] for key in ndt_keys}
+    mat_records = self.materials_df.to_dict('records') if not self.materials_df.empty else []
+    for m in mat_records:
+        m_name_clean = self.clean_nan(m.get('품목명', ''))
+        m_model_clean = self.clean_nan(m.get('모델명', ''))
+        if self._is_consumable_material(m_name_clean.strip(), ''):
+            c_id = self.normalize_id(m.get('MaterialID'))
+            if c_id:
+                consumable_ids.add(c_id)
+        chem_k = chemical_key(m_name_clean + m_model_clean)
+        if chem_k in chemical_materials:
+            chemical_materials[chem_k].append(m)
     
     if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
         temp_daily = self.daily_usage_df.copy()
@@ -111,20 +124,18 @@ def build_stock_lookups(self):
             ~valid_name_consumables['NormID'].isin(known_ids) &
             valid_name_consumables['NormName'].map(name_counts).eq(1)]
         daily_name_lookup = unassigned.groupby('NormName')['TotalUsage'].sum().to_dict()
-        print(f"DEBUG: Daily Consumable Lookup built: {daily_name_lookup}")
+        logger.debug("Daily Consumable Lookup built: %s", daily_name_lookup)
         
         # [NEW] Pre-calculate NDT chemical totals by name (Enhanced with fuzzy matching and JSON parsing)
         ndt_name_lookup = ChemicalUsage()
-        ndt_keys = ['세척제', '침투제', '현상제', '백색페인트', '흑색자분', '형광자분', '형광침투제', '자분페인트']
         for k in ndt_keys: ndt_name_lookup[k] = 0.0
-        chemical_materials = {key: [] for key in ndt_keys}
-        for _, material in self.materials_df.iterrows():
-            key = chemical_key(self.clean_nan(material.get('품목명', '')) +
-                               self.clean_nan(material.get('모델명', '')))
-            if key:
-                chemical_materials[key].append(material)
+        col_candidates_by_key = {}
+        for key in ndt_keys:
+            cands = [c for c in (f'NDT_{key}', key) if c in temp_daily.columns]
+            cands += [col for col in temp_daily.columns if chemical_key(col) == key and col not in cands]
+            col_candidates_by_key[key] = cands
 
-        for _, row in temp_daily.iterrows():
+        for row in temp_daily.to_dict('records'):
             raw = row.get('ndt_data', row.get('ndtdata', ''))
             try:
                 legacy = json.loads(raw) if isinstance(raw, str) and raw.strip().startswith('{') else raw
@@ -133,15 +144,14 @@ def build_stock_lookups(self):
             if not isinstance(legacy, dict): legacy = {}
             for key in ndt_keys:
                 # Positive direct usage wins; schema-default zero may still have legacy JSON usage.
-                candidates = [f'NDT_{key}', key]
-                candidates += [col for col in temp_daily.columns if chemical_key(col) == key and col not in candidates]
                 value = None
-                for col in candidates:
-                    if col in row and not pd.isna(row[col]) and str(row[col]).strip():
-                        value = _f(row[col])
+                for col in col_candidates_by_key[key]:
+                    cell_val = row.get(col)
+                    if cell_val is not None and not pd.isna(cell_val) and str(cell_val).strip():
+                        value = _f(cell_val)
                         break
                 if value is None or value == 0:
-                    value = sum(_f(amount) for name, amount in legacy.items() if chemical_key(name) == key)
+                    value = sum(_f(amount) for name, amount in legacy.items() if chemical_key(name) == key) if legacy else 0.0
                 ndt_name_lookup[key] += value
                 if value > 0:
                     candidates = list(chemical_materials[key])
@@ -174,7 +184,7 @@ def build_stock_lookups(self):
         for k in list(ndt_name_lookup):
             if ndt_name_lookup[k] <= 0:
                 del ndt_name_lookup[k]
-        print(f"DEBUG: Daily Usage lookup built. NDT totals: {ndt_name_lookup}")
+        logger.debug("Daily Usage lookup built. NDT totals: %s", ndt_name_lookup)
 
     return stock_in_lookup, stock_out_lookup, daily_usage_lookup, daily_name_lookup, ndt_name_lookup
 
@@ -199,13 +209,13 @@ def stock_breakdown(self, mat, lookups):
     # If this is an NDT item, find matching usage by name
     if hasattr(self, 'ndt_name_lookup') or 'ndt_name_lookup' in locals():
         lookup_source = ndt_name_lookup if 'ndt_name_lookup' in locals() else self.ndt_name_lookup
-        for ndt_key, ndt_val in lookup_source.items():
-            if ndt_key == chemical_key(combined_name):
+        if lookup_source:
+            chem_k = chemical_key(combined_name)
+            if chem_k and chem_k in lookup_source:
                 ndt_usage = lookup_source.by_material.get(str_mat_id, 0)
                 # If we found a specific NDT chemical (e.g. via model name), 
                 # ensure we don't also subtract generic inspection quantity
-                daily_qty = 0.0 
-                break
+                daily_qty = 0.0
 
     # Get stored quantity
     val = mat.get('수량', 0)

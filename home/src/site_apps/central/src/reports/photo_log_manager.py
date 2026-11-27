@@ -265,9 +265,7 @@ class PhotoLogMixin:
 
         list_vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self.photo_listbox.yview)
         # [SYNC] Sash persistence bindings (Match PAUT)
-        self.photo_pane_ratio = self.config.get('PHOTO_SASH_RATIO', 0.45)
-        self.photo_paned.bind("<Configure>", self._on_photo_paned_configure)
-        self.photo_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_photo_ratio))
+        self._bind_report_paned(self.photo_paned, "PHOTO", 0.45)
 
         # [RESTORED] Sync listbox if any files were loaded from settings
         if self.photo_selected_files:
@@ -275,20 +273,37 @@ class PhotoLogMixin:
 
         # [NEW] Bindings for Live Preview Update
         self.photo_listbox.bind("<<ListboxSelect>>", self._update_photo_preview)
+        def _schedule_photo_preview(*args):
+            try:
+                if not hasattr(self, 'root') or not self.root.winfo_exists():
+                    return
+                prev_id = getattr(self, '_photo_preview_after_id', None)
+                if prev_id:
+                    try:
+                        self.root.after_cancel(prev_id)
+                    except tk.TclError:
+                        pass
+                self._photo_preview_after_id = self.root.after(300, self._update_photo_preview)
+            except tk.TclError:
+                pass
+
         for var in (self.photo_width_pct_var, self.photo_height_pct_var, self.photo_width_pixel_adj_var, self.photo_height_pixel_adj_var, self.photo_shift_x_var,
                     self.photo_shift_y_var, self.photo_cell_width_var, self.photo_cell_height_var,
                     self.photo_cols_per_row, self.photo_rows_per_page):
-            var.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
-        self.photo_keep_aspect.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
-        self.photo_fit_width_var.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
-        self.photo_auto_rotate_var.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
+            var.trace_add("write", _schedule_photo_preview)
+        self.photo_keep_aspect.trace_add("write", _schedule_photo_preview)
+        self.photo_fit_width_var.trace_add("write", _schedule_photo_preview)
+        self.photo_auto_rotate_var.trace_add("write", _schedule_photo_preview)
 
         self._apply_sash_ratio("PHOTO")
-        self.root.after(500, lambda: self._on_photo_paned_configure(None))
         self._sync_paut_photo_page_numbers()
 
         # [NEW] 화면을 처음 켰을 때, 선택된 게 없더라도 초기 화면/안내 문구가 뜨도록 강제 1회 실행
-        self.root.after(800, self._update_photo_preview)
+        try:
+            if self.root.winfo_exists():
+                self._photo_preview_after_id = self.root.after(800, self._update_photo_preview)
+        except tk.TclError:
+            pass
 
     def _update_photo_ratio(self):
         try:

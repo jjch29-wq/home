@@ -166,6 +166,7 @@ def setup_stock_tab_impl(self):
     
     # Auto-save column widths when user resizes columns
     self.stock_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+    self.stock_tree.bind('<Destroy>', lambda e: cancel_pending_stock_rows(self) if e.widget is self.stock_tree else None, add='+')
 
     def _show_stock_tree_context_menu(event):
         region = self.stock_tree.identify_region(event.x, event.y)
@@ -199,11 +200,42 @@ def setup_stock_tab_impl(self):
     
     # Initial view update will be triggered after update_registration_combos 
     # to ensure filters are properly initialized to "전체" first.
-    if getattr(self, 'is_ready', False):
-        self.refresh_ui_for_list_change('daily_units')
+
+
+def cancel_pending_stock_rows(self):
+    job = getattr(self, '_stock_chunk_job', None)
+    if job is not None:
+        try:
+            self.root.after_cancel(job)
+        except Exception:
+            pass
+        self._stock_chunk_job = None
+    self._pending_stock_rows = []
+    self._pending_stock_trees = []
+
+
+def flush_pending_stock_rows_impl(self):
+    pending = getattr(self, '_pending_stock_rows', None)
+    if not pending:
+        cancel_pending_stock_rows(self)
+        return
+    job = getattr(self, '_stock_chunk_job', None)
+    if job is not None:
+        try:
+            self.root.after_cancel(job)
+        except Exception:
+            pass
+        self._stock_chunk_job = None
+    trees = [t for t in getattr(self, '_pending_stock_trees', []) if t and t.winfo_exists()]
+    self._pending_stock_rows = []
+    self._pending_stock_trees = []
+    for final_row, row_tag in pending:
+        for tree in trees:
+            tree.insert('', tk.END, values=final_row, tags=(row_tag,))
 
 
 def update_stock_view_impl(self):
+    cancel_pending_stock_rows(self)
     active_trees = []
     if hasattr(self, 'stock_tree') and self.stock_tree.winfo_exists():
         active_trees.append(self.stock_tree)
@@ -255,8 +287,28 @@ def update_stock_view_impl(self):
     for tree in active_trees:
         tree.tag_configure('deployed', background='#FFF9C4') # Light Yellow for "Field"
         tree.tag_configure('in_stock', background='') # Default
+
+    # Pre-index latest transaction per MaterialID in a single pass (avoids O(N*M) regex + sort per item)
+    last_out_site_map = {}
+    if not self.transactions_df.empty and 'MaterialID' in self.transactions_df.columns:
+        sorted_trans = (
+            self.transactions_df.sort_values(by='Date', ascending=False, kind='mergesort')
+            if 'Date' in self.transactions_df.columns
+            else self.transactions_df
+        )
+        t_mat_ids = sorted_trans['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+        t_types = sorted_trans['Type'] if 'Type' in sorted_trans.columns else [''] * len(sorted_trans)
+        t_sites = sorted_trans['Site'] if 'Site' in sorted_trans.columns else [''] * len(sorted_trans)
+        for m_id, t_type, t_site in zip(t_mat_ids, t_types, t_sites):
+            if m_id not in last_out_site_map:
+                if t_type == 'OUT':
+                    site_name = self.clean_nan(t_site)
+                    last_out_site_map[m_id] = f"현장: {site_name}" if site_name else "출고됨"
+                else:
+                    last_out_site_map[m_id] = None
     
-    for _, mat in self.materials_df.iterrows():
+    mat_records = self.materials_df.to_dict('records') if not self.materials_df.empty else []
+    for mat in mat_records:
         mat_id = mat['MaterialID']
         str_mat_id = self.normalize_id(mat_id)
         
@@ -288,28 +340,15 @@ def update_stock_view_impl(self):
         if mat.get('Active', 1) == 0 and not has_activity:
             continue
         
-        # Debug for specific items the user is watching (Films and NDT drugs)
-        if any(k in combined_name.upper() for k in ['세척제', '침투제', '현상제', '백색', '흑색', '자분', 'CARESTREAM', 'MX125']):
-            raw_val = mat.get('수량', 'MISSING')
-            print(f"DEBUG: Stock Calc for '{mat_name_raw} ({model_name_raw})': RawQty='{raw_val}', Master={stored_qty}, In={in_qty}, Out={out_qty}, Daily={daily_qty}, NDT={ndt_usage}, Final={current_stock}")
-        
         # --- Dynamic Location/Status Tracking ---
         status_location = "관내 (창고)"
         row_tag = 'in_stock'
         
         if current_stock <= 0:
-            # Look for the last "OUT" transaction to determine where it went
-            if not self.transactions_df.empty:
-                # Optimized last transaction check
-                mask = self.transactions_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == str_mat_id
-                relevant_trans = self.transactions_df[mask].sort_values(by='Date', ascending=False)
-                
-                if not relevant_trans.empty:
-                    last_op = relevant_trans.iloc[0]
-                    if last_op['Type'] == 'OUT':
-                        site_name = self.clean_nan(last_op.get('Site', ''))
-                        status_location = f"현장: {site_name}" if site_name else "출고됨"
-                        row_tag = 'deployed'
+            loc = last_out_site_map.get(str_mat_id)
+            if loc:
+                status_location = loc
+                row_tag = 'deployed'
         
         # [NEW] 자재명 / 장비명 컬럼 분리 표기
         mat_col = mat_name_raw if is_consumable else "-"
@@ -358,6 +397,7 @@ def update_stock_view_impl(self):
     filter_eq = str(self.cb_filter_eq.get()).strip() if self.cb_filter_eq.get() else "전체"
     
     final_row_idx = 1
+    filtered_rows = []
     for row_obj in stock_summary:
         row = row_obj['data']
         # Dropdown Filters
@@ -378,10 +418,55 @@ def update_stock_view_impl(self):
         # [UX IMPROVEMENT] 튜플을 리스트로 변환 후 화면에 보이는 순서대로 순차 번호 부여
         final_row = list(row)
         final_row[0] = str(final_row_idx)
-        
-        for tree in active_trees:
-            tree.insert('', tk.END, values=final_row, tags=(row_obj['tag'],))
+        filtered_rows.append((final_row, row_obj['tag']))
         final_row_idx += 1
+
+    sync_batch_size = 100
+    chunk_size = 250
+    initial_rows = filtered_rows[:sync_batch_size]
+    for final_row, row_tag in initial_rows:
+        for tree in active_trees:
+            tree.insert('', tk.END, values=final_row, tags=(row_tag,))
+
+    if len(filtered_rows) > sync_batch_size:
+        self._pending_stock_rows = filtered_rows[sync_batch_size:]
+        self._pending_stock_trees = list(active_trees)
+
+        def _insert_next_stock_chunk():
+            self._stock_chunk_job = None
+            pending = getattr(self, '_pending_stock_rows', None)
+            if not pending:
+                return
+            trees = [t for t in getattr(self, '_pending_stock_trees', []) if t and t.winfo_exists()]
+            if not trees:
+                self._pending_stock_rows = []
+                self._pending_stock_trees = []
+                return
+            batch = pending[:chunk_size]
+            self._pending_stock_rows = pending[chunk_size:]
+            for f_row, r_tag in batch:
+                for tree in trees:
+                    tree.insert('', tk.END, values=f_row, tags=(r_tag,))
+            if self._pending_stock_rows:
+                try:
+                    self._stock_chunk_job = self.root.after(15, _insert_next_stock_chunk)
+                except Exception:
+                    self._pending_stock_rows = []
+                    self._pending_stock_trees = []
+
+        def _arm_first_stock_chunk():
+            self._stock_chunk_job = None
+            if not getattr(self, '_pending_stock_rows', None):
+                return
+            try:
+                self._stock_chunk_job = self.root.after(20, _insert_next_stock_chunk)
+            except Exception:
+                flush_pending_stock_rows_impl(self)
+
+        try:
+            self._stock_chunk_job = self.root.after_idle(_arm_first_stock_chunk)
+        except Exception:
+            flush_pending_stock_rows_impl(self)
 
 import json
 import shutil
@@ -824,7 +909,8 @@ def view_monthly_usage_impl(self):
 
     # Build usage data for each material
     usage_data = []
-    for _, mat in self.materials_df.iterrows():
+    mat_records = self.materials_df.to_dict('records') if not self.materials_df.empty else []
+    for mat in mat_records:
         mat_id = mat['MaterialID']
 
         # Calculate monthly usage
@@ -870,7 +956,8 @@ def generate_yearly_report_impl(self):
     yearly_trans = self.transactions_df[mask]
 
     report = []
-    for _, mat in self.materials_df.iterrows():
+    mat_records = self.materials_df.to_dict('records') if not self.materials_df.empty else []
+    for mat in mat_records:
         mat_id = mat['MaterialID']
 
         # Calculate monthly usage for each month
@@ -924,7 +1011,8 @@ def generate_monthly_report_impl(self):
     monthly_trans = self.transactions_df[mask]
 
     report = []
-    for _, mat in self.materials_df.iterrows():
+    mat_records = self.materials_df.to_dict('records') if not self.materials_df.empty else []
+    for mat in mat_records:
         mat_id = mat['MaterialID']
         total_usage = monthly_trans[monthly_trans['MaterialID'] == mat_id]['Quantity'].sum()
         report.append({

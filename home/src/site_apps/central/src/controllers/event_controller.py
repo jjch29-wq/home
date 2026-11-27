@@ -263,9 +263,8 @@ def on_recent_record_click_impl(self, event):
                     return
                 from site_apps.central.src.views.daily_record_save import remember_source
                 remember_source(self, record_idx)
-                print(f"DEBUG: Loaded recent record {record_idx} to form.")
         except Exception as e:
-            print(f"DEBUG: Error loading recent record: {e}")
+            print(f"Error loading recent record: {e}")
 
 
 def _on_daily_usage_select_impl(self, event):
@@ -367,13 +366,25 @@ def _cancel_tab_config_save(app):
 def _schedule_tab_config_save(app):
     if not getattr(app, 'is_ready', False):
         return
+    # Update selected tab in memory immediately; debounce full disk/Tcl width dump to idle
+    try:
+        idx = app.notebook.index("current")
+        if hasattr(app, 'tab_config') and isinstance(app.tab_config, dict):
+            app.tab_config['selected_tab'] = idx
+            app.tab_config['selected_tab_text'] = app.notebook.tab(idx, "text")
+    except Exception:
+        pass
     _cancel_tab_config_save(app)
 
     def save():
         app._tab_config_save_after_id = None
-        app.save_tab_config()
+        app._tab_only_config_save = True
+        try:
+            app.save_tab_config()
+        finally:
+            app._tab_only_config_save = False
 
-    app._tab_config_save_after_id = app.root.after(250, save)
+    app._tab_config_save_after_id = app.root.after(1200, save)
 
 
 _HISTORY_TAB_INPUTS = {
@@ -387,6 +398,10 @@ _HISTORY_TAB_INPUTS = {
     "inout": (
         ("transactions_df", "daily_usage_df", "materials_df"),
         ("cb_trans_filter_mat", "cb_trans_filter_site", "cb_trans_filter_vehicle"),
+    ),
+    "budget": (
+        ("daily_usage_df", "materials_df", "budget_df"),
+        ("cb_budget_view_site", "budget_view_start", "budget_view_end"),
     ),
 }
 
@@ -488,14 +503,13 @@ def on_tab_changed_impl(self, event=None):
             self.root.after(150, self._ensure_sash_visible)
         
         elif tab_text == '월별 집계':
-            print("Monthly usage tab selected - refreshing view")
-            self.refresh_inquiry_filters()
+            if not getattr(self, '_inquiry_filters_synced', False) or getattr(self, '_monthly_view_dirty', True):
+                self.refresh_inquiry_filters()
+                self._inquiry_filters_synced = True
             self.update_monthly_usage_view()
             self.root.after(50, self._ensure_monthly_sash_visibility)
-            self.root.after(200, self._ensure_monthly_sash_visibility)
         elif tab_text == '공사실행예산서':
-            print("Construction budget tab selected - refreshing view")
-            self.update_budget_site_view()
+            _refresh_history_tab_on_entry(self, "budget", self.update_budget_site_view)
         elif tab_text == '입출고 관리':
             print("In/Out Management tab selected - refreshing history")
             _refresh_history_tab_on_entry(self, "inout", self.refresh_inout_history)
@@ -518,6 +532,8 @@ def on_closing_impl(self):
         )
         return
     _cancel_tab_config_save(self)
+    if work_log is not None and hasattr(work_log, 'capture_visible_sash_before_close'):
+        work_log.capture_visible_sash_before_close()
     self.save_tab_config(force=True)
     if hasattr(self, 'ndt_calculator') and hasattr(self.ndt_calculator, 'save_ui_state'):
         self.ndt_calculator.save_ui_state()

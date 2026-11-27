@@ -1918,6 +1918,8 @@ def export_all_daily_usage_impl(self):
 def export_stock_to_excel_impl(self):
     """Export current stock data to Excel"""
     try:
+        if hasattr(self, 'flush_pending_stock_rows'):
+            self.flush_pending_stock_rows()
         # Get current filtered data from treeview
         stock_data = []
 

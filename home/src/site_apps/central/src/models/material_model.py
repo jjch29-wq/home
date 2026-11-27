@@ -1,8 +1,11 @@
+import logging
 import pandas as pd
 import numpy as np
 from datetime import datetime
 import re
 from site_apps.central.src.utils.helpers import *
+
+logger = logging.getLogger(__name__)
 
 def calculate_current_stock_impl(self, mat_id, lookups=None):
     """Use the same stock calculation as the inventory list."""
@@ -79,7 +82,7 @@ def _sync_dataframe_schema_impl(self, df, sheet_name):
             any_added = True
     
     if any_added:
-        print(f"DEBUG: Synchronized schema for {sheet_name}. Missing columns added.")
+        logger.debug("Synchronized schema for %s. Missing columns added.", sheet_name)
     return df
 
 

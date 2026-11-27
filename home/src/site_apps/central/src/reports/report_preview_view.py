@@ -179,12 +179,8 @@ class ReportPreviewViewMixin:
         self._setup_preview_sidebar(self.paut_preview_tree, container, mode="PAUT")
         tree_frame.pack(side='left', fill='both', expand=True)
 
-
         # Adaptive Resizing Bindings
-        self.paut_pane_ratio = self.config.get('PAUT_SASH_RATIO', 0.5)
-        self.paut_paned.bind("<Configure>", self._on_paut_paned_configure)
-        self.paut_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_paut_ratio))
-        self.root.after(500, lambda: self._on_paut_paned_configure(None))
+        self._bind_report_paned(self.paut_paned, "PAUT", 0.5)
 
 
     def _create_gapji_preview_ui(self, parent, mode):
@@ -913,12 +909,18 @@ class ReportPreviewViewMixin:
             t.focus_set()
             
             # Column Drag-and-Drop Init
-            if t.identify_region(event.x, event.y) == "heading":
+            region = t.identify_region(event.x, event.y)
+            t._resizing_col = (region == "separator")
+            if region == "heading":
                 # Ensure we are not grabbing the separator
                 if t.identify_region(event.x - 3, event.y) == "separator" or t.identify_region(event.x + 3, event.y) == "separator":
                     t.drag_col_id = None
+                    t._resizing_col = True
                 else:
                     t.drag_col_id = t.identify_column(event.x)
+                return
+            elif region == "separator":
+                t.drag_col_id = None
                 return
             else:
                 t.drag_col_id = None
@@ -1011,6 +1013,18 @@ class ReportPreviewViewMixin:
                     except Exception:
                         pass
                 t.drag_col_id = None
+            if getattr(t, '_resizing_col', False):
+                t._resizing_col = False
+                def _save_col_widths(tv=t, mode_key=mode):
+                    if not tv.winfo_exists():
+                        return
+                    try:
+                        self.config[f"{mode_key}_COL_WIDTHS"] = {col: tv.column(col, "width") for col in tv["columns"]}
+                        if callable(getattr(self, 'save_settings', None)):
+                            self.save_settings()
+                    except Exception:
+                        pass
+                self.root.after_idle(_save_col_widths)
 
         tree.bind("<Button-1>", _on_tree_press)
         tree.bind("<B1-Motion>", _on_tree_drag)

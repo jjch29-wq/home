@@ -34,16 +34,21 @@ class CentralDailyWorkLogSearchTests(unittest.TestCase):
                 self.assertEqual(selected(), [])
 
                 tab.pack(fill="both", expand=True)
+                self.root.geometry("1400x900")
                 self.root.deiconify()
                 self.root.update_idletasks()
                 cell = tab.ndt_grid_entries[0]["Joint No."]
                 cell.event_generate("<ButtonPress-1>")
                 self.assertIs(tab.selected_ndt_row, tab.ndt_grid_entries[0])
                 self.assertEqual(selected(), [])
-                grid.grid_slaves(row=2, column=0)[0].invoke()
-                last = grid.grid_slaves(row=5, column=0)[0]
-                last.event_generate("<ButtonPress-1>", state=1)
-                last.event_generate("<ButtonRelease-1>", state=1)
+                tab.ndt_tree.see("row_2")
+                self.root.update_idletasks()
+                bx2, by2, bw2, bh2 = tab.ndt_tree.bbox("row_2", "#1")
+                tab.ndt_tree.event_generate("<ButtonPress-1>", x=bx2 + bw2 // 2, y=by2 + bh2 // 2)
+                tab.ndt_tree.see("row_5")
+                self.root.update_idletasks()
+                bx5, by5, bw5, bh5 = tab.ndt_tree.bbox("row_5", "#1")
+                tab.ndt_tree.event_generate("<ButtonPress-1>", x=bx5 + bw5 // 2, y=by5 + bh5 // 2, state=1)
                 self.assertEqual(selected(), [1, 2, 3, 4])
                 self.assertEqual(tab.ndt_selection_text.get(), "4개 행 선택됨")
 
@@ -410,6 +415,114 @@ class CentralDailyWorkLogSearchTests(unittest.TestCase):
                     self.assertEqual(len(tree.get_children()), 3)
 
                     dialog.destroy()
+
+    def test_treeview_inplace_editor_tab_enter_and_rt_slots(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "daily_work_history.json"
+            with patch("site_apps.central.src.daily_work_log_tab.get_history_path", return_value=str(path)):
+                tab = DailyWorkLogTab(self.root)
+                self.root.geometry("1400x800")
+                tab.pack(fill="both", expand=True)
+                self.root.deiconify()
+                self.root.update()
+
+                # 1. Fill row 0 with PAUT + 300A via in-place editor & verify auto thickness/length
+                tab._open_cell_editor(0, "업체")
+                tab._cell_combo_var.set("다림건설(주)")
+                tab._on_cell_combo_selected()
+                self.assertEqual(list(tab.ndt_grid_entries[0]["공사구분"]["values"]), ["", "제조", "수탁", "건가"])
+
+                tab._open_cell_editor(0, "검사방법")
+                tab._cell_combo_var.set("PAUT")
+                tab._on_cell_combo_selected()
+
+                tab._open_cell_editor(0, "관경")
+                tab._cell_combo_var.set("300A")
+                tab._on_cell_combo_selected()
+                self.assertEqual(tab.ndt_grid_entries[0]["두께"].get(), "6.4")
+                self.assertTrue(float(tab.ndt_grid_entries[0]["PAUT"].get()) > 0)
+
+                tab._open_cell_editor(0, "Joint No.")
+                tab._cell_entry_var.set("J-01")
+                tab._on_editor_return(None)
+                # Row 0 Enter moves focus to Row 1 Joint No.
+                self.assertEqual(tab._active_editor_state["row"], 1)
+                self.assertEqual(tab._active_editor_state["col"], "Joint No.")
+
+                # 2. Row 1 Enter auto-copies Row 0 and increments Joint No. to J-02
+                tab._on_editor_return(None)
+                self.assertEqual(tab.ndt_grid_entries[1]["Joint No."].get(), "J-02")
+                self.assertEqual(tab.ndt_grid_entries[1]["업체"].get(), "다림건설(주)")
+                self.assertEqual(tab.ndt_grid_entries[1]["관경"].get(), "300A")
+                self.assertEqual(tab.ndt_tree.set("row_2", "Joint No."), "J-02")
+
+                # 3. RT 4-slot section info editor updates RT_OR / RT_RE / 결과 live
+                tab.ndt_grid_entries[2]["검사방법"].set("RT")
+                tab.ndt_grid_entries[2]["관경"].set("100A")
+                tab.ndt_grid_entries[2]["관경"].event_generate("<<ComboboxSelected>>")
+                tab._open_cell_editor(2, "구간정보")
+                self.assertIs(tab._active_editor_state["widget"], tab._cell_rt_frame)
+                tab._cell_rt_vars[0].set("1/-")
+                tab._cell_rt_vars[1].set("3/SL")
+                tab._cell_rt_vars[2].set("1/-")
+                tab._on_rt_sub_keyrelease(type("E", (), {"keysym": "L"})())
+                self.assertEqual(tab.ndt_grid_entries[2]["구간정보"].get(), "1/-,3/SL,1/-")
+                self.assertEqual(tab.ndt_grid_entries[2]["RT_OR"].get(), "3")
+                self.assertEqual(tab.ndt_grid_entries[2]["RT_RE"].get(), "1")
+                self.assertEqual(tab.ndt_grid_entries[2]["결과"].get(), "불합격")
+
+    def test_work_log_frame_sash_left_hide_and_col_widths_persist_across_restart(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "daily_work_history.json"
+            shared_cfg = {}
+            saved_calls = []
+            host = SimpleNamespace(
+                tab_config=shared_cfg,
+                save_tab_config=lambda force=False: saved_calls.append((force, dict(shared_cfg))),
+            )
+            with patch("site_apps.central.src.daily_work_log_tab.get_history_path", return_value=str(path)):
+                self.root.geometry("1500x850")
+                self.root.deiconify()
+
+                # Session 1: user adjusts sash to 30%, resizes '라인번호' col to 280px, then hides left pane
+                tab1 = DailyWorkLogTab(self.root, main_app=host)
+                tab1.pack(fill="both", expand=True)
+                self.root.update()
+
+                total_w = tab1.paned.winfo_width()
+                target_sash = int(total_w * 0.30)
+                tab1._on_paned_press(SimpleNamespace(widget=tab1.paned))
+                tab1.paned.sashpos(0, target_sash)
+                tab1._on_paned_release(SimpleNamespace(widget=tab1.paned))
+
+                tab1.ndt_tree.column("라인번호", width=280)
+                tab1._resizing_ndt_col = True
+                tab1._on_ndt_tree_release(None)
+
+                tab1._toggle_left_pane()
+                self.assertFalse(tab1._left_pane_visible)
+                self.assertFalse(shared_cfg["work_log_left_visible"])
+                self.assertEqual(shared_cfg["work_log_ndt_col_widths"]["라인번호"], 280)
+                self.assertAlmostEqual(shared_cfg["work_log_sash_ratio"], target_sash / total_w, delta=0.03)
+                tab1.destroy()
+
+                # Session 2 (Restart): left pane starts hidden & column width 280px is preserved;
+                # clicking '▶ 좌측 보이기' restores the 30% sash position instead of resetting to 50%!
+                tab2 = DailyWorkLogTab(self.root, main_app=host)
+                tab2.pack(fill="both", expand=True)
+                self.root.update()
+
+                self.assertFalse(tab2._left_pane_visible)
+                self.assertEqual(tab2.left_pane_toggle.cget("text"), "▶ 좌측 보이기")
+                self.assertEqual(int(tab2.ndt_tree.column("라인번호", "width")), 280)
+
+                tab2._toggle_left_pane()
+                self.root.update()
+                self.assertTrue(tab2._left_pane_visible)
+                restored_ratio = tab2.paned.sashpos(0) / tab2.paned.winfo_width()
+                self.assertAlmostEqual(restored_ratio, shared_cfg["work_log_sash_ratio"], delta=0.03)
+                tab2.destroy()
 
 
 if __name__ == '__main__':

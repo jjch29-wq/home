@@ -138,6 +138,45 @@ class TabConfigMixin:
             if not getattr(self, 'is_ready', False) and not force:
                 return
 
+            if getattr(self, '_tab_only_config_save', False) and not force:
+                if not hasattr(self, 'tab_config') or not isinstance(self.tab_config, dict):
+                    self.tab_config = {}
+                try:
+                    current_tab_widget = self.notebook.select()
+                    self.tab_config['selected_tab'] = self.notebook.index(current_tab_widget)
+                    self.tab_config['selected_tab_text'] = self.notebook.tab(current_tab_widget, "text")
+                except Exception:
+                    pass
+                final_config = dict(self.tab_config)
+                if os.path.exists(self.config_path):
+                    try:
+                        with open(self.config_path, 'r', encoding='utf-8') as f:
+                            loaded_disk = json.load(f)
+                        if isinstance(loaded_disk, dict):
+                            loaded_disk['selected_tab'] = self.tab_config.get('selected_tab', 0)
+                            loaded_disk['selected_tab_text'] = self.tab_config.get('selected_tab_text', '')
+                            final_config = loaded_disk
+                    except (OSError, json.JSONDecodeError):
+                        pass
+                import tempfile
+                cfg_dir = os.path.dirname(os.path.abspath(self.config_path))
+                os.makedirs(cfg_dir, exist_ok=True)
+                temp_cfg = None
+                try:
+                    with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=cfg_dir, prefix='.tab_config-', suffix='.json', delete=False) as tf:
+                        temp_cfg = tf.name
+                        json.dump(final_config, tf, ensure_ascii=False, indent=2)
+                    os.replace(temp_cfg, self.config_path)
+                    temp_cfg = None
+                finally:
+                    if temp_cfg and os.path.exists(temp_cfg):
+                        try:
+                            os.remove(temp_cfg)
+                        except OSError:
+                            pass
+                self.tab_config = final_config
+                return
+
             # Force update to ensure all coordinates and sizes are accurate
             try:
                 self.root.update_idletasks()
@@ -286,6 +325,11 @@ class TabConfigMixin:
             if hasattr(self, 'budget_view_tree'):
                 for col in self.budget_view_tree['columns']:
                     self.tab_config['budget_view_col_widths'][col] = self.budget_view_tree.column(col, 'width')
+
+            # Save Daily Work Log pane layout & NDT result tree column widths
+            work_log = getattr(self, 'tab_daily_work_log', None)
+            if work_log is not None and hasattr(work_log, 'sync_layout_to_config'):
+                work_log.sync_layout_to_config()
             
             # Save tab order (항상 표준 기본 순서 고정)
             default_tab_order = [
@@ -424,7 +468,6 @@ class TabConfigMixin:
             if os.path.exists(self.config_path):
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     self.tab_config = json.load(f)
-                    print(f"DEBUG: Loaded config raw: {self.tab_config}")
                 
                 config = self.tab_config
                 
@@ -1051,6 +1094,11 @@ class TabConfigMixin:
                             # Monthly usage table sashes (월별 집계 3개 테이블 높이 복원)
                             self._ensure_monthly_sash_visibility()
 
+                            # Daily Work Log left/right frame sash & visibility restoration
+                            work_log = getattr(self, 'tab_daily_work_log', None)
+                            if work_log is not None and hasattr(work_log, 'restore_work_log_layout'):
+                                work_log.restore_work_log_layout()
+
                             # If sash lock is active (check config heavily)
                             config_locked = config.get('daily_usage_sash_locked', False)
                             if config_locked:
@@ -1094,13 +1142,18 @@ class TabConfigMixin:
                                 self.clear_daily_usage_form_all()
                             except: pass
                             
-                            # [NEW] Trigger column auto-hide on both tabs immediately after startup
+                            # [PERF] 활성 탭만 필요한 뷰를 갱신하고 비활성 탭의 불필요한 중복 렌더링 방지
                             print("[STARTUP] Refreshing views...")
                             try:
-                                self.root.after(100, lambda: self.update_daily_usage_view())
-                                self.root.after(200, lambda: self.update_monthly_usage_view())
-                                self.root.after(300, lambda: self.update_budget_site_view()) 
-                                # Removed hardcoded default tab selection so the user's saved tab is preserved
+                                self._monthly_view_dirty = True
+                                active_tab = self.notebook.select()
+                                active_title = self.notebook.tab(active_tab, "text") if active_tab else ""
+                                if active_title == '현장별 일일 사용량 기입':
+                                    self.root.after(80, self.update_daily_usage_view)
+                                elif active_title == '월별 집계':
+                                    self.root.after(80, self.update_monthly_usage_view)
+                                elif active_title == '공사실행예산서':
+                                    self.root.after(80, self.update_budget_site_view)
                             except Exception as e:
                                 print(f"[STARTUP] View refresh error: {e}")
                                 
@@ -1121,5 +1174,15 @@ class TabConfigMixin:
         except Exception as e:
             print(f"Failed to load tab config: {e}")
             # Ensure we eventually become ready even if load failed, to allow new saves
-            self.root.after(2000, lambda: setattr(self, 'is_ready', True))
+            def _mark_ready():
+                try:
+                    if hasattr(self, 'root') and self.root.winfo_exists():
+                        self.is_ready = True
+                except tk.TclError:
+                    pass
+            try:
+                if hasattr(self, 'root') and self.root.winfo_exists():
+                    self.root.after(2000, _mark_ready)
+            except tk.TclError:
+                pass
     

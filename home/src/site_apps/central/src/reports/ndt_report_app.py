@@ -252,8 +252,9 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         # 1. Initialize Configuration first (needed for state variables)
         self.config = {
             # UI State (Persistence)
-            'PMI_SASH_RATIO': 0.5, 'RT_SASH_RATIO': 0.5, 'PT_SASH_RATIO': 0.5, 'PAUT_SASH_RATIO': 0.5,
-            'PMI_COL_WIDTHS': {}, 'RT_COL_WIDTHS': {}, 'PT_COL_WIDTHS': {}, 'PAUT_COL_WIDTHS': {},
+            'PMI_SASH_RATIO': 0.5, 'RT_SASH_RATIO': 0.5, 'PT_SASH_RATIO': 0.5, 'MT_SASH_RATIO': 0.5, 'PAUT_SASH_RATIO': 0.5,
+            'PMI_COL_WIDTHS': {}, 'RT_COL_WIDTHS': {}, 'KOGAS_COL_WIDTHS': {}, 'PT_COL_WIDTHS': {}, 'MT_COL_WIDTHS': {}, 'PAUT_COL_WIDTHS': {},
+            'SIDEBAR_HIDDEN': {},
             # 갑지 (Cover)
             'SEOUL_COVER_ANCHOR': "E5", 'SEOUL_COVER_W': 200.0, 'SEOUL_COVER_H': 18.0, 'SEOUL_COVER_X': 30.0, 'SEOUL_COVER_Y': 15.0,
             'SITCO_COVER_ANCHOR': "A6", 'SITCO_COVER_W': 80.0, 'SITCO_COVER_H': 40.0, 'SITCO_COVER_X': 10.0, 'SITCO_COVER_Y': 10.0,
@@ -332,7 +333,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         # --- PAUT State Variables ---
         self.paut_target_file_path = tk.StringVar(value=self.config.get('PAUT_TARGET_PATH', ""))
         
-        default_paut_path = r"C:\Users\jjch2\Desktop\지역난방 PAUT.xlsx"
+        default_paut_path = os.path.join(os.path.expanduser("~"), "Desktop", "지역난방 PAUT.xlsx")
         saved_paut_path = self.config.get('PAUT_TEMPLATE_PATH', "")
         if not saved_paut_path and os.path.exists(default_paut_path):
             saved_paut_path = default_paut_path
@@ -411,6 +412,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         self.rt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.rt_template_file_path.get(), "RT"))
         self.kogas_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.kogas_template_file_path.get(), "KOGAS"))
         self.pt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.pt_template_file_path.get(), "PT"))
+        self.mt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.mt_template_file_path.get(), "MT"))
         self.paut_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.paut_template_file_path.get(), "PAUT"))
         self.template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.template_file_path.get(), "PMI"))
 
@@ -819,22 +821,36 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
                             self.config[f"{mode}_COL_WIDTHS"] = {col: tree.column(col, "width") for col in tree["columns"]}
                     except: pass
 
-            # 2. 패널 분할선(Sash) 비율 캡처
+            # 2. 패널 분할선(Sash) 비율 및 사이드바 접기 상태 캡처 (화면에 표시 중이고 초기 비율 적용이 끝난 패널만 갱신)
             paned_windows = [
                 ('PMI', d.get('pmi_paned')),
                 ('RT', d.get('rt_paned')),
                 ('PT', d.get('pt_paned')),
-                ('PAUT', d.get('paut_paned'))
+                ('MT', d.get('mt_paned')),
+                ('PAUT', d.get('paut_paned')),
+                ('PHOTO', d.get('photo_paned')),
             ]
+            hidden_map = self.config.setdefault('SIDEBAR_HIDDEN', {})
+            if not isinstance(hidden_map, dict):
+                hidden_map = {}
+                self.config['SIDEBAR_HIDDEN'] = hidden_map
             for mode, pw in paned_windows:
-                if pw:
+                if pw and pw.winfo_exists():
                     try:
-                        if pw.tk.getboolean(pw.panecget(pw.panes()[0], 'hide')):
+                        panes = pw.panes()
+                        if not panes:
+                            continue
+                        is_hidden = bool(pw.tk.getboolean(pw.panecget(panes[0], 'hide')))
+                        hidden_map[mode] = is_hidden
+                        if is_hidden or not getattr(pw, '_sash_initialized', False) or not pw.winfo_ismapped():
                             continue
                         total_w = pw.winfo_width()
                         if total_w > 100:
-                            self.config[f'{mode}_SASH_RATIO'] = pw.sash_coord(0)[0] / total_w
-                    except: pass
+                            ratio = max(0.08, min(0.92, pw.sash_coord(0)[0] / total_w))
+                            self.config[f'{mode}_SASH_RATIO'] = ratio
+                            setattr(self, f'{mode.lower()}_pane_ratio', ratio)
+                    except Exception:
+                        pass
 
             # 3. 윈도우 및 활성 탭 상태 캡처
             try:
@@ -968,7 +984,7 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         except Exception as e:
             print(f"Error loading photolog config: {e}")
 
-    def load_template_specific_config(self, template_path, mode="RT"):
+    def load_template_specific_config(self, template_path, mode="RT", force=False):
         """템플릿 파일과 연동된 JSON 설정 파일을 로드하여 UI에 반영"""
         if not template_path or not os.path.exists(template_path): return
         
@@ -985,8 +1001,17 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         try:
             if not os.path.exists(config_path) or not os.access(config_path, os.R_OK):
                 return
+            mtime = os.path.getmtime(config_path)
+            cache = getattr(self, '_loaded_template_configs', None)
+            if cache is None:
+                cache = {}
+                self._loaded_template_configs = cache
+            cache_key = (mode, os.path.abspath(config_path))
+            if not force and cache.get(cache_key) == mtime:
+                return
             with open(config_path, 'r', encoding='utf-8') as f:
                 t_config = json.load(f)
+            cache[cache_key] = mtime
             
             self.log(f"📂 [Auto-Load] '{os.path.basename(template_path)}' 전용 설정을 불러왔습니다.")
             
@@ -1139,6 +1164,9 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
         try:
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(t_data, f, indent=4, ensure_ascii=False)
+            cache = getattr(self, '_loaded_template_configs', None)
+            if isinstance(cache, dict):
+                cache[(mode, os.path.abspath(config_path))] = os.path.getmtime(config_path)
         except Exception as e:
             print(f"[ERROR] 템플릿 전용 설정 자동 저장 실패: {e}")
 
@@ -1368,15 +1396,114 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
     def _apply_sash_ratio(self, mode):
         """Helper to apply saved sash ratio with a slight delay to ensure UI mapping."""
         pw = getattr(self, f"{mode.lower()}_paned", None)
-        ratio = self.config.get(f"{mode}_SASH_RATIO")
-        if pw and ratio is not None:
-            def apply():
+        default_ratio = 0.45 if mode == "PHOTO" else 0.5
+        ratio = self.config.get(f"{mode}_SASH_RATIO", default_ratio)
+        try:
+            ratio = max(0.08, min(0.92, float(ratio)))
+        except (TypeError, ValueError):
+            ratio = default_ratio
+        setattr(self, f"{mode.lower()}_pane_ratio", ratio)
+        if not pw:
+            return
+
+        def apply(attempts=0):
+            if not pw.winfo_exists():
+                return
+            try:
+                panes = pw.panes()
+                if panes and pw.tk.getboolean(pw.panecget(panes[0], 'hide')):
+                    pw._sash_initialized = True
+                    return
                 total_w = pw.winfo_width()
+                if pw.winfo_ismapped() and total_w > 100:
+                    pw.sash_place(0, int(total_w * getattr(self, f"{mode.lower()}_pane_ratio", ratio)), 0)
+                    pw._sash_initialized = True
+                    return
+            except Exception:
+                return
+            if attempts < 20:
+                try:
+                    if self.root.winfo_exists():
+                        self.root.after(100, lambda: apply(attempts + 1))
+                except tk.TclError:
+                    pass
+
+        try:
+            if self.root.winfo_exists():
+                self.root.after(100, apply)
+        except tk.TclError:
+            pass
+
+    def _infer_paned_mode(self, paned):
+        for mode in ("PMI", "RT", "PT", "MT", "PAUT", "PHOTO"):
+            if getattr(self, f"{mode.lower()}_paned", None) is paned:
+                return mode
+        return None
+
+    def _bind_report_paned(self, paned, mode, default_ratio=0.5):
+        """보고서 서브탭 PanedWindow의 분할선 비율 유지 및 드래그 즉시 저장 바인딩을 설정한다."""
+        ratio_attr = f"{mode.lower()}_pane_ratio"
+        try:
+            saved = float(self.config.get(f"{mode}_SASH_RATIO", default_ratio))
+            saved = max(0.08, min(0.92, saved))
+        except (TypeError, ValueError):
+            saved = default_ratio
+        setattr(self, ratio_attr, saved)
+
+        def on_configure(event=None):
+            if event is not None and event.widget is not paned:
+                return
+            if not paned.winfo_exists() or not getattr(paned, '_sash_initialized', False):
+                return
+            try:
+                panes = paned.panes()
+                if panes and paned.tk.getboolean(paned.panecget(panes[0], 'hide')):
+                    return
+                total_w = paned.winfo_width()
                 if total_w > 100:
-                    pw.sash_place(0, int(total_w * ratio), 0)
-                else:
-                    self.root.after(100, apply)
-            self.root.after(100, apply)
+                    cur_ratio = float(getattr(self, ratio_attr, saved))
+                    paned.sash_place(0, int(total_w * cur_ratio), 0)
+            except Exception:
+                pass
+
+        def on_press(_event=None):
+            try:
+                panes = paned.panes()
+                if panes and paned.tk.getboolean(paned.panecget(panes[0], 'hide')):
+                    paned._sash_press_x = None
+                    return
+                paned._sash_press_x = paned.sash_coord(0)[0]
+            except Exception:
+                paned._sash_press_x = None
+
+        def on_release(_event=None):
+            prev_x = getattr(paned, '_sash_press_x', None)
+            paned._sash_press_x = None
+            if prev_x is None or not getattr(paned, '_sash_initialized', False):
+                return
+
+            def commit():
+                if not paned.winfo_exists():
+                    return
+                try:
+                    panes = paned.panes()
+                    if panes and paned.tk.getboolean(paned.panecget(panes[0], 'hide')):
+                        return
+                    total_w = paned.winfo_width()
+                    cur_x = paned.sash_coord(0)[0]
+                    if total_w > 100 and abs(cur_x - prev_x) >= 2:
+                        new_ratio = max(0.08, min(0.92, cur_x / total_w))
+                        setattr(self, ratio_attr, new_ratio)
+                        self.config[f"{mode}_SASH_RATIO"] = new_ratio
+                        self.save_settings()
+                except Exception:
+                    pass
+
+            self.root.after(10, commit)
+
+        paned.bind("<Configure>", on_configure, add="+")
+        paned.bind("<ButtonPress-1>", on_press, add="+")
+        paned.bind("<ButtonRelease-1>", on_release, add="+")
 
     def evaluate_paut_flaw(self, t, h, l, depth, flaw_nature, mode="ECA"):
         """
@@ -1904,30 +2031,77 @@ class PMIReportApp(PhotoLogMixin, ReportSheetStylerMixin, NDTReportRunnersMixin,
             except Exception:
                 pass
 
-    def _add_sidebar_toggle(self, paned, sidebar):
-        if not self.is_embedded:
+    def _add_sidebar_toggle(self, paned, sidebar, mode=None):
+        if not getattr(self, 'is_embedded', False):
             return
+        if mode is None and hasattr(self, '_infer_paned_mode'):
+            mode = self._infer_paned_mode(paned)
+        cfg = getattr(self, 'config', None)
+        hidden_map = cfg.get('SIDEBAR_HIDDEN', {}) if isinstance(cfg, dict) else {}
+        initially_hidden = bool(mode and isinstance(hidden_map, dict) and hidden_map.get(mode, False))
+
         previous_width = 425
+        if mode and isinstance(cfg, dict):
+            try:
+                saved_ratio = float(cfg.get(f"{mode}_SASH_RATIO", 0.5))
+                if 0.08 <= saved_ratio <= 0.92:
+                    setattr(self, f"{mode.lower()}_pane_ratio", saved_ratio)
+            except (TypeError, ValueError):
+                pass
+
         toolbar = ttk.Frame(paned.master)
         toolbar.pack(fill='x', before=paned)
 
         def restore_width():
-            if not paned.tk.getboolean(paned.panecget(sidebar, 'hide')):
-                paned.sash_place(0, previous_width, 0)
+            if not paned.winfo_exists() or paned.tk.getboolean(paned.panecget(sidebar, 'hide')):
+                return
+            target_w = previous_width
+            if mode and isinstance(cfg, dict):
+                total_w = paned.winfo_width()
+                ratio = getattr(self, f"{mode.lower()}_pane_ratio", cfg.get(f"{mode}_SASH_RATIO"))
+                if total_w > 100 and ratio is not None:
+                    try:
+                        target_w = max(120, min(int(total_w * float(ratio)), total_w - 120))
+                    except (TypeError, ValueError):
+                        pass
+            paned.sash_place(0, target_w, 0)
+            paned._sash_initialized = True
 
         def toggle():
             nonlocal previous_width
             if paned.tk.getboolean(paned.panecget(sidebar, 'hide')):
                 paned.paneconfigure(sidebar, hide=False)
                 button.configure(text='◀ 왼쪽 패널 접기')
-                paned.after_idle(restore_width)
+                if mode and isinstance(cfg, dict):
+                    cfg.setdefault('SIDEBAR_HIDDEN', {})[mode] = False
+                def _restore_and_save():
+                    restore_width()
+                    if callable(getattr(self, 'save_settings', None)):
+                        self.save_settings()
+                paned.after_idle(_restore_and_save)
             else:
-                previous_width = paned.sash_coord(0)[0]
+                try:
+                    previous_width = paned.sash_coord(0)[0]
+                except Exception:
+                    pass
+                total_w = paned.winfo_width()
+                if mode and isinstance(cfg, dict):
+                    if total_w > 100 and previous_width > 0:
+                        ratio = max(0.08, min(0.92, previous_width / total_w))
+                        setattr(self, f"{mode.lower()}_pane_ratio", ratio)
+                        cfg[f"{mode}_SASH_RATIO"] = ratio
+                    cfg.setdefault('SIDEBAR_HIDDEN', {})[mode] = True
                 paned.paneconfigure(sidebar, hide=True)
                 button.configure(text='▶ 왼쪽 패널 펼치기')
+                if callable(getattr(self, 'save_settings', None)):
+                    self.save_settings()
 
-        button = ttk.Button(toolbar, text='◀ 왼쪽 패널 접기', command=toggle)
+        init_text = '▶ 왼쪽 패널 펼치기' if initially_hidden else '◀ 왼쪽 패널 접기'
+        button = ttk.Button(toolbar, text=init_text, command=toggle)
         button.pack(side='left', padx=6, pady=3)
+        if initially_hidden:
+            paned.paneconfigure(sidebar, hide=True)
+            paned._sash_initialized = True
 
     def col_to_num(self, col_str):
         """[NEW] 엑셀 열 이름(A, B, AA...)을 숫자 인덱스(1, 2, 27...)로 변환"""

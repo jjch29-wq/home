@@ -427,10 +427,24 @@ def setup_budget_tab_impl(self):
             _bind_esc_recursive(child)
 
     # after_idle: 모든 위젯 생성 완료 후 바인딩
-    self.root.after_idle(lambda: _bind_esc_recursive(self.tab_daily_usage))
+    def _safe_bind_esc():
+        try:
+            if hasattr(self, 'tab_daily_usage') and self.tab_daily_usage.winfo_exists():
+                _bind_esc_recursive(self.tab_daily_usage)
+        except tk.TclError:
+            pass
+
+    def _safe_update_budget():
+        try:
+            if hasattr(self, 'root') and self.root.winfo_exists():
+                self.update_budget_site_view()
+        except tk.TclError:
+            pass
+
+    self.root.after_idle(_safe_bind_esc)
 
     # 초기 데이터 로드 (첫 현장 자동 선택 후 표시)
-    self.root.after(100, lambda: self.update_budget_site_view())
+    self.root.after(100, _safe_update_budget)
 
     self._budget_loaded_site = self.cb_budget_site.get().strip()
     self._budget_baseline = self._capture_budget_input()

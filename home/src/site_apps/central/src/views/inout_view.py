@@ -960,8 +960,8 @@ class InoutViewMixin:
             self.apply_autocomplete_to_all_comboboxes()
         
         # 3. Final view update now that filters are set to "전체"
-        import threading
-        self.root.after(100, self.update_stock_view)
+        if not getattr(self, '_suppress_combo_stock_refresh', False) and hasattr(self, 'stock_tree'):
+            self.root.after(100, self.update_stock_view)
 
     def register_material(self):
         co_code = self.cb_co_code.get().strip()
