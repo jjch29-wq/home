@@ -76,11 +76,17 @@ DEFAULT_CONFIG = {
 }
 
 def load_config():
-    if not os.path.exists(CONFIG_FILE):
+    cfg_path = CONFIG_FILE
+    try:
+        from site_apps.central.src.site_profile import get_active_profile, resolve_billing_config_path
+        cfg_path = resolve_billing_config_path(get_active_profile(), CONFIG_FILE)
+    except Exception:
+        pass
+    if not os.path.exists(cfg_path):
         save_config(deepcopy(DEFAULT_CONFIG))
         return deepcopy(DEFAULT_CONFIG)
     try:
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+        with open(cfg_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
             # Merge missing schema fields without replacing saved records or rates.
             def merge_missing(target, defaults):
@@ -101,10 +107,19 @@ def load_config():
         raise RuntimeError(f'기성 설정을 읽지 못했습니다. 원본 파일을 확인해주세요: {error}') from error
 
 def save_config(config):
-    temp_path = CONFIG_FILE + '.tmp'
+    cfg_path = CONFIG_FILE
+    try:
+        from site_apps.central.src.site_profile import get_active_profile, resolve_billing_config_path
+        cfg_path = resolve_billing_config_path(get_active_profile(), CONFIG_FILE)
+    except Exception:
+        pass
+    parent_dir = os.path.dirname(os.path.abspath(cfg_path))
+    if parent_dir and not os.path.exists(parent_dir):
+        os.makedirs(parent_dir, exist_ok=True)
+    temp_path = cfg_path + '.tmp'
     with open(temp_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
-    os.replace(temp_path, CONFIG_FILE)
+    os.replace(temp_path, cfg_path)
 
 # 글로벌 변수
 CONFIG = load_config()

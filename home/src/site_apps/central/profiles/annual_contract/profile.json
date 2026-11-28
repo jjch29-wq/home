@@ -1,0 +1,29 @@
+{
+  "profile_id": "annual_contract",
+  "display_name": "연간 단가계약 (공용재고)",
+  "site_type": "annual_contract",
+  "inventory_mode": "shared",
+  "window_title": "자재·NDT 관리 프로그램 [연간 단가계약]",
+  "description": "연간 단가계약 현장용 프로필: 회사 공용 재고 공유 + 계약별 독립 작업일보/기성정산/성적서 관리 (핫태핑 비활성)",
+  "enabled_tabs": [
+    "stock",
+    "io_transfer",
+    "inout",
+    "daily_usage",
+    "daily_history",
+    "monthly",
+    "work_log",
+    "ndt_billing",
+    "budget",
+    "ndt_report"
+  ],
+  "enable_hot_tapping": false,
+  "companies": [],
+  "company_work_categories": {},
+  "all_work_categories": ["", "정기", "추가", "보수", "긴급"],
+  "billing_title": "연간 단가계약 총 계약 수량",
+  "billing_overrides": {
+    "allow_lump_sum": true
+  }
+}
+

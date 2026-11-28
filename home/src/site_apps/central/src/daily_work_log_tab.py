@@ -755,16 +755,24 @@ class DailyWorkLogTab(ttk.Frame):
         self.ndt_selection_label.grid_remove()
 
         # 4. 우측: 선택 행 핫태핑 및 공정사진 (2단 배치)
-        extra_box = ttk.LabelFrame(top_frame, text="🔥 선택 행 핫태핑 · 📸 공정사진", padding=(6, 3))
+        from site_apps.central.src.site_profile import get_active_profile
+        _active_profile = get_active_profile()
+        _hot_enabled = _active_profile.enable_hot_tapping
+        extra_box = ttk.LabelFrame(
+            top_frame,
+            text="🔥 선택 행 핫태핑 · 📸 공정사진" if _hot_enabled else "📸 공정사진",
+            padding=(6, 3),
+        )
 
         hot_bar = ttk.Frame(extra_box)
-        hot_bar.grid(row=0, column=0, sticky="w", pady=1)
         ttk.Button(
             hot_bar, text="🔥 선택 행 핫태핑 입력/수정", command=self._edit_hot_tapping, style="Warning.TButton"
         ).pack(side="left", padx=(2, 6))
         self.hot_summary_var = tk.StringVar()
         hot_summary = ttk.Label(extra_box, textvariable=self.hot_summary_var, foreground="#444444", wraplength=260)
-        hot_summary.grid(row=2, column=0, sticky="w", padx=2)
+        if _hot_enabled:
+            hot_bar.grid(row=0, column=0, sticky="w", pady=1)
+            hot_summary.grid(row=2, column=0, sticky="w", padx=2)
 
         photo_bar = ttk.Frame(extra_box)
         photo_bar.grid(row=1, column=0, sticky="w", pady=1)

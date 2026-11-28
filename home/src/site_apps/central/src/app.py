@@ -386,8 +386,17 @@ if not hasattr(messagebox, 'showerror_orig'):
         # self.wait_window() removed from here to allow caller to set vars before blocking
 
 class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
-    def __init__(self, root):
+    def __init__(self, root, profile_id=None):
         self.root = root
+        from site_apps.central.src.site_profile import (
+            load_site_profile,
+            set_active_profile_id,
+            resolve_config_path,
+            resolve_inventory_path,
+        )
+        if profile_id is not None:
+            set_active_profile_id(profile_id)
+        self.site_profile = load_site_profile(profile_id)
 
         # 공정별 관경에 따른 검사길이 (m) 룩업 테이블
         self.SIZE_LENGTH = {
@@ -409,7 +418,11 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             except Exception:
                 pass
                 
-        self.root.title("자재 및 소모품 관리 시스템 (Material Manager)")
+        self.root.title(
+            "자재 및 소모품 관리 시스템 (Material Manager)"
+            if self.site_profile.is_central
+            else self.site_profile.window_title
+        )
         self.root.geometry("1600x900")
         try:
             self.root.state('zoomed') # Maximize on Windows
@@ -599,6 +612,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
 
         # User settings are intentionally ignored by Git, so a clean checkout
         # needs a valid first-run file before configuration is loaded.
+        self.config_path = resolve_config_path(self.site_profile, self.config_path)
         ensure_initial_config(self.config_path)
 
         # 중앙지사에서 선택한 클라우드 재고 파일을 우선 사용한다.
@@ -608,6 +622,9 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             raise FileNotFoundError(f'중앙지사 운영 재고 파일이 없습니다: {cloud_inventory}')
         if os.path.isfile(cloud_inventory):
             self.db_path = cloud_inventory
+
+        # 프로필 재고 모드 적용 (shared: 회사 공용 재고 공유 / isolated: 프로필 전용 재고)
+        self.db_path = resolve_inventory_path(self.site_profile, self.db_path)
 
         # db_path 확정
         
@@ -626,7 +643,7 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         self.vehicles = [] # Initialize vehicle list
         self.vehicle_inspections = {} # [NEW] Track active inspection widgets
         self.vehicle_boxes = [] # [NEW] Track active inspection widgets for automated save
-        self.companies = ['GS네오텍', '다림건설(주)', '한국지역난방공사', '한국지역난방공사 중앙지사'] # Initialize companies list
+        self.companies = list(self.site_profile.companies) # Initialize companies list from active profile
         self.worktimes = [] # Initialize worktimes list
         self.ot_times = [] # Initialize ot_times list
         self.test_items = [] # [NEW] Initialize test_items
@@ -1217,6 +1234,12 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         path_row.pack(fill='x')
         ttk.Label(path_row, text="재고 경로").pack(side='left', padx=(0, 8))
         ttk.Entry(path_row, textvariable=self._inventory_path_status, state='readonly').pack(side='left', fill='x', expand=True)
+        ttk.Label(
+            path_row,
+            text=self.site_profile.status_badge(),
+            foreground='#1565c0',
+            font=('Malgun Gothic', 9, 'bold'),
+        ).pack(side='right', padx=(10, 0))
         ttk.Label(status, textvariable=self._operating_data_status).pack(anchor='w', pady=(3, 0))
         self.refresh_operating_data_status()
 
@@ -1255,28 +1278,32 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         self.setup_monthly_usage_tab()
 
         # Tab 7: Daily Work Log (작업/감독일보)
-        work_log_page = ttk.Frame(self.notebook)
-        self.notebook.add(work_log_page, text='작업/감독일보')
-        self._load_tab_on_first_map(work_log_page, lambda: self.setup_daily_work_log_tab(work_log_page), show_loading=True)
+        if self.site_profile.is_tab_enabled('work_log'):
+            work_log_page = ttk.Frame(self.notebook)
+            self.notebook.add(work_log_page, text='작업/감독일보')
+            self._load_tab_on_first_map(work_log_page, lambda: self.setup_daily_work_log_tab(work_log_page), show_loading=True)
 
         # Tab 8: NDT Billing Calculator (기성 정산 (NDT))
-        self.tab_ndt_billing = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
-        self._load_tab_on_first_map(self.tab_ndt_billing, self.setup_ndt_billing_tab, show_loading=True)
+        if self.site_profile.is_tab_enabled('ndt_billing'):
+            self.tab_ndt_billing = ttk.Frame(self.notebook)
+            self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
+            self._load_tab_on_first_map(self.tab_ndt_billing, self.setup_ndt_billing_tab, show_loading=True)
 
         # Tab 9: Project Execution Budget (공사실행예산서)
-        self.tab_budget = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_budget, text='공사실행예산서')
-        self.setup_budget_tab()
+        if self.site_profile.is_tab_enabled('budget'):
+            self.tab_budget = ttk.Frame(self.notebook)
+            self.notebook.add(self.tab_budget, text='공사실행예산서')
+            self.setup_budget_tab()
 
         # Tab 10: NDT Inspection Report Generator (비파괴검사 성적서/보고서)
-        try:
-            from site_apps.central.src.views.ndt_report_tab import NDTReportTab
-            self.tab_ndt_report = NDTReportTab(self.notebook, main_app=self, lazy=True)
-            self.notebook.add(self.tab_ndt_report, text='비파괴검사 성적서/보고서')
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to load NDTReportTab: {e}")
+        if self.site_profile.is_tab_enabled('ndt_report'):
+            try:
+                from site_apps.central.src.views.ndt_report_tab import NDTReportTab
+                self.tab_ndt_report = NDTReportTab(self.notebook, main_app=self, lazy=True)
+                self.notebook.add(self.tab_ndt_report, text='비파괴검사 성적서/보고서')
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to load NDTReportTab: {e}")
         
         # Select default tab instantly to prevent flicker: 마지막 보던 탭 또는 현장별 일일 사용량 기입
         init_tab = self.tab_daily_usage
@@ -4658,8 +4685,22 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
         search_entry.focus_set()
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--profile", dest="profile_id", default=None)
+    parser.add_argument("--pick-profile", action="store_true")
+    cli_args, _unknown = parser.parse_known_args()
+
+    selected_profile = cli_args.profile_id
+    if cli_args.pick_profile:
+        from site_apps.central.src.site_profile import pick_profile_dialog
+        selected_profile = pick_profile_dialog()
+        if not selected_profile:
+            sys.exit(0)
+
     root = tk.Tk()
-    app = MaterialManager(root)
+    app = MaterialManager(root, profile_id=selected_profile)
     try:
         root.mainloop()
     except KeyboardInterrupt:

@@ -159,6 +159,11 @@ def get_data_dir():
 
 
 def get_history_path():
+    from .site_profile import get_profile_data_dir
+
+    profile_dir = get_profile_data_dir()
+    if profile_dir:
+        return os.path.join(profile_dir, 'daily_work_history.json')
     return os.path.join(get_data_dir(), 'daily_work_history.json')
 
 
@@ -176,6 +181,11 @@ def get_submission_dir():
 
 
 def get_process_photos_dir():
+    from .site_profile import get_profile_data_dir
+
+    profile_dir = get_profile_data_dir()
+    if profile_dir:
+        return os.path.join(profile_dir, 'process_photos')
     return os.path.join(get_data_dir(), 'data', 'process_photos')
 
 

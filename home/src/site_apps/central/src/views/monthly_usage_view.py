@@ -64,6 +64,46 @@ def setup_monthly_usage_tab_impl(self):
     btn_export = ttk.Button(filter_frame, text="📊 엑셀 내보내기", command=self.export_monthly_usage_history, style="Action.TButton")
     btn_export.pack(side='left', padx=4)
 
+    def _export_client_statement():
+        from site_apps.central.src.services.smb_statement_exporter import export_smb_statement_excel
+        year_val = self.cb_filter_year.get().strip()
+        month_val = self.cb_filter_month.get().strip()
+        site_val = self.cb_filter_site_monthly.get().strip()
+        period_tag = f"{year_val if year_val != '전체' else '전체'}_{month_val if month_val != '전체' else '전체'}"
+        site_tag = f"_{site_val}" if site_val and site_val != '전체' else ""
+        default_name = f"거래명세서_{period_tag}{site_tag}.xlsx"
+        fp = filedialog.asksaveasfilename(
+            title="업체별 거래명세서 저장",
+            defaultextension=".xlsx",
+            initialfile=default_name,
+            filetypes=[("Excel 파일", "*.xlsx")],
+        )
+        if not fp:
+            return
+        try:
+            profile = getattr(self, "site_profile", None)
+            profile_name = profile.display_name if profile else "중앙지사"
+            summary = export_smb_statement_excel(
+                getattr(self, "daily_usage_df", None),
+                fp,
+                year=year_val,
+                month=month_val,
+                site=site_val,
+                profile_name=profile_name,
+            )
+            messagebox.showinfo(
+                "거래명세서 저장 완료",
+                f"총 {len(summary['rows'])}건 출력 완료\n"
+                f"공급가액: {summary['supply_total']:,}원\n"
+                f"부가세(10%): {summary['vat_total']:,}원\n"
+                f"총 청구금액: {summary['grand_total']:,}원",
+            )
+        except Exception as err:
+            messagebox.showerror("저장 오류", f"거래명세서 생성 중 오류가 발생했습니다.\n{err}")
+
+    btn_statement = ttk.Button(filter_frame, text="📄 거래명세서 출력", command=_export_client_statement, style="Success.TButton")
+    btn_statement.pack(side='left', padx=4)
+
     btn_popout = ttk.Button(filter_frame, text="🗗 팝업창 분리", command=self.open_detached_monthly_usage_view, style="Info.TButton")
     btn_popout.pack(side='left', padx=4)
     

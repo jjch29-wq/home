@@ -1,0 +1,27 @@
+{
+  "profile_id": "smb_general",
+  "display_name": "중소업체 건별/일식 (공용재고)",
+  "site_type": "smb_general",
+  "inventory_mode": "shared",
+  "window_title": "자재·NDT 관리 프로그램 [중소업체 건별/일식]",
+  "description": "중소업체 건별/출장비/일식 업무용 경량 프로필: 회사 공용 재고 공유 + 일일사용량·월별거래명세서·실행예산·6종 성적서 집중",
+  "enabled_tabs": [
+    "stock",
+    "io_transfer",
+    "inout",
+    "daily_usage",
+    "daily_history",
+    "monthly",
+    "budget",
+    "ndt_report"
+  ],
+  "enable_hot_tapping": false,
+  "companies": [],
+  "company_work_categories": {},
+  "all_work_categories": ["", "일반", "긴급", "야간", "일식"],
+  "billing_title": "건별/일식 정산",
+  "billing_overrides": {
+    "allow_lump_sum": true
+  }
+}
+

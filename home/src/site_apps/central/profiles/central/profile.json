@@ -1,0 +1,39 @@
+{
+  "profile_id": "central",
+  "display_name": "한국지역난방 중앙지사",
+  "site_type": "kdhc",
+  "inventory_mode": "shared",
+  "window_title": "자재 관리 프로그램 (v8 - 1원단위 완벽 보정)",
+  "description": "한국지역난방공사 중앙지사 전체 기능(10개 탭 · 핫태핑 · 월간진도보고서 · 기성정산) 프로필",
+  "enabled_tabs": [
+    "stock",
+    "io_transfer",
+    "inout",
+    "daily_usage",
+    "daily_history",
+    "monthly",
+    "work_log",
+    "ndt_billing",
+    "budget",
+    "ndt_report"
+  ],
+  "enable_hot_tapping": true,
+  "companies": [
+    "GS네오텍",
+    "다림건설(주)",
+    "한국지역난방공사",
+    "한국지역난방공사 중앙지사"
+  ],
+  "company_work_categories": {
+    "다림": ["", "제조", "수탁", "건가"],
+    "다림건설": ["", "제조", "수탁", "건가"],
+    "다림건설(주)": ["", "제조", "수탁", "건가"],
+    "GS네오텍": ["", "건가-추가", "건가-개선"],
+    "GS": ["", "건가-추가", "건가-개선"],
+    "지에스네오텍": ["", "건가-추가", "건가-개선"]
+  },
+  "all_work_categories": ["", "제조", "수탁", "건가", "건가-추가", "건가-개선"],
+  "billing_title": "가산~가평 총 계약 수량",
+  "billing_overrides": {}
+}
+
