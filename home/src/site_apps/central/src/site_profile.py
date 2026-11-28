@@ -27,11 +27,25 @@ ALL_TAB_KEYS: tuple[str, ...] = (
     "ndt_billing",
     "budget",
     "ndt_report",
+    "clients_contracts",
+)
+
+CENTRAL_DEFAULT_TAB_KEYS: tuple[str, ...] = (
+    "stock",
+    "io_transfer",
+    "inout",
+    "daily_usage",
+    "daily_history",
+    "monthly",
+    "work_log",
+    "ndt_billing",
+    "budget",
+    "ndt_report",
 )
 
 SITE_TYPE_DEFAULTS: dict[str, dict[str, Any]] = {
     "kdhc": {
-        "enabled_tabs": list(ALL_TAB_KEYS),
+        "enabled_tabs": list(CENTRAL_DEFAULT_TAB_KEYS),
         "enable_hot_tapping": True,
         "inventory_mode": "shared",
     },
@@ -47,6 +61,7 @@ SITE_TYPE_DEFAULTS: dict[str, dict[str, Any]] = {
             "ndt_billing",
             "budget",
             "ndt_report",
+            "clients_contracts",
         ],
         "enable_hot_tapping": False,
         "inventory_mode": "shared",
@@ -61,6 +76,7 @@ SITE_TYPE_DEFAULTS: dict[str, dict[str, Any]] = {
             "monthly",
             "budget",
             "ndt_report",
+            "clients_contracts",
         ],
         "enable_hot_tapping": False,
         "inventory_mode": "shared",

@@ -13,7 +13,8 @@
     "daily_history",
     "monthly",
     "budget",
-    "ndt_report"
+    "ndt_report",
+    "clients_contracts"
   ],
   "enable_hot_tapping": false,
   "companies": [],

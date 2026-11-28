@@ -40,7 +40,7 @@ class CentralMultiSiteProfileTests(unittest.TestCase):
         central = site_profile.load_site_profile("central")
         self.assertTrue(central.is_central)
         self.assertTrue(central.enable_hot_tapping)
-        self.assertEqual(central.enabled_tabs, site_profile.ALL_TAB_KEYS)
+        self.assertEqual(central.enabled_tabs, site_profile.CENTRAL_DEFAULT_TAB_KEYS)
 
         annual = site_profile.load_site_profile("annual_contract")
         self.assertEqual(annual.site_type, "annual_contract")

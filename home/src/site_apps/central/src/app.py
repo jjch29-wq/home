@@ -418,11 +418,8 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             except Exception:
                 pass
                 
-        self.root.title(
-            "자재 및 소모품 관리 시스템 (Material Manager)"
-            if self.site_profile.is_central
-            else self.site_profile.window_title
-        )
+        from site_apps.central.src.multi_app_launcher import format_window_title
+        self.root.title(format_window_title(self.site_profile))
         self.root.geometry("1600x900")
         try:
             self.root.state('zoomed') # Maximize on Windows
@@ -1304,6 +1301,16 @@ class MaterialManager(TabConfigMixin, InoutViewMixin, AppDialogsMixin):
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).error(f"Failed to load NDTReportTab: {e}")
+
+        # Tab 11: Client, Contract & Template Library (거래처·계약·템플릿 관리)
+        if self.site_profile.is_tab_enabled('clients_contracts'):
+            clients_page = ttk.Frame(self.notebook)
+            self.notebook.add(clients_page, text='거래처·계약 관리')
+            def _setup_clients_contracts(page=clients_page):
+                from site_apps.central.src.views.client_contract_tab import ClientContractTab
+                self.tab_clients_contracts = ClientContractTab(page, main_app=self)
+                self.tab_clients_contracts.pack(fill='both', expand=True)
+            self._load_tab_on_first_map(clients_page, _setup_clients_contracts)
         
         # Select default tab instantly to prevent flicker: 마지막 보던 탭 또는 현장별 일일 사용량 기입
         init_tab = self.tab_daily_usage
